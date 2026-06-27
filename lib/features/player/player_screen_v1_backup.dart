@@ -1,0 +1,266 @@
+import 'dart:async';
+
+import 'package:audio_session/audio_session.dart';
+import 'package:flutter/material.dart';
+import 'package:audioplayers/audioplayers.dart';
+import 'package:flutter_tts/flutter_tts.dart';
+
+class PlayerScreen extends StatefulWidget {
+  final String blocker;
+  final String sleepLatency;
+  final String energy;
+  final String goal;
+  final Duration sessionLength;
+
+  const PlayerScreen({
+    super.key,
+    required this.blocker,
+    required this.sleepLatency,
+    required this.energy,
+    required this.goal,
+    required this.sessionLength,
+  });
+
+  @override
+  State<PlayerScreen> createState() => _PlayerScreenState();
+}
+
+class _PlayerScreenState extends State<PlayerScreen>
+    with SingleTickerProviderStateMixin {
+  final AudioPlayer _bgPlayer = AudioPlayer();
+  final FlutterTts _tts = FlutterTts();
+
+  static const double _targetVolume = 1.0;
+
+  bool _ready = false;
+  bool _playing = false;
+
+  Timer? _sessionTimer;
+
+  late final AnimationController _breathController;
+  late final Animation<double> _breathAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _breathController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 5),
+    );
+
+    _breathAnimation = Tween<double>(
+      begin: 0.96,
+      end: 1.04,
+    ).animate(
+      CurvedAnimation(
+        parent: _breathController,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+    _breathController.repeat(reverse: true);
+    _initAudio();
+  }
+
+  // 🔥 AKILLI SES MOTORU
+  Future<void> _initAudio() async {
+    try {
+      final session = await AudioSession.instance;
+      await session.configure(const AudioSessionConfiguration.speech());
+
+      String audioPath;
+
+      switch (widget.blocker) {
+        case "mind":
+          audioPath =
+              'assets/audio/voice/session_01.mp3';
+          break;
+        case "stress":
+          audioPath = 'assets/audio/voice/session_01.mp3';
+          break;
+        case "body":
+          audioPath = 'assets/audio/voice/session_01.mp3';
+          break;
+        case "overstimulated":
+          audioPath = 'assets/audio/voice/session_01.mp3';
+          break;
+        case "wired":
+          audioPath = 'assets/audio/voice/session_01.mp3';
+          break;
+        case "deep":
+          audioPath = 'assets/audio/voice/session_01.mp3';
+          break;
+        case "relationship":
+          audioPath = 'assets/audio/voice/session_01.mp3';
+          break;
+        case "loneliness":
+          audioPath = 'assets/audio/voice/session_01.mp3';
+          break;
+        default:
+          audioPath =
+              'assets/audio/voice/session_01.mp3';
+      }
+
+      print("🎧 Selected audio: $audioPath");
+
+      print("STEP 1"); print("ASSET PATH = $audioPath");
+      await _bgPlayer.play(AssetSource("audio/bg/CoreDefaultAir/session_01.mp3"));
+      print("STEP 2");
+      await _bgPlayer.setReleaseMode(ReleaseMode.loop);
+
+      if (!mounted) return;
+      setState(() => _ready = true);
+    print("_ready SET TRUE");
+
+      print("RESUME PRESSED");
+      await _bgPlayer.resume();
+      print("STEP 4");
+      await _bgPlayer.setVolume(_targetVolume);
+
+      setState(() => _playing = true);
+      _startSessionTimer();
+
+      await _tts.setLanguage("en-US");
+      await _tts.setSpeechRate(0.42);
+      await _tts.setVolume(1.0);
+      await _tts.setPitch(0.95);
+      await _tts.setVolume(1.0);
+
+      /*
+TTS TEMP DISABLED FOR TEST
+*/
+    } catch (e) {
+      print("AUDIO ERROR: $e");
+    }
+  }
+
+  void _startSessionTimer() {
+    _sessionTimer?.cancel();
+    _sessionTimer = Timer(widget.sessionLength, () async {
+      await _bgPlayer.stop();
+    });
+  }
+
+  Future<void> _togglePlay() async {
+    if (!_ready) { print("_READY BLOCKED PLAY"); return; }
+
+    if (_playing) {
+      print("PAUSE PRESSED");
+      await _bgPlayer.pause();
+      setState(() => _playing = false);
+    } else {
+      print("RESUME PRESSED");
+      await _bgPlayer.resume();
+      print("STEP 4");
+      await _bgPlayer.setVolume(_targetVolume);
+      setState(() => _playing = true);
+    }
+  }
+
+  @override
+  void dispose() {
+    _sessionTimer?.cancel();
+    _breathController.dispose();
+    _bgPlayer.dispose();
+    super.dispose();
+  }
+
+  String _buildSessionTitle() {
+    switch (widget.blocker) {
+      case "mind":
+        return "Quiet Mind Session";
+      case "stress":
+        return "Stress Release";
+      case "body":
+        return "Body Relaxation";
+      case "overstimulated":
+        return "Deep Calm";
+      case "wired":
+        return "Wind Down";
+      case "deep":
+        return "Deep Sleep";
+      case "relationship":
+        return "Letting Go Session";
+      case "loneliness":
+        return "Comfort Session";
+      default:
+        return "Sleep Session";
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final sessionTitle = _buildSessionTitle();
+
+    return Scaffold(
+      backgroundColor: const Color(0xFF05060A),
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: const Text('Nocta'),
+      ),
+      body: SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            children: [
+              const Spacer(),
+
+              AnimatedBuilder(
+                animation: _breathAnimation,
+                builder: (context, child) {
+                  return Transform.scale(
+                    scale: _breathAnimation.value,
+                    child: Container(
+                      width: 180,
+                      height: 180,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: Colors.white.withOpacity(0.2),
+                      ),
+                    ),
+                  );
+                },
+              ),
+
+              const SizedBox(height: 24),
+
+              Text(
+                sessionTitle,
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 28,
+                ),
+              ),
+
+              const Spacer(),
+
+              GestureDetector(
+                onTap: () {
+                  print("BUTTON TAPPED");
+                  _togglePlay();
+                },
+                child: Container(
+                  width: 90,
+                  height: 90,
+                  decoration: const BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white,
+                  ),
+                  child: Icon(
+                    _playing ? Icons.pause : Icons.play_arrow,
+                    color: Colors.black,
+                    size: 40,
+                  ),
+                ),
+              ),
+
+              const SizedBox(height: 40),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}

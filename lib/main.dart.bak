@@ -1,0 +1,1063 @@
+import 'package:flutter/material.dart';
+import 'package:just_audio/just_audio.dart';
+
+void main() {
+  runApp(const SleepWaveApp());
+}
+
+class SleepWaveApp extends StatelessWidget {
+  const SleepWaveApp({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return MaterialApp(
+      title: 'SleepWave',
+      debugShowCheckedModeBanner: false,
+      theme: ThemeData(
+        brightness: Brightness.dark,
+        scaffoldBackgroundColor: const Color(0xFF070B14),
+        useMaterial3: true,
+        sliderTheme: SliderThemeData(
+          activeTrackColor: AppColors.softBlue,
+          inactiveTrackColor: Colors.white.withOpacity(0.14),
+          thumbColor: AppColors.softWhite,
+          overlayColor: AppColors.softBlue.withOpacity(0.12),
+          trackHeight: 3.2,
+        ),
+      ),
+      home: const WelcomeScreen(),
+    );
+  }
+}
+
+class AppColors {
+  static const Color bgTop = Color(0xFF0B1020);
+  static const Color bgBottom = Color(0xFF05070D);
+  static const Color softBlue = Color(0xFF8FB8FF);
+  static const Color softWhite = Color(0xFFF5F7FB);
+  static const Color mutedText = Color(0xFF9AA4B2);
+  static const Color card = Color(0xFF111827);
+  static const Color border = Color(0x22FFFFFF);
+  static const Color buttonDark = Color(0xFF1C2433);
+}
+
+class WelcomeScreen extends StatelessWidget {
+  const WelcomeScreen({super.key});
+
+  void _openChoiceScreen(BuildContext context) {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 280),
+        reverseTransitionDuration: const Duration(milliseconds: 220),
+        pageBuilder: (_, animation, __) => FadeTransition(
+          opacity: animation,
+          child: const ChoiceScreen(),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [AppColors.bgTop, AppColors.bgBottom],
+          ),
+        ),
+        child: Stack(
+          children: [
+            Positioned.fill(
+              child: Opacity(
+                opacity: 0.95,
+                child: Image.asset(
+                  'assets/images/sleepwave_logo.png',
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+            Positioned.fill(
+              child: Container(
+                decoration: BoxDecoration(
+                  gradient: LinearGradient(
+                    begin: Alignment.topCenter,
+                    end: Alignment.bottomCenter,
+                    colors: [
+                      Colors.black.withOpacity(0.28),
+                      Colors.black.withOpacity(0.56),
+                      Colors.black.withOpacity(0.80),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+            SafeArea(
+              child: Padding(
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 24, vertical: 24),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Spacer(),
+                    const Text(
+                      'SleepWave',
+                      style: TextStyle(
+                        color: AppColors.softWhite,
+                        fontSize: 38,
+                        fontWeight: FontWeight.w300,
+                        letterSpacing: 0.8,
+                        height: 1.0,
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    const Text(
+                      'A quiet AI-guided sleep experience.',
+                      style: TextStyle(
+                        color: AppColors.softWhite,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w400,
+                        height: 1.4,
+                      ),
+                    ),
+                    const SizedBox(height: 8),
+                    const Text(
+                      'Sleep analysis, calming guidance, and direct sleep mode in one premium flow.',
+                      style: TextStyle(
+                        color: AppColors.mutedText,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w400,
+                        height: 1.5,
+                      ),
+                    ),
+                    const SizedBox(height: 28),
+                    SizedBox(
+                      width: double.infinity,
+                      height: 58,
+                      child: OutlinedButton(
+                        style: OutlinedButton.styleFrom(
+                          backgroundColor:
+                              AppColors.buttonDark.withOpacity(0.82),
+                          foregroundColor: AppColors.softWhite,
+                          side: BorderSide(
+                            color: Colors.white.withOpacity(0.14),
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(18),
+                          ),
+                        ),
+                        onPressed: () => _openChoiceScreen(context),
+                        child: const Text(
+                          'Begin',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.2,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class ChoiceScreen extends StatelessWidget {
+  const ChoiceScreen({super.key});
+
+  void _pushPage(BuildContext context, Widget page) {
+    Navigator.push(
+      context,
+      PageRouteBuilder(
+        transitionDuration: const Duration(milliseconds: 260),
+        reverseTransitionDuration: const Duration(milliseconds: 220),
+        pageBuilder: (_, animation, __) => FadeTransition(
+          opacity: animation,
+          child: page,
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [AppColors.bgTop, AppColors.bgBottom],
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                _TopBar(
+                  title: 'Choose your path',
+                  onBack: () => Navigator.pop(context),
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'Start with guidance, take a quick analysis, or go directly into sleep.',
+                  style: TextStyle(
+                    color: AppColors.mutedText,
+                    fontSize: 14,
+                    height: 1.5,
+                  ),
+                ),
+                const SizedBox(height: 24),
+                Expanded(
+                  child: Column(
+                    children: [
+                      _ChoiceCard(
+                        icon: Icons.chat_bubble_outline_rounded,
+                        title: 'AI Sleep Specialist',
+                        subtitle:
+                            'Talk through your sleep issue and get a suggested session.',
+                        onTap: () => _pushPage(context, const AiSleepScreen()),
+                      ),
+                      const SizedBox(height: 18),
+                      _ChoiceCard(
+                        icon: Icons.analytics_outlined,
+                        title: 'Sleep Analysis',
+                        subtitle:
+                            'Answer a few quick questions and get a tailored direction.',
+                        onTap: () =>
+                            _pushPage(context, const SleepAnalysisScreen()),
+                      ),
+                      const SizedBox(height: 18),
+                      _ChoiceCard(
+                        icon: Icons.nightlight_round,
+                        title: 'Direct Sleep',
+                        subtitle:
+                            'Start a calm session immediately with minimal friction.',
+                        onTap: () =>
+                            _pushPage(context, const DirectSleepScreen()),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class AiSleepScreen extends StatelessWidget {
+  const AiSleepScreen({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    return const BasePage(
+      title: 'AI Sleep Specialist',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          _MessageBubble(
+            isUser: false,
+            text: 'Hi Seher. Tell me what is making sleep difficult tonight.',
+          ),
+          SizedBox(height: 12),
+          _MessageBubble(
+            isUser: true,
+            text: 'My mind feels busy and I cannot switch off.',
+          ),
+          SizedBox(height: 12),
+          _MessageBubble(
+            isUser: false,
+            text:
+                'I would guide you toward a slower voice-led transition with soft background audio.',
+          ),
+          Spacer(),
+          _InputBar(),
+        ],
+      ),
+    );
+  }
+}
+
+class SleepAnalysisScreen extends StatefulWidget {
+  const SleepAnalysisScreen({super.key});
+
+  @override
+  State<SleepAnalysisScreen> createState() => _SleepAnalysisScreenState();
+}
+
+class _SleepAnalysisScreenState extends State<SleepAnalysisScreen> {
+  final Map<int, int> answers = {};
+  final TextEditingController noteController = TextEditingController();
+
+  @override
+  void dispose() {
+    noteController.dispose();
+    super.dispose();
+  }
+
+  Widget buildQuestion({
+    required int index,
+    required String question,
+    required List<String> options,
+  }) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 28),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            question,
+            style: const TextStyle(
+              fontSize: 22,
+              fontWeight: FontWeight.w500,
+              color: Colors.white,
+              height: 1.25,
+            ),
+          ),
+          const SizedBox(height: 18),
+          ...List.generate(options.length, (i) {
+            final selected = answers[index] == i;
+
+            return GestureDetector(
+              onTap: () {
+                setState(() {
+                  answers[index] = i;
+                });
+              },
+              child: Container(
+                margin: const EdgeInsets.only(bottom: 12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    Icon(
+                      selected
+                          ? Icons.radio_button_checked
+                          : Icons.radio_button_off,
+                      color: selected
+                          ? const Color(0xFF8FB6FF)
+                          : Colors.white.withOpacity(0.55),
+                      size: 22,
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Text(
+                        options[i],
+                        style: TextStyle(
+                          fontSize: 18,
+                          color: selected
+                              ? Colors.white
+                              : Colors.white.withOpacity(0.88),
+                          fontWeight:
+                              selected ? FontWeight.w500 : FontWeight.w400,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+          Divider(
+            height: 34,
+            thickness: 1,
+            color: Colors.white.withOpacity(0.08),
+          ),
+        ],
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return BasePage(
+      title: 'Sleep Analysis',
+      child: Column(
+        children: [
+          Expanded(
+            child: SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(
+                    'Let’s understand your sleep patterns and create the most suitable experience for tonight.',
+                    style: TextStyle(
+                      fontSize: 16,
+                      height: 1.5,
+                      color: Colors.white.withOpacity(0.58),
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: Colors.white.withOpacity(0.08),
+                  ),
+                  const SizedBox(height: 28),
+                  buildQuestion(
+                    index: 1,
+                    question: 'How quiet is your mind when trying to sleep?',
+                    options: const [
+                      'Calm',
+                      'Slightly active',
+                      'Very active',
+                    ],
+                  ),
+                  buildQuestion(
+                    index: 2,
+                    question:
+                        'How much stress or tension do you feel right now?',
+                    options: const [
+                      'None',
+                      'Moderate',
+                      'High',
+                    ],
+                  ),
+                  buildQuestion(
+                    index: 3,
+                    question: 'Do you use your phone before sleep?',
+                    options: const [
+                      'No',
+                      '10–30 min',
+                      'More than 1 hour',
+                    ],
+                  ),
+                  buildQuestion(
+                    index: 4,
+                    question: 'Is your sleep schedule consistent?',
+                    options: const [
+                      'Yes',
+                      'Sometimes',
+                      'No',
+                    ],
+                  ),
+                  buildQuestion(
+                    index: 5,
+                    question:
+                        'Does your body feel tired but you still can’t sleep?',
+                    options: const [
+                      'No',
+                      'Sometimes',
+                      'Yes',
+                    ],
+                  ),
+                  buildQuestion(
+                    index: 6,
+                    question: 'Do you feel emotionally overwhelmed right now?',
+                    options: const [
+                      'No',
+                      'A little',
+                      'Yes',
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  const Text(
+                    'Did anything affect you today? (optional)',
+                    style: TextStyle(
+                      fontSize: 20,
+                      fontWeight: FontWeight.w500,
+                      color: Colors.white,
+                      height: 1.3,
+                    ),
+                  ),
+                  const SizedBox(height: 14),
+                  Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(14),
+                      border: Border.all(
+                        color: Colors.white.withOpacity(0.10),
+                      ),
+                      color: Colors.white.withOpacity(0.03),
+                    ),
+                    child: TextField(
+                      controller: noteController,
+                      maxLines: 5,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 16,
+                      ),
+                      decoration: InputDecoration(
+                        hintText: 'Write here if you want…',
+                        hintStyle: TextStyle(
+                          color: Colors.white.withOpacity(0.35),
+                          fontSize: 16,
+                        ),
+                        border: InputBorder.none,
+                        contentPadding: const EdgeInsets.all(18),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 120),
+                ],
+              ),
+            ),
+          ),
+          SizedBox(
+            width: double.infinity,
+            height: 56,
+            child: OutlinedButton(
+              style: OutlinedButton.styleFrom(
+                backgroundColor: AppColors.buttonDark.withOpacity(0.82),
+                foregroundColor: AppColors.softWhite,
+                side: BorderSide(color: Colors.white.withOpacity(0.14)),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(18),
+                ),
+              ),
+              onPressed: () {
+                debugPrint('Answers: $answers');
+                debugPrint('Note: ${noteController.text}');
+              },
+              child: const Text(
+                'Get my sleep plan',
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class DirectSleepScreen extends StatefulWidget {
+  const DirectSleepScreen({super.key});
+
+  @override
+  State<DirectSleepScreen> createState() => _DirectSleepScreenState();
+}
+
+class _DirectSleepScreenState extends State<DirectSleepScreen>
+    with SingleTickerProviderStateMixin {
+  final AudioPlayer player = AudioPlayer();
+
+  static const String audioPath =
+      'assets/audio/bg/CoreDefaultAir/CoreDefaultAir_BG_30m_clean.m4a';
+
+  bool isPlaying = false;
+  Duration position = Duration.zero;
+  Duration duration = Duration.zero;
+  bool isLoading = true;
+  String? audioError;
+
+  late final AnimationController _breathController;
+  late final Animation<double> _breathAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+
+    _breathController = AnimationController(
+      vsync: this,
+      duration: const Duration(seconds: 5),
+    );
+
+    _breathAnimation = Tween<double>(
+      begin: 0.82,
+      end: 1.18,
+    ).animate(
+      CurvedAnimation(
+        parent: _breathController,
+        curve: Curves.easeInOut,
+      ),
+    );
+
+    _breathController.repeat(reverse: true);
+
+    _setupAudio();
+
+    player.playerStateStream.listen((state) {
+      if (!mounted) return;
+      setState(() {
+        isPlaying = state.playing;
+      });
+    });
+
+    player.positionStream.listen((value) {
+      if (!mounted) return;
+      setState(() {
+        position = value;
+      });
+    });
+
+    player.durationStream.listen((value) {
+      if (!mounted) return;
+      setState(() {
+        duration = value ?? Duration.zero;
+      });
+    });
+  }
+
+  Future<void> _setupAudio() async {
+    try {
+      await player.setAsset(audioPath);
+      if (!mounted) return;
+      setState(() {
+        isLoading = false;
+        audioError = null;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        isLoading = false;
+        audioError = e.toString();
+      });
+    }
+  }
+
+  Future<void> _togglePlayPause() async {
+    if (isLoading || audioError != null) return;
+
+    if (isPlaying) {
+      await player.pause();
+    } else {
+      await player.play();
+    }
+  }
+
+  Future<void> _restartAudio() async {
+    if (isLoading || audioError != null) return;
+    await player.seek(Duration.zero);
+    await player.play();
+  }
+
+  Future<void> _seekForward10() async {
+    if (isLoading || audioError != null) return;
+    final newPosition = position + const Duration(seconds: 10);
+    final safeTarget = duration == Duration.zero
+        ? newPosition
+        : (newPosition > duration ? duration : newPosition);
+    await player.seek(safeTarget);
+  }
+
+  String _formatDuration(Duration value) {
+    final minutes = value.inMinutes.remainder(60).toString().padLeft(2, '0');
+    final seconds = value.inSeconds.remainder(60).toString().padLeft(2, '0');
+    final hours = value.inHours;
+
+    if (hours > 0) {
+      return '${hours.toString().padLeft(2, '0')}:$minutes:$seconds';
+    }
+    return '$minutes:$seconds';
+  }
+
+  @override
+  void dispose() {
+    _breathController.dispose();
+    player.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final double progressMax =
+        duration.inMilliseconds > 0 ? duration.inMilliseconds.toDouble() : 1;
+    final double progressValue = position.inMilliseconds
+        .clamp(0, duration.inMilliseconds > 0 ? duration.inMilliseconds : 1)
+        .toDouble();
+
+    return BasePage(
+      title: 'Direct Sleep',
+      child: Column(
+        children: [
+          const SizedBox(height: 10),
+          AnimatedBuilder(
+            animation: _breathAnimation,
+            builder: (context, child) {
+              return Transform.scale(
+                scale: _breathAnimation.value,
+                child: Container(
+                  width: 170,
+                  height: 170,
+                  decoration: BoxDecoration(
+                    shape: BoxShape.circle,
+                    color: Colors.white.withOpacity(0.22),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.28),
+                      width: 1.2,
+                    ),
+                  ),
+                ),
+              );
+            },
+          ),
+          const SizedBox(height: 28),
+          const Text(
+            'Soft Sleep Entry',
+            style: TextStyle(
+              color: AppColors.softWhite,
+              fontSize: 24,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            '30 min • slow breathing • background audio',
+            style: TextStyle(
+              color: AppColors.mutedText,
+              fontSize: 14,
+            ),
+          ),
+          const SizedBox(height: 20),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: AppColors.card.withOpacity(0.58),
+              borderRadius: BorderRadius.circular(22),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Column(
+              children: [
+                LinearProgressIndicator(
+                  value: progressValue / progressMax,
+                  minHeight: 4,
+                  backgroundColor: Colors.white.withOpacity(0.08),
+                  valueColor: const AlwaysStoppedAnimation<Color>(
+                    AppColors.softBlue,
+                  ),
+                  borderRadius: BorderRadius.circular(999),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text(
+                      _formatDuration(position),
+                      style: const TextStyle(
+                        color: AppColors.mutedText,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                    Text(
+                      duration == Duration.zero
+                          ? '--:--'
+                          : _formatDuration(duration),
+                      style: const TextStyle(
+                        color: AppColors.mutedText,
+                        fontSize: 12.5,
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+          const Spacer(),
+          if (audioError != null)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: Text(
+                'Audio could not be loaded.',
+                style: TextStyle(
+                  color: Colors.red.shade300,
+                  fontSize: 13,
+                ),
+              ),
+            ),
+          Container(
+            padding: const EdgeInsets.all(18),
+            decoration: BoxDecoration(
+              color: AppColors.card.withOpacity(0.72),
+              borderRadius: BorderRadius.circular(24),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceAround,
+              children: [
+                IconButton(
+                  onPressed: _restartAudio,
+                  icon: const Icon(
+                    Icons.replay_rounded,
+                    color: AppColors.softWhite,
+                    size: 30,
+                  ),
+                ),
+                IconButton(
+                  onPressed: _togglePlayPause,
+                  icon: isLoading
+                      ? const SizedBox(
+                          width: 42,
+                          height: 42,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : Icon(
+                          isPlaying
+                              ? Icons.pause_circle_filled_rounded
+                              : Icons.play_circle_fill_rounded,
+                          color: AppColors.softWhite,
+                          size: 64,
+                        ),
+                ),
+                IconButton(
+                  onPressed: _seekForward10,
+                  icon: const Icon(
+                    Icons.forward_10_rounded,
+                    color: AppColors.softWhite,
+                    size: 30,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class BasePage extends StatelessWidget {
+  final String title;
+  final Widget child;
+
+  const BasePage({
+    super.key,
+    required this.title,
+    required this.child,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      body: Container(
+        width: double.infinity,
+        height: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [AppColors.bgTop, AppColors.bgBottom],
+          ),
+        ),
+        child: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 16, 20, 20),
+            child: Column(
+              children: [
+                _TopBar(
+                  title: title,
+                  onBack: () => Navigator.pop(context),
+                ),
+                const SizedBox(height: 20),
+                Expanded(child: child),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _TopBar extends StatelessWidget {
+  final String title;
+  final VoidCallback onBack;
+
+  const _TopBar({
+    required this.title,
+    required this.onBack,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        GestureDetector(
+          onTap: onBack,
+          child: Container(
+            width: 42,
+            height: 42,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.06),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.border),
+            ),
+            child: const Icon(
+              Icons.arrow_back_ios_new_rounded,
+              size: 18,
+              color: AppColors.softWhite,
+            ),
+          ),
+        ),
+        const SizedBox(width: 14),
+        Text(
+          title,
+          style: const TextStyle(
+            color: AppColors.softWhite,
+            fontSize: 24,
+            fontWeight: FontWeight.w500,
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+class _ChoiceCard extends StatelessWidget {
+  final IconData icon;
+  final String title;
+  final String subtitle;
+  final VoidCallback onTap;
+
+  const _ChoiceCard({
+    required this.icon,
+    required this.title,
+    required this.subtitle,
+    required this.onTap,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: Colors.transparent,
+      child: InkWell(
+        borderRadius: BorderRadius.circular(24),
+        onTap: onTap,
+        child: Ink(
+          width: double.infinity,
+          padding: const EdgeInsets.all(20),
+          decoration: BoxDecoration(
+            color: AppColors.card.withOpacity(0.78),
+            borderRadius: BorderRadius.circular(24),
+            border: Border.all(color: AppColors.border),
+          ),
+          child: Row(
+            children: [
+              Container(
+                width: 52,
+                height: 52,
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(18),
+                ),
+                child: Icon(
+                  icon,
+                  color: AppColors.softWhite,
+                  size: 24,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        color: AppColors.softWhite,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      subtitle,
+                      style: const TextStyle(
+                        color: AppColors.mutedText,
+                        fontSize: 13.5,
+                        height: 1.45,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 10),
+              const Icon(
+                Icons.arrow_forward_ios_rounded,
+                color: AppColors.mutedText,
+                size: 16,
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MessageBubble extends StatelessWidget {
+  final bool isUser;
+  final String text;
+
+  const _MessageBubble({
+    required this.isUser,
+    required this.text,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    return Align(
+      alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
+      child: Container(
+        constraints: const BoxConstraints(maxWidth: 290),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: BoxDecoration(
+          color: isUser
+              ? Colors.white.withOpacity(0.08)
+              : const Color(0xFF111827),
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: AppColors.border),
+        ),
+        child: Text(
+          text,
+          style: const TextStyle(
+            color: AppColors.softWhite,
+            fontSize: 14.5,
+            height: 1.5,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _InputBar extends StatelessWidget {
+  const _InputBar();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: AppColors.card.withOpacity(0.85),
+        borderRadius: BorderRadius.circular(22),
+        border: Border.all(color: AppColors.border),
+      ),
+      child: const Row(
+        children: [
+          Expanded(
+            child: Text(
+              'Describe your sleep issue...',
+              style: TextStyle(
+                color: AppColors.mutedText,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          Icon(
+            Icons.arrow_upward_rounded,
+            color: AppColors.softWhite,
+            size: 22,
+          ),
+        ],
+      ),
+    );
+  }
+}

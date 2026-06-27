@@ -1,0 +1,181 @@
+class NoctaConversations {
+
+// ==========================================================
+// OVERTHINKING
+// ==========================================================
+
+static const List<String> overthinkingOpeners = [
+
+"""
+
+Whatever has been on your mind today seems to have stayed with you longer than you wanted it to.
+
+Now that things are a little quieter, it may be harder to ignore.
+
+What feels heaviest on your mind right now?
+""",
+
+"""
+
+Tomorrow seems to have arrived a little earlier than it needed to.
+
+Even though the day is ending, part of your attention is already trying to be there.
+
+What part of tomorrow has been taking up the most space in your mind?
+""",
+
+"""
+
+Your mind may have been trying to stay one step ahead of everything.
+
+Questions.
+Possibilities.
+Things that have not happened yet.
+
+What keeps pulling your attention back tonight?
+"""
+];
+
+static const List<String> overthinkingMiddle = [
+
+"Not everything your mind is holding belongs to tonight.",
+
+"The future does not need all of your attention right now.",
+
+"Some questions are allowed to wait until tomorrow.",
+
+"You do not have to carry all of tomorrow into this moment.",
+
+"For now, this moment is enough."
+
+];
+
+static const List<String> overthinkingClosers = [];
+
+// ==========================================================
+// WORK STRESS
+// ==========================================================
+
+static const List<String> workStressOpeners = [
+
+  """
+There may have been very little space to slow down today.
+
+Even after the work has ended, part of your attention may still be carrying the weight of it.
+
+What has been the hardest part of today to leave behind?
+""",
+
+  """
+Your workday may have ended, but part of your attention still seems to be there.
+
+Sometimes the mind keeps carrying conversations, responsibilities, or unfinished tasks long after the day is over.
+
+What from today has been the hardest to leave at work?
+""",
+
+  """
+Part of your attention may already be with tomorrow's work.
+
+When there is a lot waiting ahead, the mind can begin preparing long before the day arrives.
+
+What about tomorrow has been asking for your attention tonight?
+""",
+
+  """
+Some days can begin to feel like they are repeating themselves.
+
+When there seems to be little room to step away, work can start to occupy more space than you ever intended.
+
+What has been making work feel difficult to step away from lately?
+""",
+
+  """
+Your workday may have come to an end, but your mind may not have had the same chance.
+
+Sometimes it can take longer for the mind to leave work behind than it does for the body.
+
+What part of today still feels like it is asking for your attention?
+"""
+
+];
+
+static const List<String> workStressMiddle = [
+
+  "Not everything from today needs to come with you into this moment.",
+
+  "Some of it can stay where the day ended.",
+
+  "You do not need to carry every responsibility into tonight.",
+
+  "For now, the rest of it can wait until morning.",
+
+  "Not all of it belongs in this moment."
+
+];
+
+static const List<String> workStressClosers = [
+
+  "You have carried enough of it for today. Nothing more is needed from you tonight.",
+
+  "For now, the weight of the day can stay where it is.",
+
+  "You do not need to carry the rest of it into tonight.",
+
+  "The unfinished parts of today can wait until morning.",
+
+  "Nothing more is being asked of you right now.",
+
+  "You have done enough for one day.",
+
+  "For now, it is safe to set the rest down.",
+
+  "The day does not need anything more from you tonight.",
+
+  "You can leave the rest exactly where it is.",
+
+  "Tomorrow can stay where it is."
+
+];
+
+// ==========================================================
+// FUTURE ANXIETY
+// ==========================================================
+
+static const List<String> futureAnxietyOpeners = [];
+
+static const List<String> futureAnxietyMiddle = [];
+
+static const List<String> futureAnxietyClosers = [];
+
+// ==========================================================
+// RELATIONSHIP
+// ==========================================================
+
+static const List<String> relationshipOpeners = [];
+
+static const List<String> relationshipMiddle = [];
+
+static const List<String> relationshipClosers = [];
+
+// ==========================================================
+// LONELINESS
+// ==========================================================
+
+static const List<String> lonelinessOpeners = [];
+
+static const List<String> lonelinessMiddle = [];
+
+static const List<String> lonelinessClosers = [];
+
+// ==========================================================
+// EMOTIONAL PAIN
+// ==========================================================
+
+static const List<String> emotionalPainOpeners = [];
+
+static const List<String> emotionalPainMiddle = [];
+
+static const List<String> emotionalPainClosers = [];
+
+}

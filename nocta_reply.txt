@@ -1,0 +1,197 @@
+213:static String generateNoctaReply({
+214-  required String userInput,
+215-  required SleepState state,
+216-  required List<String> conversationHistory,
+217-}) {
+218-  final step = conversationHistory.length;
+219-  final text = userInput.toLowerCase();
+220-  final historyText = conversationHistory.join(" ").toLowerCase();
+221-
+222-  String? topic;
+223-
+224-  if (historyText.contains("presentation")) topic = "presentation";
+225-  if (historyText.contains("meeting")) topic = "meeting";
+226-  if (historyText.contains("interview")) topic = "interview";
+227-  if (historyText.contains("exam")) topic = "exam";
+228-
+229-  if (step <= 1) {
+230-
+231-    if (text.contains("presentation")) {
+232-      return "Part of your attention is still staying with tomorrow's presentation.";
+233-    }
+234-
+235-    if (text.contains("meeting")) {
+236-      return "Part of your mind still seems to be sitting in tomorrow's meeting.";
+237-    }
+238-
+239-    if (text.contains("interview")) {
+240-      return "It sounds like tomorrow's interview is asking for a lot of your attention tonight.";
+241-    }
+242-
+243-    if (text.contains("exam")) {
+244-      return "Part of you is already trying to be with tomorrow's exam.";
+245-    }
+246-
+247-    switch (state) {
+248-      case SleepState.overthinking:
+249-        return NoctaConversations.overthinkingOpeners[
+250-          DateTime.now().millisecond %
+251-              NoctaConversations.overthinkingOpeners.length
+252-        ];
+253-      case SleepState.workStress:
+254-
+255-        if (topic == "presentation") {
+256-          return "Nothing about tomorrow's presentation needs anything more from you right now.";
+257-        }
+258-
+259-        if (topic == "meeting") {
+260-          return "Nothing about tomorrow's meeting needs your attention right now.";
+261-        }
+262-
+263-        if (topic == "interview") {
+264-          return "You do not need to keep preparing for tomorrow's interview right now.";
+265-        }
+266-
+267-        if (topic == "exam") {
+268-          return "Nothing more is needed from you for tomorrow's exam tonight.";
+269-        }
+270-
+271-        return [
+272-    "Part of your day still feels like it is following you here.",
+273-    "Some of today still seems to be asking for your attention.",
+274-    "It sounds like part of your mind is still staying with today's responsibilities.",
+275-    "A piece of today may still feel unfinished tonight.",
+276-    "Part of you is still carrying the weight of the day."
+277-  ][DateTime.now().millisecond % 5];
+278-      case SleepState.relationship:
+279-        return "Something about this connection still feels present tonight.";
+280-
+281-      case SleepState.futureAnxiety:
+282-        return [
+283-          "Tomorrow may have arrived a little earlier than it needed to.",
+284-          "Part of your attention already seems to be with the future.",
+285-          "The future appears to be taking up more space than it needs to right now.",
+286-          "Part of your mind may still be trying to get ahead of what comes next.",
+287-          "Something about the future still seems to be asking for your attention."
+288-        ][DateTime.now().millisecond % 5];
+289-
+290-      case SleepState.loneliness:
+291-        return "Tonight feels a little too quiet around you.";
+292-      default:
+293-        return "Something in you still feels awake tonight.";
+294-    }
+295-  }
+296-
+297-  if (step == 2) {
+298-    switch (state) {
+299-      case SleepState.overthinking:
+300-        return [
+301-          "Not all of tomorrow is here right now.",
+302-          "It may not need quite as much space right now.",
+303-          "Not everything needs your attention tonight.",
+304-          "For now, it can be just tonight.",
+305-          "It does not all belong to this moment."
+306-        ][DateTime.now().millisecond % 5];
+307-
+308-      case SleepState.workStress:
+309-
+310-        if (topic == "presentation") {
+311-          return "Nothing about tomorrow's presentation needs anything more from you right now.";
+312-        }
+313-
+314-        if (topic == "meeting") {
+315-          return "Nothing about tomorrow's meeting needs your attention right now.";
+316-        }
+317-
+318-        if (topic == "interview") {
+319-          return "You do not need to keep preparing for tomorrow's interview right now.";
+320-        }
+321-
+322-        if (topic == "exam") {
+323-          return "Nothing more is needed from you for tomorrow's exam tonight.";
+324-        }
+325-
+326-        return [
+327-          "Not everything from today needs to come with you into this moment.",
+328-          "Some of it can stay where the day ended.",
+329-          "You do not need to carry every responsibility into tonight.",
+330-          "For now, the rest of it can wait until morning.",
+331-          "Not all of it belongs in this moment."
+332-        ][DateTime.now().millisecond % 5];
+333-
+334-      case SleepState.relationship:
+335-        return "Not all of this needs your attention right now.";
+336-
+337-      case SleepState.futureAnxiety:
+338-        return [
+339-          "Not every question needs an answer tonight.",
+340-          "The future does not need to be figured out right now.",
+341-          "Some uncertainty can remain unresolved for now.",
+342-          "You do not need to know how everything will unfold tonight.",
+343-          "Not everything about tomorrow needs to be decided right now."
+344-        ][DateTime.now().millisecond % 5];
+345-
+346-      case SleepState.loneliness:
+347-        return "This moment does not need to hold the whole weight of that feeling.";
+348-
+349-      default:
+350-        return "It may not need quite as much space right now.";
+351-    }
+352-  }
+353-
+354-  switch (state) {
+355-    case SleepState.overthinking:
+356-      return [
+357-  "You do not need to keep watch over it right now. For now, it can stay where it is.",
+358-  "Nothing more is needed from you tonight.",
+359-  "You have carried enough of it for today.",
+360-  "You do not have to solve it before you rest.",
+361-  "The night does not require an answer from you.",
+362-  "For now, it is safe to leave it where it is.",
+363-  "You can let go of it for a little while.",
+364-  "You do not need to carry it any further tonight.",
+365-  "For now, you can leave it where it is.",
+366-  "The rest of it can wait outside this moment.",
+367-  "You have done enough with it for one day.",
+368-  "It does not need anything more from you tonight.",
+369-  "You can stop holding it for a little while.",
+370-  "For the next few minutes, it can simply stay unresolved.",
+371-  "You do not have to stay with it right now.",
+372-  "It is okay to leave the rest for tomorrow's version of you.",
+373-  "You can let this moment be smaller than the thing you are carrying.",
+374-  "For now, the weight of it can be set down.",
+375-  "Nothing is asking anything more from you tonight.",
+376-  "You can leave the rest exactly where it is."
+377-][DateTime.now().millisecond % 20];
+378-    case SleepState.workStress:
+379-      return [
+380-  "You have carried enough of it for today. Nothing more is needed from you tonight.",
+381-  "For now, the weight of the day can stay where it is.",
+382-  "You do not need to carry the rest of it into tonight.",
+383-  "The unfinished parts of today can wait until morning.",
+384-  "Nothing more is being asked of you right now.",
+385-  "You have done enough for one day.",
+386-  "For now, it is safe to set the rest down.",
+387-  "The day does not need anything more from you tonight.",
+388-  "You can leave the rest exactly where it is.",
+389-  "Tomorrow can stay where it is."
+390-][DateTime.now().millisecond % 10];
+391-    case SleepState.relationship:
+392-      return "You do not need to understand all of it before you rest. For now, we can let it soften.";
+393-
+394-    case SleepState.futureAnxiety:
+395-      return [
+396-        "Not every answer needs to arrive tonight.",
+397-        "The future can remain unfinished for now.",
+398-        "You do not need to know how everything will unfold before you rest.",
+399-        "Some things can stay uncertain until tomorrow.",
+400-        "For now, the future can simply remain tomorrow."
+401-      ][DateTime.now().millisecond % 5];
+402-
+403-    case SleepState.loneliness:
+404-      return "You do not have to fill the whole quiet tonight. Just let this moment hold you for a while.";
+405-    default:
+406-      return "You do not need to solve it tonight. We can leave it here for now.";
+407-  }
+408-}
+409-}

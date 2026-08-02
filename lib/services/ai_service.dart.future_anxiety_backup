@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
+import '../content/nocta_conversations.dart';
 
 enum SleepState {
   overthinking,
@@ -13,6 +14,16 @@ enum SleepState {
   emotional,
   physical,
   unknown,
+}
+
+
+enum FutureTheme {
+  interview,
+  exam,
+  money,
+  health,
+  moving,
+  general,
 }
 
 class AIService {
@@ -63,12 +74,27 @@ class AIService {
         text.contains("hastane") ||
         text.contains("mesai") ||
         text.contains("nöbet") ||
-        text.contains("yarın") ||
-        text.contains("gelecek") ||
         text.contains("yetiştir") ||
         text.contains("sorumluluk")) {
       return SleepState.workStress;
     }
+
+    if (text.contains("future") ||
+        text.contains("uncertain") ||
+        text.contains("what if") ||
+        text.contains("tomorrow") ||
+        text.contains("thinking about tomorrow") ||
+        text.contains("worried about tomorrow") ||
+        text.contains("financial") ||
+        text.contains("career") ||
+        text.contains("gelecek") ||
+        text.contains("belirsiz") ||
+        text.contains("yarın") ||
+        text.contains("ya olmazsa") ||
+        text.contains("ya olursa")) {
+      return SleepState.futureAnxiety;
+    }
+
 
     if (text.contains("stres") ||
         text.contains("stress") ||
@@ -132,6 +158,51 @@ class AIService {
 
     return SleepState.unknown;
   }
+static FutureTheme detectFutureTheme(String input) {
+  final text = input.toLowerCase();
+
+  if (text.contains("interview") ||
+      text.contains("job interview") ||
+      text.contains("iş görüşmesi") ||
+      text.contains("mülakat")) {
+    return FutureTheme.interview;
+  }
+
+  if (text.contains("exam") ||
+      text.contains("sınav") ||
+      text.contains("test") ||
+      text.contains("final")) {
+    return FutureTheme.exam;
+  }
+
+  if (text.contains("money") ||
+      text.contains("debt") ||
+      text.contains("loan") ||
+      text.contains("borç") ||
+      text.contains("para") ||
+      text.contains("kredi")) {
+    return FutureTheme.money;
+  }
+
+  if (text.contains("health") ||
+      text.contains("mri") ||
+      text.contains("result") ||
+      text.contains("scan") ||
+      text.contains("sağlık") ||
+      text.contains("sonuç") ||
+      text.contains("mr")) {
+    return FutureTheme.health;
+  }
+
+  if (text.contains("move") ||
+      text.contains("moving") ||
+      text.contains("taşın") ||
+      text.contains("şehir değiş")) {
+    return FutureTheme.moving;
+  }
+
+  return FutureTheme.general;
+}
 
   
   
@@ -208,6 +279,7 @@ static String generateNoctaReply({
   final historyText = conversationHistory.join(" ").toLowerCase();
 
   String? topic;
+  final futureTheme = detectFutureTheme(userInput);
 
   if (historyText.contains("presentation")) topic = "presentation";
   if (historyText.contains("meeting")) topic = "meeting";
@@ -234,13 +306,10 @@ static String generateNoctaReply({
 
     switch (state) {
       case SleepState.overthinking:
-        return [
-  "Tomorrow seems to be asking for a lot of your attention tonight.",
-  "Part of your attention is still staying with tomorrow.",
-  "Tomorrow appears to be taking up more space than it needs to right now.",
-  "Your mind is still keeping a place open for tomorrow.",
-  "It sounds like part of you is already living in tomorrow."
-][DateTime.now().millisecond % 5];
+        return NoctaConversations.overthinkingOpeners[
+          DateTime.now().millisecond %
+              NoctaConversations.overthinkingOpeners.length
+        ];
       case SleepState.workStress:
 
         if (topic == "presentation") {
@@ -259,15 +328,30 @@ static String generateNoctaReply({
           return "Nothing more is needed from you for tomorrow's exam tonight.";
         }
 
-        return [
-    "Part of your day still feels like it is following you here.",
-    "Some of today still seems to be asking for your attention.",
-    "It sounds like part of your mind is still staying with today's responsibilities.",
-    "A piece of today may still feel unfinished tonight.",
-    "Part of you is still carrying the weight of the day."
-  ][DateTime.now().millisecond % 5];
+        return _pick(NoctaConversations.workStressOpeners);
       case SleepState.relationship:
-        return "Something about this connection still feels present tonight.";
+        return _pick(NoctaConversations.relationshipOpeners);
+
+      case SleepState.futureAnxiety:
+
+        if (futureTheme == FutureTheme.interview) {
+          return "It sounds like tomorrow's interview is taking up a lot of space tonight.";
+        }
+
+        if (futureTheme == FutureTheme.money) {
+          return "Part of your mind seems to be trying to solve tomorrow's finances tonight.";
+        }
+
+        if (futureTheme == FutureTheme.health) {
+          return "Waiting for answers about your health can make the future feel very close.";
+        }
+
+        if (futureTheme == FutureTheme.moving) {
+          return "Big changes can make the future feel louder than usual.";
+        }
+
+        return _pick(NoctaConversations.futureAnxietyOpeners);
+
       case SleepState.loneliness:
         return "Tonight feels a little too quiet around you.";
       default:
@@ -304,16 +388,13 @@ static String generateNoctaReply({
           return "Nothing more is needed from you for tomorrow's exam tonight.";
         }
 
-        return [
-          "Not everything from today needs to come with you into this moment.",
-          "Some of it can stay where the day ended.",
-          "You do not need to carry every responsibility into tonight.",
-          "For now, the rest of it can wait until morning.",
-          "Not all of it belongs in this moment."
-        ][DateTime.now().millisecond % 5];
+        return _pick(NoctaConversations.workStressMiddle);
 
       case SleepState.relationship:
-        return "Not all of this needs your attention right now.";
+        return _pick(NoctaConversations.relationshipMiddle);
+
+      case SleepState.futureAnxiety:
+        return _pick(NoctaConversations.futureAnxietyMiddle);
 
       case SleepState.loneliness:
         return "This moment does not need to hold the whole weight of that feeling.";
@@ -325,43 +406,15 @@ static String generateNoctaReply({
 
   switch (state) {
     case SleepState.overthinking:
-      return [
-  "You do not need to keep watch over it right now. For now, it can stay where it is.",
-  "Nothing more is needed from you tonight.",
-  "You have carried enough of it for today.",
-  "You do not have to solve it before you rest.",
-  "The night does not require an answer from you.",
-  "For now, it is safe to leave it where it is.",
-  "You can let go of it for a little while.",
-  "You do not need to carry it any further tonight.",
-  "For now, you can leave it where it is.",
-  "The rest of it can wait outside this moment.",
-  "You have done enough with it for one day.",
-  "It does not need anything more from you tonight.",
-  "You can stop holding it for a little while.",
-  "For the next few minutes, it can simply stay unresolved.",
-  "You do not have to stay with it right now.",
-  "It is okay to leave the rest for tomorrow's version of you.",
-  "You can let this moment be smaller than the thing you are carrying.",
-  "For now, the weight of it can be set down.",
-  "Nothing is asking anything more from you tonight.",
-  "You can leave the rest exactly where it is."
-][DateTime.now().millisecond % 20];
+      return _pick(NoctaConversations.overthinkingClosers);
     case SleepState.workStress:
-      return [
-  "You have carried enough of it for today. Nothing more is needed from you tonight.",
-  "For now, the weight of the day can stay where it is.",
-  "You do not need to carry the rest of it into tonight.",
-  "The unfinished parts of today can wait until morning.",
-  "Nothing more is being asked of you right now.",
-  "You have done enough for one day.",
-  "For now, it is safe to set the rest down.",
-  "The day does not need anything more from you tonight.",
-  "You can leave the rest exactly where it is.",
-  "Tomorrow can stay where it is."
-][DateTime.now().millisecond % 10];
+      return _pick(NoctaConversations.workStressClosers);
     case SleepState.relationship:
-      return "You do not need to understand all of it before you rest. For now, we can let it soften.";
+      return _pick(NoctaConversations.relationshipClosers);
+
+    case SleepState.futureAnxiety:
+      return _pick(NoctaConversations.futureAnxietyClosers);
+
     case SleepState.loneliness:
       return "You do not have to fill the whole quiet tonight. Just let this moment hold you for a while.";
     default:

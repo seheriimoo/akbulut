@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:http/http.dart' as http;
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import '../content/nocta_conversations.dart';
+import 'theme_prompt_builder.dart';
 
 enum SleepState {
   overthinking,
@@ -16,8 +17,17 @@ enum SleepState {
   unknown,
 }
 
-class AIService {
+enum FutureTheme { interview, exam, money, health, moving, general }
 
+enum RelationshipTheme {
+  futureLost,
+  noReturn,
+  conversation,
+  missing,
+  unknown,
+}
+
+class AIService {
   // removed (now SessionManager)
   static String get apiKey => dotenv.env['OPENAI_API_KEY'] ?? "";
 
@@ -38,6 +48,28 @@ class AIService {
 
   static SleepState detectState(String input) {
     final text = input.toLowerCase();
+
+    // Specific relationship context must be evaluated before general
+    // overthinking language such as "thinking".
+    if (text.contains("relationship") ||
+        text.contains("breakup") ||
+        RegExp(r'\bex\b').hasMatch(text) ||
+        text.contains("partner") ||
+        text.contains("girlfriend") ||
+        text.contains("boyfriend") ||
+        text.contains("husband") ||
+        text.contains("wife") ||
+        text.contains("miss my ex") ||
+        text.contains("heartbroken")) {
+      return SleepState.relationship;
+    }
+
+    if (text.contains("miss her") ||
+        text.contains("miss him") ||
+        text.contains("thinking about her") ||
+        text.contains("thinking about him")) {
+      return SleepState.missSomeone;
+    }
 
     if (text.contains("thinking") ||
         text.contains("overthinking") ||
@@ -72,15 +104,36 @@ class AIService {
     if (text.contains("future") ||
         text.contains("uncertain") ||
         text.contains("what if") ||
+        text.contains("tomorrow") ||
+        text.contains("thinking about tomorrow") ||
+        text.contains("worried about tomorrow") ||
         text.contains("financial") ||
         text.contains("career") ||
+        text.contains("mri") ||
+        text.contains("result") ||
+        text.contains("results") ||
+        text.contains("scan") ||
+        text.contains("diagnosis") ||
+        text.contains("health") ||
+        text.contains("debt") ||
+        text.contains("loan") ||
+        text.contains("credit") ||
+        text.contains("money") ||
+        text.contains("borç") ||
+        text.contains("kredi") ||
+        text.contains("para") ||
+        text.contains("move") ||
+        text.contains("moving") ||
+        text.contains("relocation") ||
+        text.contains("new city") ||
+        text.contains("taşın") ||
         text.contains("gelecek") ||
         text.contains("belirsiz") ||
+        text.contains("yarın") ||
         text.contains("ya olmazsa") ||
         text.contains("ya olursa")) {
       return SleepState.futureAnxiety;
     }
-
 
     if (text.contains("stres") ||
         text.contains("stress") ||
@@ -115,26 +168,6 @@ class AIService {
       return SleepState.loneliness;
     }
 
-    if (text.contains("miss her") ||
-        text.contains("miss him") ||
-        text.contains("thinking about her") ||
-        text.contains("thinking about him")) {
-      return SleepState.missSomeone;
-    }
-
-    if (text.contains("relationship") ||
-        text.contains("breakup") ||
-        text.contains("ex") ||
-        text.contains("partner") ||
-        text.contains("girlfriend") ||
-        text.contains("boyfriend") ||
-        text.contains("husband") ||
-        text.contains("wife") ||
-        text.contains("miss my ex") ||
-        text.contains("heartbroken")) {
-      return SleepState.relationship;
-    }
-
     if (text.contains("tired") ||
         text.contains("body") ||
         text.contains("yorgun") ||
@@ -145,9 +178,85 @@ class AIService {
     return SleepState.unknown;
   }
 
-  
-  
-  
+  static RelationshipTheme detectRelationshipTheme(String input) {
+    final text = input.toLowerCase();
+
+    if (text.contains("don't want to get back") ||
+        text.contains("dont want to get back") ||
+        text.contains("don't want to be with") ||
+        text.contains("do not want to be with") ||
+        text.contains("don't want them back") ||
+        text.contains("dont want them back") ||
+        text.contains("do not want them back") ||
+        text.contains("don't want the relationship back") ||
+        text.contains("relationship back")) {
+      return RelationshipTheme.noReturn;
+    }
+
+    if (text.contains("future") ||
+        text.contains("imagined") ||
+        text.contains("life together")) {
+      return RelationshipTheme.futureLost;
+    }
+
+    if (text.contains("talk to") ||
+        text.contains("one more time")) {
+      return RelationshipTheme.conversation;
+    }
+
+    if (text.contains("miss")) {
+      return RelationshipTheme.missing;
+    }
+
+    return RelationshipTheme.unknown;
+  }
+
+  static FutureTheme detectFutureTheme(String input) {
+    final text = input.toLowerCase();
+
+    if (text.contains("interview") ||
+        text.contains("job interview") ||
+        text.contains("iş görüşmesi") ||
+        text.contains("mülakat")) {
+      return FutureTheme.interview;
+    }
+
+    if (text.contains("exam") ||
+        text.contains("sınav") ||
+        text.contains("test") ||
+        text.contains("final")) {
+      return FutureTheme.exam;
+    }
+
+    if (text.contains("money") ||
+        text.contains("debt") ||
+        text.contains("loan") ||
+        text.contains("borç") ||
+        text.contains("para") ||
+        text.contains("kredi")) {
+      return FutureTheme.money;
+    }
+
+    if (text.contains("health") ||
+        text.contains("mri") ||
+        text.contains("result") ||
+        text.contains("scan") ||
+        text.contains("sağlık") ||
+        text.contains("sonuç") ||
+        text.contains("mr")) {
+      return FutureTheme.health;
+    }
+
+    if (text.contains("move") ||
+        text.contains("moving") ||
+        text.contains("taşın") ||
+        text.contains("şehir değiş")) {
+      return FutureTheme.moving;
+    }
+
+    return FutureTheme.general;
+  }
+
   static Future<String?> enhanceWithAI(String baseText) async {
     if (apiKey.isEmpty) return null;
 
@@ -174,9 +283,9 @@ Rules:
 - Do not expand
 - Do not explain
 - Make it feel less repetitive and more human
-"""
+""",
             },
-            {"role": "user", "content": baseText}
+            {"role": "user", "content": baseText},
           ],
           "temperature": 0.8,
           "max_tokens": 80,
@@ -205,205 +314,226 @@ Rules:
     print("AI MESSAGE COUNT = $aiMessageCount");
     print("STATE = $state");
 
-return generateNoctaReply(userInput: userInput, state: state, conversationHistory: conversationHistory);
-
+    return generateNoctaReply(
+      userInput: userInput,
+      state: state,
+      conversationHistory: conversationHistory,
+    );
   }
 
+  static String generateNoctaReply({
+    required String userInput,
+    required SleepState state,
+    required List<String> conversationHistory,
+  }) {
+    final step = conversationHistory.length;
+    final text = userInput.toLowerCase();
+    final historyText = conversationHistory.join(" ").toLowerCase();
 
-static String generateNoctaReply({
-  required String userInput,
-  required SleepState state,
-  required List<String> conversationHistory,
-}) {
-  final step = conversationHistory.length;
-  final text = userInput.toLowerCase();
-  final historyText = conversationHistory.join(" ").toLowerCase();
+    String? topic;
+    final futureTheme = detectFutureTheme(userInput);
 
-  String? topic;
+    if (historyText.contains("presentation")) topic = "presentation";
+    if (historyText.contains("meeting")) topic = "meeting";
+    if (historyText.contains("interview")) topic = "interview";
+    if (historyText.contains("exam")) topic = "exam";
 
-  if (historyText.contains("presentation")) topic = "presentation";
-  if (historyText.contains("meeting")) topic = "meeting";
-  if (historyText.contains("interview")) topic = "interview";
-  if (historyText.contains("exam")) topic = "exam";
+    if (step <= 1) {
+      final normalizedText = text.trim();
 
-  if (step <= 1) {
+      final isSimpleGreeting = RegExp(
+        r'^(h+i+|h+e+y+|hello+|good evening|good night)( there)?[.!?]*$',
+      ).hasMatch(normalizedText);
 
-    if (text.contains("presentation")) {
-      return "Part of your attention is still staying with tomorrow's presentation.";
+      final asksHowAreYou = RegExp(r'\bhow are you\b').hasMatch(normalizedText);
+
+      if (isSimpleGreeting || asksHowAreYou) {
+        return "Hi. I'm doing well, thank you for asking. How are you feeling? If something is keeping you awake, you can tell me about it.";
+      }
+
+      if (text.contains("presentation")) {
+        return "Part of your attention is still staying with tomorrow's presentation.";
+      }
+
+      if (text.contains("meeting")) {
+        return "Part of your mind still seems to be sitting in tomorrow's meeting.";
+      }
+
+      if (text.contains("interview")) {
+        return "It sounds like tomorrow's interview is asking for a lot of your attention tonight.";
+      }
+
+      if (text.contains("exam")) {
+        return "Part of you is already trying to be with tomorrow's exam.";
+      }
+
+      switch (state) {
+        case SleepState.overthinking:
+          if (text.contains("debt") ||
+              text.contains("loan") ||
+              text.contains("credit") ||
+              text.contains("money") ||
+              text.contains("borç") ||
+              text.contains("kredi") ||
+              text.contains("para")) {
+            return "Part of your mind seems to be trying to solve tomorrow's finances tonight.";
+          }
+
+          return NoctaConversations.overthinkingOpeners[DateTime.now()
+                  .millisecond %
+              NoctaConversations.overthinkingOpeners.length];
+        case SleepState.workStress:
+          if (topic == "presentation") {
+            return "Nothing about tomorrow's presentation needs anything more from you right now.";
+          }
+
+          if (topic == "meeting") {
+            return "Nothing about tomorrow's meeting needs your attention right now.";
+          }
+
+          if (topic == "interview") {
+            return "You do not need to keep preparing for tomorrow's interview right now.";
+          }
+
+          if (topic == "exam") {
+            return "Nothing more is needed from you for tomorrow's exam tonight.";
+          }
+
+          return _pick(NoctaConversations.workStressOpeners);
+        case SleepState.relationship:
+          return _pick(NoctaConversations.relationshipOpeners);
+
+        case SleepState.futureAnxiety:
+          if (futureTheme == FutureTheme.interview) {
+            return "It sounds like tomorrow's interview is taking up a lot of space tonight.";
+          }
+
+          if (futureTheme == FutureTheme.money) {
+            return "Part of your mind seems to be trying to solve tomorrow's finances tonight.";
+          }
+
+          if (futureTheme == FutureTheme.health) {
+            return "Waiting for answers about your health can make the future feel very close.";
+          }
+
+          if (futureTheme == FutureTheme.moving) {
+            return "Big changes can make the future feel louder than usual.";
+          }
+
+          return _pick(NoctaConversations.futureAnxietyOpeners);
+
+        case SleepState.loneliness:
+          return "Tonight feels a little too quiet around you.";
+        default:
+          return "Something in you still feels awake tonight.";
+      }
     }
 
-    if (text.contains("meeting")) {
-      return "Part of your mind still seems to be sitting in tomorrow's meeting.";
-    }
+    if (step == 2) {
+      switch (state) {
+        case SleepState.overthinking:
+          if (text.contains("debt") ||
+              text.contains("loan") ||
+              text.contains("credit") ||
+              text.contains("money") ||
+              text.contains("borç") ||
+              text.contains("kredi") ||
+              text.contains("para")) {
+            return "Financial pressure can make the future feel like a problem that must be solved right now.";
+          }
 
-    if (text.contains("interview")) {
-      return "It sounds like tomorrow's interview is asking for a lot of your attention tonight.";
-    }
+          return [
+            "Sometimes thinking continues because letting go feels riskier.",
+            "The mind can become so focused on finding an answer that it forgets to ask whether the answer is helping.",
+            "Sometimes the search for certainty becomes the thing that keeps us awake.",
+            "The mind is not always searching for an answer. Sometimes it is searching for relief.",
+            "Overthinking often begins as problem solving. It becomes exhausting when it turns into problem circling.",
+          ][DateTime.now().millisecond % 5];
 
-    if (text.contains("exam")) {
-      return "Part of you is already trying to be with tomorrow's exam.";
+        case SleepState.workStress:
+          if (topic == "presentation") {
+            return "Nothing about tomorrow's presentation needs anything more from you right now.";
+          }
+
+          if (topic == "meeting") {
+            return "Nothing about tomorrow's meeting needs your attention right now.";
+          }
+
+          if (topic == "interview") {
+            return "You do not need to keep preparing for tomorrow's interview right now.";
+          }
+
+          if (topic == "exam") {
+            return "Nothing more is needed from you for tomorrow's exam tonight.";
+          }
+
+          return _pick(NoctaConversations.workStressMiddle);
+
+        case SleepState.relationship:
+          final relationshipTheme =
+              detectRelationshipTheme(userInput);
+
+          final themePrompt =
+              ThemePromptBuilder.buildRelationshipPrompt(
+                relationshipTheme.name,
+              );
+
+          print(themePrompt);
+
+          if (relationshipTheme == RelationshipTheme.noReturn) {
+            return """That can be a confusing place to be.
+
+Part of you still thinks about them.
+
+Yet another part of you already knows the relationship is not where you want to return.
+
+Sometimes the heart needs more time to let go than the mind does.""";
+          }
+
+          return _pick(NoctaConversations.relationshipMiddle);
+
+        case SleepState.futureAnxiety:
+          if (futureTheme == FutureTheme.interview) {
+            return "The interview may feel important, but nothing more needs to be decided tonight.";
+          }
+
+          if (futureTheme == FutureTheme.money) {
+            return "Financial uncertainty often makes the mind believe it must keep working after the day is over.";
+          }
+
+          if (futureTheme == FutureTheme.health) {
+            return "The mind often searches for certainty when the answer has not arrived yet.";
+          }
+
+          if (futureTheme == FutureTheme.moving) {
+            return "Big transitions can make the future feel like it needs to be solved all at once.";
+          }
+
+          return _pick(NoctaConversations.futureAnxietyMiddle);
+
+        case SleepState.loneliness:
+          return "This moment does not need to hold the whole weight of that feeling.";
+
+        default:
+          return "It may not need quite as much space right now.";
+      }
     }
 
     switch (state) {
       case SleepState.overthinking:
-        return NoctaConversations.overthinkingOpeners[
-          DateTime.now().millisecond %
-              NoctaConversations.overthinkingOpeners.length
-        ];
+        return _pick(NoctaConversations.overthinkingClosers);
       case SleepState.workStress:
-
-        if (topic == "presentation") {
-          return "Nothing about tomorrow's presentation needs anything more from you right now.";
-        }
-
-        if (topic == "meeting") {
-          return "Nothing about tomorrow's meeting needs your attention right now.";
-        }
-
-        if (topic == "interview") {
-          return "You do not need to keep preparing for tomorrow's interview right now.";
-        }
-
-        if (topic == "exam") {
-          return "Nothing more is needed from you for tomorrow's exam tonight.";
-        }
-
-        return [
-    "Part of your day still feels like it is following you here.",
-    "Some of today still seems to be asking for your attention.",
-    "It sounds like part of your mind is still staying with today's responsibilities.",
-    "A piece of today may still feel unfinished tonight.",
-    "Part of you is still carrying the weight of the day."
-  ][DateTime.now().millisecond % 5];
+        return _pick(NoctaConversations.workStressClosers);
       case SleepState.relationship:
-        return "Something about this connection still feels present tonight.";
+        return _pick(NoctaConversations.relationshipClosers);
 
       case SleepState.futureAnxiety:
-        return [
-          "Tomorrow may have arrived a little earlier than it needed to.",
-          "Part of your attention already seems to be with the future.",
-          "The future appears to be taking up more space than it needs to right now.",
-          "Part of your mind may still be trying to get ahead of what comes next.",
-          "Something about the future still seems to be asking for your attention."
-        ][DateTime.now().millisecond % 5];
+        return _pick(NoctaConversations.futureAnxietyClosers);
 
       case SleepState.loneliness:
-        return "Tonight feels a little too quiet around you.";
+        return "You do not have to fill the whole quiet tonight. Just let this moment hold you for a while.";
       default:
-        return "Something in you still feels awake tonight.";
+        return "You do not need to solve it tonight. We can leave it here for now.";
     }
   }
-
-  if (step == 2) {
-    switch (state) {
-      case SleepState.overthinking:
-        return [
-          "Not all of tomorrow is here right now.",
-          "It may not need quite as much space right now.",
-          "Not everything needs your attention tonight.",
-          "For now, it can be just tonight.",
-          "It does not all belong to this moment."
-        ][DateTime.now().millisecond % 5];
-
-      case SleepState.workStress:
-
-        if (topic == "presentation") {
-          return "Nothing about tomorrow's presentation needs anything more from you right now.";
-        }
-
-        if (topic == "meeting") {
-          return "Nothing about tomorrow's meeting needs your attention right now.";
-        }
-
-        if (topic == "interview") {
-          return "You do not need to keep preparing for tomorrow's interview right now.";
-        }
-
-        if (topic == "exam") {
-          return "Nothing more is needed from you for tomorrow's exam tonight.";
-        }
-
-        return [
-          "Not everything from today needs to come with you into this moment.",
-          "Some of it can stay where the day ended.",
-          "You do not need to carry every responsibility into tonight.",
-          "For now, the rest of it can wait until morning.",
-          "Not all of it belongs in this moment."
-        ][DateTime.now().millisecond % 5];
-
-      case SleepState.relationship:
-        return "Not all of this needs your attention right now.";
-
-      case SleepState.futureAnxiety:
-        return [
-          "Not every question needs an answer tonight.",
-          "The future does not need to be figured out right now.",
-          "Some uncertainty can remain unresolved for now.",
-          "You do not need to know how everything will unfold tonight.",
-          "Not everything about tomorrow needs to be decided right now."
-        ][DateTime.now().millisecond % 5];
-
-      case SleepState.loneliness:
-        return "This moment does not need to hold the whole weight of that feeling.";
-
-      default:
-        return "It may not need quite as much space right now.";
-    }
-  }
-
-  switch (state) {
-    case SleepState.overthinking:
-      return [
-  "You do not need to keep watch over it right now. For now, it can stay where it is.",
-  "Nothing more is needed from you tonight.",
-  "You have carried enough of it for today.",
-  "You do not have to solve it before you rest.",
-  "The night does not require an answer from you.",
-  "For now, it is safe to leave it where it is.",
-  "You can let go of it for a little while.",
-  "You do not need to carry it any further tonight.",
-  "For now, you can leave it where it is.",
-  "The rest of it can wait outside this moment.",
-  "You have done enough with it for one day.",
-  "It does not need anything more from you tonight.",
-  "You can stop holding it for a little while.",
-  "For the next few minutes, it can simply stay unresolved.",
-  "You do not have to stay with it right now.",
-  "It is okay to leave the rest for tomorrow's version of you.",
-  "You can let this moment be smaller than the thing you are carrying.",
-  "For now, the weight of it can be set down.",
-  "Nothing is asking anything more from you tonight.",
-  "You can leave the rest exactly where it is."
-][DateTime.now().millisecond % 20];
-    case SleepState.workStress:
-      return [
-  "You have carried enough of it for today. Nothing more is needed from you tonight.",
-  "For now, the weight of the day can stay where it is.",
-  "You do not need to carry the rest of it into tonight.",
-  "The unfinished parts of today can wait until morning.",
-  "Nothing more is being asked of you right now.",
-  "You have done enough for one day.",
-  "For now, it is safe to set the rest down.",
-  "The day does not need anything more from you tonight.",
-  "You can leave the rest exactly where it is.",
-  "Tomorrow can stay where it is."
-][DateTime.now().millisecond % 10];
-    case SleepState.relationship:
-      return "You do not need to understand all of it before you rest. For now, we can let it soften.";
-
-    case SleepState.futureAnxiety:
-      return [
-        "Not every answer needs to arrive tonight.",
-        "The future can remain unfinished for now.",
-        "You do not need to know how everything will unfold before you rest.",
-        "Some things can stay uncertain until tomorrow.",
-        "For now, the future can simply remain tomorrow."
-      ][DateTime.now().millisecond % 5];
-
-    case SleepState.loneliness:
-      return "You do not have to fill the whole quiet tonight. Just let this moment hold you for a while.";
-    default:
-      return "You do not need to solve it tonight. We can leave it here for now.";
-  }
-}
 }

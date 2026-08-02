@@ -1,0 +1,17 @@
+enum ConversationStage { observe, understand, reframe, release, transition }
+
+class ConversationFlow {
+  const ConversationFlow._();
+
+  static ConversationStage stageFor(int userMessageCount) {
+    if (userMessageCount <= 1) {
+      return ConversationStage.observe;
+    }
+
+    if (userMessageCount == 2) {
+      return ConversationStage.understand;
+    }
+
+    return ConversationStage.transition;
+  }
+}

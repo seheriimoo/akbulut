@@ -1,0 +1,62 @@
+import '../models/sleep_state.dart';
+import 'conversation_flow.dart';
+import 'future_theme_detector.dart';
+import 'relationship_theme_detector.dart';
+
+class ConversationContext {
+  final String userInput;
+  final String text;
+  final String historyText;
+
+  final SleepState state;
+  final ConversationStage stage;
+
+  final String? topic;
+
+  final FutureTheme futureTheme;
+  final RelationshipTheme relationshipTheme;
+
+  const ConversationContext({
+    required this.userInput,
+    required this.text,
+    required this.historyText,
+    required this.state,
+    required this.stage,
+    required this.topic,
+    required this.futureTheme,
+    required this.relationshipTheme,
+  });
+
+  factory ConversationContext.build({
+    required String userInput,
+    required SleepState state,
+    required List<String> conversationHistory,
+  }) {
+    final text = userInput.toLowerCase();
+
+    final historyText = conversationHistory.join(" ").toLowerCase();
+
+    String? topic;
+
+    if (historyText.contains("presentation")) {
+      topic = "presentation";
+    } else if (historyText.contains("meeting")) {
+      topic = "meeting";
+    } else if (historyText.contains("interview")) {
+      topic = "interview";
+    } else if (historyText.contains("exam")) {
+      topic = "exam";
+    }
+
+    return ConversationContext(
+      userInput: userInput,
+      text: text,
+      historyText: historyText,
+      state: state,
+      stage: ConversationFlow.stageFor(conversationHistory.length),
+      topic: topic,
+      futureTheme: detectFutureTheme(userInput),
+      relationshipTheme: detectRelationshipTheme(userInput),
+    );
+  }
+}

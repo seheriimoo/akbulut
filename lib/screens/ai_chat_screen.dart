@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/ai_service.dart';
 import '../features/player/player_screen.dart';
+import '../models/conversation_types.dart';
 
 class AISleepChatScreen extends StatefulWidget {
   const AISleepChatScreen({super.key});
@@ -21,25 +22,36 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
   SleepState? _conversationState;
   final List<String> _userMessages = [];
 
-@override
-void initState() {
-  super.initState();
-}
+  @override
+  void initState() {
+    super.initState();
+
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _sendInitialMessage();
+    });
+  }
 
   @override
   void dispose() {
-  _controller.dispose();
-  _scrollController.dispose();
-  super.dispose();
-}
+    _controller.dispose();
+    _scrollController.dispose();
+    super.dispose();
+  }
 
-Future<void> _sendInitialMessage() async {
-  final starters = [
-      "Şu an seni uyanık tutan şey daha çok zihinsel mi yoksa bir his gibi mi geliyor?",
-      "Uykuya geçmeni zorlaştıran şey daha çok düşünceler mi yoksa bedenindeki bir gerginlik mi?",
-     "🌙 Zihninde kalan bir şey mi var yoksa sadece gevşeyememe hali mi? 🤍",
-     "Bugünden kalan bir şey mi seni hâlâ uyanık tutuyor?",
-    ];
+  Future<void> _sendInitialMessage() async {
+    if (!mounted) return;
+
+    setState(() {
+      _messages.add(
+        const _ChatMessage(
+          text:
+              "I'm here to understand what your mind is carrying tonight.\n\nWhenever you're ready, tell me what's on your mind.",
+          isUser: false,
+        ),
+      );
+    });
+
+    _scrollToBottom();
   }
 
   Future<void> _handleSend() async {
@@ -69,11 +81,11 @@ Future<void> _sendInitialMessage() async {
     _conversationState ??= AIService.detectState(userInput);
 
     final reply = await AIService.generateReply(
-  userInput: userInput,
-  aiMessageCount: aiMessageCount,
-  conversationHistory: _userMessages,
-  conversationState: _conversationState,
-);
+      userInput: userInput,
+      aiMessageCount: aiMessageCount,
+      conversationHistory: _userMessages,
+      conversationState: _conversationState,
+    );
     if (!mounted) return;
 
     setState(() => isTyping = false);
@@ -104,8 +116,6 @@ Future<void> _sendInitialMessage() async {
 
     setState(() => isLoadingAudio = true);
 
-                        
-
     await Future.delayed(const Duration(seconds: 2));
 
     if (!mounted) return;
@@ -125,8 +135,7 @@ Future<void> _sendInitialMessage() async {
     Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (_) => 
-         PlayerScreen(
+        builder: (_) => PlayerScreen(
           goal: "sleep",
           blocker: blocker,
           sleepLatency: "medium",
@@ -172,10 +181,7 @@ Future<void> _sendInitialMessage() async {
       energy = 0;
     }
 
-    return {
-      "sleepLatency": sleepLatency,
-      "energy": energy,
-    };
+    return {"sleepLatency": sleepLatency, "energy": energy};
   }
 
   void _scrollToBottom() {
@@ -194,19 +200,19 @@ Future<void> _sendInitialMessage() async {
   Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: const Color(0xFF02030A),
-     appBar: AppBar(
-      backgroundColor: Colors.transparent,
-      elevation: 0,
-      title: const Text(
-    "Nocta",
-    style: TextStyle(
-      fontSize: 20,
-      fontWeight: FontWeight.w500,
-      color: Colors.white,
-    ),
-  ),
-),
-             
+      appBar: AppBar(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        title: const Text(
+          "Nocta",
+          style: TextStyle(
+            fontSize: 20,
+            fontWeight: FontWeight.w500,
+            color: Colors.white,
+          ),
+        ),
+      ),
+
       body: Column(
         children: [
           Expanded(
@@ -220,7 +226,27 @@ Future<void> _sendInitialMessage() async {
                   return const _TypingBubble();
                 }
 
-                return _MessageBubble(message: _messages[index]);
+                final message = _messages[index];
+
+                if (!message.isUser) {
+                  return Padding(
+                    padding: const EdgeInsets.symmetric(
+                      vertical: 12,
+                      horizontal: 4,
+                    ),
+                    child: Text(
+                      message.text,
+                      style: const TextStyle(
+                        color: Colors.white,
+                        fontSize: 19,
+                        height: 1.7,
+                        fontWeight: FontWeight.w400,
+                      ),
+                    ),
+                  );
+                }
+
+                return _MessageBubble(message: message);
               },
             ),
           ),
@@ -243,25 +269,17 @@ Future<void> _sendInitialMessage() async {
                 decoration: BoxDecoration(
                   color: const Color(0xFF0F172A),
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(
-                    color: Colors.white.withOpacity(0.08),
-                  ),
+                  border: Border.all(color: Colors.white.withOpacity(0.08)),
                 ),
                 child: TextField(
                   controller: _controller,
-                enabled: aiMessageCount < 3 && !isLoadingAudio && !isTyping,
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontSize: 14,
-                  ),
+                  enabled: aiMessageCount < 3 && !isLoadingAudio && !isTyping,
+                  style: const TextStyle(color: Colors.white, fontSize: 16),
                   minLines: 1,
                   maxLines: 4,
                   decoration: const InputDecoration(
-                    hintText: "Tell me what's keeping you awake...",
-                    hintStyle: TextStyle(
-                      color: Colors.white38,
-                      fontSize: 14,
-                    ),
+                    hintText: "What's on your mind tonight?",
+                    hintStyle: TextStyle(color: Colors.white38, fontSize: 14),
                     border: InputBorder.none,
                   ),
                   onSubmitted: (_) => _handleSend(),
@@ -289,10 +307,7 @@ class _ChatMessage {
   final String text;
   final bool isUser;
 
-  const _ChatMessage({
-    required this.text,
-    required this.isUser,
-  });
+  const _ChatMessage({required this.text, required this.isUser});
 }
 
 class _MessageBubble extends StatelessWidget {
@@ -307,35 +322,32 @@ class _MessageBubble extends StatelessWidget {
     return Align(
       alignment: isUser ? Alignment.centerRight : Alignment.centerLeft,
       child: Container(
-        margin: const EdgeInsets.symmetric(vertical: 6),
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        margin: const EdgeInsets.symmetric(vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 14),
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.78,
         ),
         decoration: BoxDecoration(
-  color: isUser
-      ? Colors.white.withOpacity(0.07)
-      : Colors.white.withOpacity(0.05),
+          color: isUser
+              ? Colors.white.withOpacity(0.07)
+              : Colors.white.withOpacity(0.05),
 
-  borderRadius: BorderRadius.only(
-    topLeft: const Radius.circular(18),
-    topRight: const Radius.circular(18),
-    bottomLeft: Radius.circular(isUser ? 18 : 6),
-    bottomRight: Radius.circular(isUser ? 6 : 18),
-  ),
+          borderRadius: BorderRadius.only(
+            topLeft: const Radius.circular(22),
+            topRight: const Radius.circular(22),
+            bottomLeft: Radius.circular(isUser ? 22 : 10),
+            bottomRight: Radius.circular(isUser ? 10 : 22),
+          ),
 
-    border: Border.all(
-    color: Colors.white.withOpacity(0.10),
-    width: 1,
-  ),
-),
+          border: Border.all(color: Colors.white.withOpacity(0.08), width: 1),
+        ),
 
         child: Text(
-        message.text,
-        style: const TextStyle(
-        color: Colors.white,
-        fontSize: 14,
-        height: 1.42,
+          message.text,
+          style: const TextStyle(
+            color: Colors.white,
+            fontSize: 16,
+            height: 1.55,
           ),
         ),
       ),

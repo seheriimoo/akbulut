@@ -1,8 +1,9 @@
+import 'belief_detector.dart';
+import 'learning_engine.dart';
 import 'living_mind_model.dart';
-import 'perception_engine.dart';
 import 'mental_pattern_detector.dart';
 import 'emotional_pattern_detector.dart';
-import 'learning_engine.dart';
+import 'perception_engine.dart';
 import 'reasoning_engine.dart';
 
 class NoctaAIBrain {
@@ -11,6 +12,7 @@ class NoctaAIBrain {
   final PerceptionEngine perceptionEngine;
   final MentalPatternDetector mentalPatternDetector;
   final EmotionalPatternDetector emotionalPatternDetector;
+  final BeliefDetector beliefDetector;
   final LearningEngine learningEngine;
   final ReasoningEngine reasoningEngine;
 
@@ -19,6 +21,7 @@ class NoctaAIBrain {
     required this.perceptionEngine,
     required this.mentalPatternDetector,
     required this.emotionalPatternDetector,
+    required this.beliefDetector,
     required this.learningEngine,
     required this.reasoningEngine,
   });
@@ -30,10 +33,13 @@ class NoctaAIBrain {
 
     final emotionalPatterns = emotionalPatternDetector.detect(evidence);
 
+    final beliefs = beliefDetector.detect(evidence);
+
     final updatedModel = learningEngine.update(
       mindModel,
       mentalPatterns: mentalPatterns,
       emotionalPatterns: emotionalPatterns,
+      beliefs: beliefs,
     );
 
     return reasoningEngine.decide(updatedModel.mentalPatterns);

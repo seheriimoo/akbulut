@@ -1,13 +1,14 @@
 import 'belief_detector.dart';
+import 'brain_turn_result.dart';
 import 'emotional_pattern_detector.dart';
-import 'knowledge_merger.dart';
-import 'learning_engine.dart';
 import 'living_mind_model.dart';
+import 'memory_engine.dart';
 import 'mental_pattern_detector.dart';
 import 'need_detector.dart';
 import 'perception_engine.dart';
 import 'preference_detector.dart';
 import 'reasoning_engine.dart';
+import 'validated_understanding.dart';
 
 class NoctaAIBrain {
   final LivingMindModel mindModel;
@@ -18,10 +19,7 @@ class NoctaAIBrain {
   final BeliefDetector beliefDetector;
   final NeedDetector needDetector;
   final PreferenceDetector preferenceDetector;
-
-  final KnowledgeMerger knowledgeMerger;
-
-  final LearningEngine learningEngine;
+  final MemoryEngine memoryEngine;
   final ReasoningEngine reasoningEngine;
 
   const NoctaAIBrain({
@@ -32,39 +30,30 @@ class NoctaAIBrain {
     required this.beliefDetector,
     required this.needDetector,
     required this.preferenceDetector,
-    required this.knowledgeMerger,
-    required this.learningEngine,
+    required this.memoryEngine,
     required this.reasoningEngine,
   });
 
-  ReasoningDecision processMessage(String message) {
+  BrainTurnResult processMessage(String message) {
     final evidence = perceptionEngine.perceive(message);
 
-    final mentalPatterns = mentalPatternDetector.detect(evidence);
-    final emotionalPatterns = emotionalPatternDetector.detect(evidence);
-
-    final beliefCandidates = beliefDetector.detect(evidence);
-
-    final beliefs = knowledgeMerger.merge(mindModel.beliefs, beliefCandidates);
-
-    final needs = needDetector.detect(evidence);
-
-    final preferences = preferenceDetector.detect(evidence);
-
-    final updatedModel = learningEngine.update(
-      mindModel,
-      mentalPatterns: mentalPatterns,
-      emotionalPatterns: emotionalPatterns,
-      beliefs: beliefs,
-      needs: needs,
-      preferences: preferences,
+    final understanding = ValidatedUnderstanding(
+      mentalPatterns: mentalPatternDetector.detect(evidence),
+      emotionalPatterns: emotionalPatternDetector.detect(evidence),
+      beliefCandidates: beliefDetector.detect(evidence),
+      needCandidates: needDetector.detect(evidence),
+      preferences: preferenceDetector.detect(evidence),
     );
 
-    return reasoningEngine.decide(
+    final updatedModel = memoryEngine.update(mindModel, understanding);
+
+    final decision = reasoningEngine.decide(
       mentalPatterns: updatedModel.mentalPatterns,
       beliefs: updatedModel.beliefs,
       needs: updatedModel.needs,
       preferences: updatedModel.preferences,
     );
+
+    return BrainTurnResult(model: updatedModel, decision: decision);
   }
 }

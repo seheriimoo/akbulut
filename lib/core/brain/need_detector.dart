@@ -1,11 +1,11 @@
+import 'detection_candidate.dart';
 import 'evidence.dart';
-import 'need.dart';
 
 class NeedDetector {
   const NeedDetector();
 
-  List<Need> detect(List<Evidence> evidence) {
-    final needs = <Need>[];
+  List<DetectionCandidate> detect(List<Evidence> evidence) {
+    final needs = <DetectionCandidate>[];
 
     for (final item in evidence) {
       if (item.type != 'need') {
@@ -13,12 +13,10 @@ class NeedDetector {
       }
 
       needs.add(
-        Need(
+        DetectionCandidate(
           id: item.value.toLowerCase().replaceAll(' ', '_'),
           name: item.value,
           description: item.value,
-          confidence: item.confidence,
-          observations: 1,
         ),
       );
     }

@@ -45,8 +45,11 @@ class NoctaAIBrain {
       mentalPatterns: mentalPatterns,
       emotionalPatterns: emotionalPatterns,
       beliefs: beliefs,
-      needs: needs,
     );
+
+    // Need desteğini bir sonraki adımda LearningEngine'e ekleyeceğiz.
+    // Şimdilik detector zincirini tamamlıyoruz.
+    final _ = needs;
 
     return reasoningEngine.decide(updatedModel.mentalPatterns);
   }

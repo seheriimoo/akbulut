@@ -5,6 +5,7 @@ import 'living_mind_model.dart';
 import 'mental_pattern_detector.dart';
 import 'need_detector.dart';
 import 'perception_engine.dart';
+import 'preference_detector.dart';
 import 'reasoning_engine.dart';
 
 class NoctaAIBrain {
@@ -15,6 +16,7 @@ class NoctaAIBrain {
   final EmotionalPatternDetector emotionalPatternDetector;
   final BeliefDetector beliefDetector;
   final NeedDetector needDetector;
+  final PreferenceDetector preferenceDetector;
   final LearningEngine learningEngine;
   final ReasoningEngine reasoningEngine;
 
@@ -25,6 +27,7 @@ class NoctaAIBrain {
     required this.emotionalPatternDetector,
     required this.beliefDetector,
     required this.needDetector,
+    required this.preferenceDetector,
     required this.learningEngine,
     required this.reasoningEngine,
   });
@@ -33,12 +36,10 @@ class NoctaAIBrain {
     final evidence = perceptionEngine.perceive(message);
 
     final mentalPatterns = mentalPatternDetector.detect(evidence);
-
     final emotionalPatterns = emotionalPatternDetector.detect(evidence);
-
     final beliefs = beliefDetector.detect(evidence);
-
     final needs = needDetector.detect(evidence);
+    final preferences = preferenceDetector.detect(evidence);
 
     final updatedModel = learningEngine.update(
       mindModel,
@@ -46,8 +47,14 @@ class NoctaAIBrain {
       emotionalPatterns: emotionalPatterns,
       beliefs: beliefs,
       needs: needs,
+      preferences: preferences,
     );
 
-    return reasoningEngine.decide(updatedModel.mentalPatterns);
+    return reasoningEngine.decide(
+      mentalPatterns: updatedModel.mentalPatterns,
+      beliefs: updatedModel.beliefs,
+      needs: updatedModel.needs,
+      preferences: updatedModel.preferences,
+    );
   }
 }

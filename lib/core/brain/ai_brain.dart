@@ -1,5 +1,6 @@
 import 'belief_detector.dart';
 import 'emotional_pattern_detector.dart';
+import 'knowledge_merger.dart';
 import 'learning_engine.dart';
 import 'living_mind_model.dart';
 import 'mental_pattern_detector.dart';
@@ -17,6 +18,9 @@ class NoctaAIBrain {
   final BeliefDetector beliefDetector;
   final NeedDetector needDetector;
   final PreferenceDetector preferenceDetector;
+
+  final KnowledgeMerger knowledgeMerger;
+
   final LearningEngine learningEngine;
   final ReasoningEngine reasoningEngine;
 
@@ -28,6 +32,7 @@ class NoctaAIBrain {
     required this.beliefDetector,
     required this.needDetector,
     required this.preferenceDetector,
+    required this.knowledgeMerger,
     required this.learningEngine,
     required this.reasoningEngine,
   });
@@ -37,8 +42,13 @@ class NoctaAIBrain {
 
     final mentalPatterns = mentalPatternDetector.detect(evidence);
     final emotionalPatterns = emotionalPatternDetector.detect(evidence);
-    final beliefs = beliefDetector.detect(evidence);
+
+    final beliefCandidates = beliefDetector.detect(evidence);
+
+    final beliefs = knowledgeMerger.merge(mindModel.beliefs, beliefCandidates);
+
     final needs = needDetector.detect(evidence);
+
     final preferences = preferenceDetector.detect(evidence);
 
     final updatedModel = learningEngine.update(

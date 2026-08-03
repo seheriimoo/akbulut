@@ -1,11 +1,11 @@
-import 'belief.dart';
+import 'detection_candidate.dart';
 import 'evidence.dart';
 
 class BeliefDetector {
   const BeliefDetector();
 
-  List<Belief> detect(List<Evidence> evidence) {
-    final beliefs = <Belief>[];
+  List<DetectionCandidate> detect(List<Evidence> evidence) {
+    final beliefs = <DetectionCandidate>[];
 
     for (final item in evidence) {
       if (item.type != 'belief') {
@@ -13,12 +13,10 @@ class BeliefDetector {
       }
 
       beliefs.add(
-        Belief(
+        DetectionCandidate(
           id: item.value.toLowerCase().replaceAll(' ', '_'),
           name: item.value,
           description: item.value,
-          confidence: item.confidence,
-          observations: 1,
         ),
       );
     }

@@ -1,9 +1,14 @@
+import 'belief_detector.dart';
 import 'conversation_engine.dart';
 import 'conversation_policy.dart';
 import 'cognitive_turn_result.dart';
+import 'emotional_pattern_detector.dart';
 import 'exit_intelligence.dart';
+import 'mental_pattern_detector.dart';
+import 'need_detector.dart';
 import 'night_session.dart';
 import 'perception_engine.dart';
+import 'preference_detector.dart';
 import 'release_engine.dart';
 import 'working_mind_view.dart';
 
@@ -17,6 +22,16 @@ import 'working_mind_view.dart';
 class CognitiveOrchestrator {
   final PerceptionEngine perceptionEngine;
 
+  final MentalPatternDetector mentalPatternDetector;
+
+  final EmotionalPatternDetector emotionalPatternDetector;
+
+  final BeliefDetector beliefDetector;
+
+  final NeedDetector needDetector;
+
+  final PreferenceDetector preferenceDetector;
+
   final ReleaseEngine releaseEngine;
 
   final ConversationPolicy conversationPolicy;
@@ -27,6 +42,11 @@ class CognitiveOrchestrator {
 
   const CognitiveOrchestrator({
     required this.perceptionEngine,
+    required this.mentalPatternDetector,
+    required this.emotionalPatternDetector,
+    required this.beliefDetector,
+    required this.needDetector,
+    required this.preferenceDetector,
     required this.releaseEngine,
     required this.conversationPolicy,
     required this.conversationEngine,

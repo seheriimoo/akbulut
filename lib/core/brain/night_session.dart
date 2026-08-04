@@ -15,4 +15,16 @@ class NightSession {
   final List<SessionTurn> turns;
 
   const NightSession({required this.workingMind, required this.turns});
+
+  /// Records one temporary turn for the current night.
+  ///
+  /// Returns a new NightSession.
+  ///
+  /// Does not write persistent memory.
+  NightSession recordTurn(SessionTurn turn) {
+    return NightSession(
+      workingMind: workingMind,
+      turns: [...turns, turn],
+    );
+  }
 }

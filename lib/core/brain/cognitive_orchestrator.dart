@@ -107,15 +107,11 @@ class CognitiveOrchestrator {
               )
             : null;
 
-    final updatedSession = NightSession(
-      workingMind: session.workingMind,
-      turns: [
-        ...session.turns,
-        SessionTurn(
-          releaseDecision: releaseDecision,
-          phase: conversationDecision.phase,
-        ),
-      ],
+    final updatedSession = session.recordTurn(
+      SessionTurn(
+        releaseDecision: releaseDecision,
+        phase: conversationDecision.phase,
+      ),
     );
 
     return CognitiveTurnResult(

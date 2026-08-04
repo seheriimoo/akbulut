@@ -92,7 +92,13 @@ class CognitiveOrchestrator {
     exitDecision;
 
     // TODO 6
-    // ConversationEngine
+    final utterance = conversationEngine.generate(
+      conversationDecision: conversationDecision,
+      understanding: understanding,
+      workingMind: workingMind,
+    );
+
+    utterance;
 
     // TODO 7
     // Return CognitiveTurnResult

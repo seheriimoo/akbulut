@@ -27,7 +27,7 @@ class ConversationPolicy {
 
       case ReleaseReadiness.settling:
         return const ConversationDecision(
-          phase: ConversationPhase.permission,
+          phase: ConversationPhase.release,
           shouldSpeak: true,
         );
 

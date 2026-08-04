@@ -12,6 +12,7 @@ import 'night_session.dart';
 import 'perception_engine.dart';
 import 'preference_detector.dart';
 import 'release_engine.dart';
+import 'session_turn.dart';
 import 'validated_understanding.dart';
 import 'working_mind_view.dart';
 
@@ -56,15 +57,22 @@ class CognitiveOrchestrator {
     required this.exitIntelligence,
   });
 
+  /// Forward-only turn coordinator.
+  ///
+  /// Pipeline:
+  /// Perception → ValidatedUnderstanding → WorkingMindView →
+  /// Release → ConversationPolicy → Exit → Conversation →
+  /// CognitiveTurnResult
+  ///
+  /// Updates temporary NightSession state only.
+  /// Does not write persistent memory.
   CognitiveTurnResult processTurn({
     required String message,
     required NightSession session,
     required WorkingMindView workingMind,
   }) {
-    // TODO 1
     final evidence = perceptionEngine.perceive(message);
 
-    // TODO 2
     final understanding = ValidatedUnderstanding(
       mentalPatterns: mentalPatternDetector.detect(evidence),
       emotionalPatterns: emotionalPatternDetector.detect(evidence),
@@ -73,18 +81,15 @@ class CognitiveOrchestrator {
       preferences: preferenceDetector.detect(evidence),
     );
 
-    // TODO 3
     final releaseDecision = releaseEngine.evaluate(
       understanding: understanding,
       model: workingMind.model,
     );
 
-    // TODO 4
     final conversationDecision = conversationPolicy.decide(
       releaseDecision: releaseDecision,
     );
 
-    // TODO 5
     final exitDecision = exitIntelligence.decide(
       releaseDecision: releaseDecision,
       conversationDecision: conversationDecision,
@@ -102,8 +107,19 @@ class CognitiveOrchestrator {
               )
             : null;
 
+    final updatedSession = NightSession(
+      workingMind: session.workingMind,
+      turns: [
+        ...session.turns,
+        SessionTurn(
+          releaseDecision: releaseDecision,
+          phase: conversationDecision.phase,
+        ),
+      ],
+    );
+
     return CognitiveTurnResult(
-      session: session,
+      session: updatedSession,
       releaseDecision: releaseDecision,
       conversationDecision: conversationDecision,
       exitDecision: exitDecision,

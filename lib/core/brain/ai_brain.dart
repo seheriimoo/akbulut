@@ -10,6 +10,15 @@ import 'preference_detector.dart';
 import 'reasoning_engine.dart';
 import 'validated_understanding.dart';
 
+/// NoctaAIBrain
+///
+/// Transitional entry point pending cutover to CognitiveOrchestrator.
+///
+/// Mid-turn persistent memory writes are not part of the
+/// canonical HCOS Architecture v1.1 path.
+///
+/// MemoryEngine remains the sole LivingMindModel writer and accepts
+/// SessionSummary at session end only.
 class NoctaAIBrain {
   final LivingMindModel mindModel;
 
@@ -19,6 +28,11 @@ class NoctaAIBrain {
   final BeliefDetector beliefDetector;
   final NeedDetector needDetector;
   final PreferenceDetector preferenceDetector;
+
+  /// Retained for transitional cutover.
+  ///
+  /// Not invoked mid-turn. Session-end writes use SessionSummary.
+  // ignore: unused_field
   final MemoryEngine memoryEngine;
   final ReasoningEngine reasoningEngine;
 
@@ -45,15 +59,20 @@ class NoctaAIBrain {
       preferences: preferenceDetector.detect(evidence),
     );
 
-    final updatedModel = memoryEngine.update(mindModel, understanding);
+    // Obsolete mid-turn MemoryEngine.update(ValidatedUnderstanding) removed.
+    // LivingMindModel is unchanged during the turn.
 
     final decision = reasoningEngine.decide(
-      mentalPatterns: updatedModel.mentalPatterns,
-      beliefs: updatedModel.beliefs,
-      needs: updatedModel.needs,
-      preferences: updatedModel.preferences,
+      mentalPatterns: understanding.mentalPatterns.isNotEmpty
+          ? understanding.mentalPatterns
+          : mindModel.mentalPatterns,
+      beliefs: mindModel.beliefs,
+      needs: mindModel.needs,
+      preferences: understanding.preferences.isNotEmpty
+          ? understanding.preferences
+          : mindModel.preferences,
     );
 
-    return BrainTurnResult(model: updatedModel, decision: decision);
+    return BrainTurnResult(model: mindModel, decision: decision);
   }
 }

@@ -29,10 +29,10 @@ class ExitIntelligence {
       return ExitDecision.transitionToAudio;
     }
 
-    if (!conversationDecision.shouldSpeak) {
-      return ExitDecision.silence;
+    if (conversationDecision.shouldSpeak) {
+      return ExitDecision.continueConversation;
     }
 
-    return ExitDecision.continueConversation;
+    return ExitDecision.silence;
   }
 }

@@ -1,8 +1,10 @@
 import 'belief_detector.dart';
 import 'conversation_engine.dart';
 import 'conversation_policy.dart';
+import 'conversation_utterance.dart';
 import 'cognitive_turn_result.dart';
 import 'emotional_pattern_detector.dart';
+import 'exit_decision.dart';
 import 'exit_intelligence.dart';
 import 'mental_pattern_detector.dart';
 import 'need_detector.dart';
@@ -89,22 +91,23 @@ class CognitiveOrchestrator {
       session: session,
     );
 
-    exitDecision;
+    // Canonical order: Release → ConversationPolicy → Exit → Conversation.
+    // Exit decides whether Conversation executes; Conversation ownership stays after Exit.
+    final ConversationUtterance? utterance =
+        exitDecision == ExitDecision.continueConversation
+            ? conversationEngine.generate(
+                conversationDecision: conversationDecision,
+                understanding: understanding,
+                workingMind: workingMind,
+              )
+            : null;
 
-    // TODO 6
-    final utterance = conversationEngine.generate(
+    return CognitiveTurnResult(
+      session: session,
+      releaseDecision: releaseDecision,
       conversationDecision: conversationDecision,
-      understanding: understanding,
-      workingMind: workingMind,
+      exitDecision: exitDecision,
+      utterance: utterance,
     );
-
-    utterance;
-
-    // TODO 7
-    // Return CognitiveTurnResult
-
-    conversationDecision;
-
-    throw UnimplementedError();
   }
 }

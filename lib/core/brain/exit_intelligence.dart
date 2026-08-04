@@ -1,4 +1,5 @@
 import 'conversation_decision.dart';
+import 'conversation_phase.dart';
 import 'exit_decision.dart';
 import 'night_session.dart';
 import 'release_decision.dart';
@@ -24,6 +25,14 @@ class ExitIntelligence {
     required ConversationDecision conversationDecision,
     required NightSession session,
   }) {
-    throw UnimplementedError();
+    if (conversationDecision.phase == ConversationPhase.audio) {
+      return ExitDecision.transitionToAudio;
+    }
+
+    if (!conversationDecision.shouldSpeak) {
+      return ExitDecision.silence;
+    }
+
+    return ExitDecision.continueConversation;
   }
 }

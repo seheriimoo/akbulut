@@ -6,12 +6,15 @@ import 'cognitive_turn_result.dart';
 import 'emotional_pattern_detector.dart';
 import 'exit_decision.dart';
 import 'exit_intelligence.dart';
+import 'living_mind_model.dart';
+import 'memory_engine.dart';
 import 'mental_pattern_detector.dart';
 import 'need_detector.dart';
 import 'night_session.dart';
 import 'perception_engine.dart';
 import 'preference_detector.dart';
 import 'release_engine.dart';
+import 'session_summarizer.dart';
 import 'session_turn.dart';
 import 'validated_understanding.dart';
 import 'working_mind_view.dart';
@@ -44,6 +47,10 @@ class CognitiveOrchestrator {
 
   final ExitIntelligence exitIntelligence;
 
+  final SessionSummarizer sessionSummarizer;
+
+  final MemoryEngine memoryEngine;
+
   const CognitiveOrchestrator({
     required this.perceptionEngine,
     required this.mentalPatternDetector,
@@ -55,6 +62,8 @@ class CognitiveOrchestrator {
     required this.conversationPolicy,
     required this.conversationEngine,
     required this.exitIntelligence,
+    required this.sessionSummarizer,
+    required this.memoryEngine,
   });
 
   /// Forward-only turn coordinator.
@@ -121,5 +130,21 @@ class CognitiveOrchestrator {
       exitDecision: exitDecision,
       utterance: utterance,
     );
+  }
+
+  /// Session-end memory lifecycle.
+  ///
+  /// NightSession → SessionSummarizer → SessionSummary →
+  /// MemoryEngine → LivingMindModel
+  ///
+  /// Persistent memory is written once per completed session.
+  /// Mid-turn persistent writes are not performed here.
+  LivingMindModel completeSession({
+    required NightSession session,
+    required LivingMindModel model,
+  }) {
+    final summary = sessionSummarizer.summarize(session);
+
+    return memoryEngine.update(model, summary);
   }
 }

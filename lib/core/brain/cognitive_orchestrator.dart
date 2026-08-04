@@ -92,7 +92,7 @@ class CognitiveOrchestrator {
 
     final releaseDecision = releaseEngine.evaluate(
       understanding: understanding,
-      model: workingMind.model,
+      workingMind: workingMind,
     );
 
     final conversationDecision = conversationPolicy.decide(

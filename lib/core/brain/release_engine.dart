@@ -1,8 +1,18 @@
-import 'living_mind_model.dart';
 import 'release_decision.dart';
 import 'validated_understanding.dart';
+import 'working_mind_view.dart';
 
 /// ReleaseEngine
+///
+/// Estimates release readiness.
+///
+/// Reads persistent knowledge only through WorkingMindView.
+///
+/// Owns no conversation protocol.
+///
+/// Owns no exit decisions.
+///
+/// Owns no memory writes.
 ///
 /// Decision Rules (V1)
 ///
@@ -16,8 +26,10 @@ class ReleaseEngine {
 
   ReleaseDecision evaluate({
     required ValidatedUnderstanding understanding,
-    required LivingMindModel model,
+    required WorkingMindView workingMind,
   }) {
+    // Persistent knowledge is available only through workingMind.
+    // Current V1 rules use understanding signals only.
     if (understanding.emotionalPatterns.isNotEmpty) {
       return const ReleaseDecision(
         readiness: ReleaseReadiness.regulated,

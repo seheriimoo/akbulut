@@ -71,23 +71,33 @@ class CognitiveOrchestrator {
       preferences: preferenceDetector.detect(evidence),
     );
 
-    // TODO 3 will consume this.
-    understanding;
-
     // TODO 3
-    // ReleaseEngine
+    final releaseDecision = releaseEngine.evaluate(
+      understanding: understanding,
+      model: workingMind.model,
+    );
 
     // TODO 4
-    // ConversationPolicy
+    final conversationDecision = conversationPolicy.decide(
+      releaseDecision: releaseDecision,
+    );
 
     // TODO 5
-    // ExitIntelligence
+    final exitDecision = exitIntelligence.decide(
+      releaseDecision: releaseDecision,
+      conversationDecision: conversationDecision,
+      session: session,
+    );
+
+    exitDecision;
 
     // TODO 6
     // ConversationEngine
 
     // TODO 7
     // Return CognitiveTurnResult
+
+    conversationDecision;
 
     throw UnimplementedError();
   }

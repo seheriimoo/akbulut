@@ -10,6 +10,7 @@ import 'night_session.dart';
 import 'perception_engine.dart';
 import 'preference_detector.dart';
 import 'release_engine.dart';
+import 'validated_understanding.dart';
 import 'working_mind_view.dart';
 
 /// CognitiveOrchestrator
@@ -59,10 +60,19 @@ class CognitiveOrchestrator {
     required WorkingMindView workingMind,
   }) {
     // TODO 1
-    // Perception
+    final evidence = perceptionEngine.perceive(message);
 
     // TODO 2
-    // ValidatedUnderstanding
+    final understanding = ValidatedUnderstanding(
+      mentalPatterns: mentalPatternDetector.detect(evidence),
+      emotionalPatterns: emotionalPatternDetector.detect(evidence),
+      beliefCandidates: beliefDetector.detect(evidence),
+      needCandidates: needDetector.detect(evidence),
+      preferences: preferenceDetector.detect(evidence),
+    );
+
+    // TODO 3 will consume this.
+    understanding;
 
     // TODO 3
     // ReleaseEngine

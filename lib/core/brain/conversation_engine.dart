@@ -1,60 +1,62 @@
 import 'conversation_decision.dart';
-import 'conversation_phase.dart';
 import 'conversation_utterance.dart';
+import 'exit_decision.dart';
+import 'language_model_client.dart';
+import 'prompt_architecture.dart';
+import 'utterance_guard.dart';
 import 'validated_understanding.dart';
 import 'working_mind_view.dart';
 
 /// ConversationEngine
 ///
-/// Generates the minimum helpful language.
+/// Expression stage only. Renders language after upstream decisions.
 ///
-/// It never decides whether HCOS should speak.
+/// Required inputs: ConversationDecision, ExitDecision.
+/// Optional inputs: ValidatedUnderstanding, WorkingMindView (shaping only).
 ///
-/// It only renders language when permitted by
-/// ConversationPolicy and ExitIntelligence.
+/// Output: one ConversationUtterance, or no conversational language.
 ///
-/// Owns no release estimation.
-///
-/// Owns no memory.
-///
-/// Owns no exit decisions.
+/// Owns no release, protocol, exit, or memory decisions.
 class ConversationEngine {
-  const ConversationEngine();
+  final PromptArchitecture promptArchitecture;
 
-  ConversationUtterance generate({
-    required ConversationDecision conversationDecision,
-    required ValidatedUnderstanding understanding,
-    required WorkingMindView workingMind,
-  }) {
-    // Language generation only.
-    // Release, exit, readiness, and memory ownership remain elsewhere.
-    // understanding and workingMind are accepted for the orchestrator
-    // contract; this placeholder does not read them.
-    return ConversationUtterance(
-      text: _placeholderTextFor(conversationDecision.phase),
-    );
-  }
+  final LanguageModelClient languageModelClient;
 
-  /// Deterministic production placeholder.
+  final UtteranceGuard utteranceGuard;
+
+  const ConversationEngine({
+    this.promptArchitecture = const PromptArchitecture(),
+    this.languageModelClient = const LanguageModelClient(),
+    this.utteranceGuard = const UtteranceGuard(),
+  });
+
+  /// Emits exactly one speech outcome for the turn:
+  /// a single [ConversationUtterance], or `null` for no conversational language.
   ///
-  /// Renders protocol phase as fixed language.
-  /// No prompting. No personality. No memory.
-  String _placeholderTextFor(ConversationPhase phase) {
-    switch (phase) {
-      case ConversationPhase.validation:
-        return 'That makes sense.';
-      case ConversationPhase.naming:
-        return 'Something is still holding on.';
-      case ConversationPhase.permission:
-        return 'You do not have to solve this tonight.';
-      case ConversationPhase.release:
-        return 'You can let this rest for now.';
-      case ConversationPhase.continuity:
-        return 'Nothing more is needed right now.';
-      case ConversationPhase.audio:
-        return '';
-      case ConversationPhase.silence:
-        return '';
+  /// Expression path:
+  /// PromptArchitecture → (abstain | LanguageModelClient) → UtteranceGuard.
+  ConversationUtterance? generate({
+    required ConversationDecision conversationDecision,
+    required ExitDecision exitDecision,
+    ValidatedUnderstanding? understanding,
+    WorkingMindView? workingMind,
+  }) {
+    final package = promptArchitecture.package(
+      conversationDecision: conversationDecision,
+      exitDecision: exitDecision,
+      understanding: understanding,
+      workingMind: workingMind,
+    );
+
+    if (package == null) {
+      return null;
     }
+
+    final utterance = languageModelClient.realize(package);
+
+    return utteranceGuard.allow(
+      utterance: utterance,
+      what: package.what,
+    );
   }
 }

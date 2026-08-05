@@ -1,4 +1,5 @@
 import 'belief_detector.dart';
+import 'conversation_decision.dart';
 import 'conversation_engine.dart';
 import 'conversation_policy.dart';
 import 'conversation_utterance.dart';
@@ -68,10 +69,8 @@ class CognitiveOrchestrator {
 
   /// Forward-only turn coordinator.
   ///
-  /// Pipeline:
-  /// Perception → ValidatedUnderstanding → WorkingMindView →
-  /// Release → ConversationPolicy → Exit → Conversation →
-  /// CognitiveTurnResult
+  /// Canonical decision order:
+  /// Release → ConversationPolicy → Exit → Conversation.
   ///
   /// Updates temporary NightSession state only.
   /// Does not write persistent memory.
@@ -105,16 +104,14 @@ class CognitiveOrchestrator {
       session: session,
     );
 
-    // Canonical order: Release → ConversationPolicy → Exit → Conversation.
-    // Exit decides whether Conversation executes; Conversation ownership stays after Exit.
-    final ConversationUtterance? utterance =
-        exitDecision == ExitDecision.continueConversation
-            ? conversationEngine.generate(
-                conversationDecision: conversationDecision,
-                understanding: understanding,
-                workingMind: workingMind,
-              )
-            : null;
+    // Sprint 4 Conversation handoff: authorized inputs only, unchanged.
+    // ConversationEngine is invoked exactly once after Exit.
+    final ConversationUtterance? utterance = _handoffToConversation(
+      conversationDecision: conversationDecision,
+      exitDecision: exitDecision,
+      understanding: understanding,
+      workingMind: workingMind,
+    );
 
     final updatedSession = session.recordTurn(
       SessionTurn(
@@ -129,6 +126,27 @@ class CognitiveOrchestrator {
       conversationDecision: conversationDecision,
       exitDecision: exitDecision,
       utterance: utterance,
+    );
+  }
+
+  /// Passes frozen Conversation Input Contract fields unchanged.
+  ///
+  /// Required: [conversationDecision], [exitDecision].
+  /// Optional shaping: [understanding], [workingMind].
+  ///
+  /// Does not pass release decisions, memory-write authority, or other
+  /// forbidden Conversation inputs. Does not write memory.
+  ConversationUtterance? _handoffToConversation({
+    required ConversationDecision conversationDecision,
+    required ExitDecision exitDecision,
+    ValidatedUnderstanding? understanding,
+    WorkingMindView? workingMind,
+  }) {
+    return conversationEngine.generate(
+      conversationDecision: conversationDecision,
+      exitDecision: exitDecision,
+      understanding: understanding,
+      workingMind: workingMind,
     );
   }
 

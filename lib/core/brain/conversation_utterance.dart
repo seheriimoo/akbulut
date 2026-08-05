@@ -1,7 +1,10 @@
-/// Immutable output produced by ConversationEngine.
+/// Immutable speech result produced by ConversationEngine.
 ///
-/// Contains the text that HCOS chooses to deliver
-/// during the current turn.
+/// When Conversation emits conversational language, exactly one
+/// [ConversationUtterance] is produced for the turn.
+///
+/// No conversational language is represented by the absence of this
+/// value (`null` at the Conversation boundary), not by an empty utterance.
 class ConversationUtterance {
   final String text;
 

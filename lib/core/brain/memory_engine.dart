@@ -1,8 +1,17 @@
 import 'knowledge_merger.dart';
 import 'living_mind_model.dart';
 import 'need_merger.dart';
-import 'validated_understanding.dart';
+import 'session_summary.dart';
 
+/// MemoryEngine
+///
+/// Sole writer of the Living Mind Model.
+///
+/// Accepts durable SessionSummary knowledge only.
+///
+/// Does not extract session knowledge.
+///
+/// Does not own conversation or exit decisions.
 class MemoryEngine {
   final KnowledgeMerger knowledgeMerger;
   final NeedMerger needMerger;
@@ -12,29 +21,24 @@ class MemoryEngine {
     this.needMerger = const NeedMerger(),
   });
 
-  LivingMindModel update(
-    LivingMindModel model,
-    ValidatedUnderstanding understanding,
-  ) {
-    final beliefs = knowledgeMerger.merge(
-      model.beliefs,
-      understanding.beliefCandidates,
-    );
+  LivingMindModel update(LivingMindModel model, SessionSummary summary) {
+    final beliefs = knowledgeMerger.merge(model.beliefs, summary.beliefs);
 
-    final needs = needMerger.merge(model.needs, understanding.needCandidates);
+    final needs = needMerger.merge(model.needs, summary.needs);
 
     return model.copyWith(
-      mentalPatterns: understanding.mentalPatterns.isEmpty
+      mentalPatterns: summary.mentalPatterns.isEmpty
           ? model.mentalPatterns
-          : understanding.mentalPatterns,
-      emotionalPatterns: understanding.emotionalPatterns.isEmpty
+          : summary.mentalPatterns,
+      emotionalPatterns: summary.emotionalPatterns.isEmpty
           ? model.emotionalPatterns
-          : understanding.emotionalPatterns,
+          : summary.emotionalPatterns,
+      triggers: summary.triggers.isEmpty ? model.triggers : summary.triggers,
       beliefs: beliefs,
       needs: needs,
-      preferences: understanding.preferences.isEmpty
+      preferences: summary.preferences.isEmpty
           ? model.preferences
-          : understanding.preferences,
+          : summary.preferences,
     );
   }
 }

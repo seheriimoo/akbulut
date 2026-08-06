@@ -7,11 +7,15 @@ import 'working_mind_view.dart';
 
 /// Immutable LLM invocation package.
 ///
-/// Carries a fixed WHAT, optional shaping context, and bound expression
-/// constraints. Does not contain prompt wording. Does not invoke a model.
-/// Does not generate language.
+/// Carries a fixed speakable WHAT, optional shaping context, and bound
+/// expression constraints. Does not contain prompt wording. Does not invoke
+/// a model. Does not generate language.
+///
+/// Construction is rejected for non-speakable WHAT (`audio`, `silence`).
+/// Those turns must abstain before packaging.
 class LlmInvocationPackage {
   /// Sealed expression intent for this turn (protocol phase to realize).
+  /// Always a speakable [ConversationPhase].
   final ConversationPhase what;
 
   /// Optional turn understanding for wording shaping only.
@@ -35,12 +39,38 @@ class LlmInvocationPackage {
   /// Always [LlmContractBounds.forbidden]; not caller-overridable or mutable.
   UnmodifiableListView<String> get llmForbidden => LlmContractBounds.forbidden;
 
-  const LlmInvocationPackage({
+  /// Creates a package for a speakable WHAT only.
+  ///
+  /// Throws [ArgumentError] if [what] is `audio` or `silence`.
+  LlmInvocationPackage({
     required this.what,
     this.understanding,
     this.workingMind,
     this.dna = ConversationDNA.instance,
-  });
+  }) {
+    if (!_isSpeakableWhat(what)) {
+      throw ArgumentError.value(
+        what,
+        'what',
+        'LlmInvocationPackage WHAT must be speakable '
+        '(validation, naming, permission, release, or continuity)',
+      );
+    }
+  }
+
+  static bool _isSpeakableWhat(ConversationPhase what) {
+    switch (what) {
+      case ConversationPhase.validation:
+      case ConversationPhase.naming:
+      case ConversationPhase.permission:
+      case ConversationPhase.release:
+      case ConversationPhase.continuity:
+        return true;
+      case ConversationPhase.audio:
+      case ConversationPhase.silence:
+        return false;
+    }
+  }
 }
 
 /// Frozen LLM Contract bounds attached to every invocation package.

@@ -10,8 +10,12 @@ import 'package:slowave/core/brain/utterance_guard.dart';
 import 'package:slowave/core/brain/validated_understanding.dart';
 import 'package:slowave/core/brain/working_mind_view.dart';
 
+import 'faithful_test_vendor_provider.dart';
+
 void main() {
-  const client = LanguageModelClient();
+  const client = LanguageModelClient(
+    vendorProvider: FaithfulTestVendorProvider(),
+  );
   const guard = UtteranceGuard();
 
   const speakable = <ConversationPhase>[
@@ -47,17 +51,17 @@ void main() {
   });
 
   group('Conversation LLM Contract compliance — LanguageModelClient', () {
-    test('never emits empty text for any speakable WHAT', () {
+    test('never emits empty text for any speakable WHAT', () async {
       for (final phase in speakable) {
-        final utterance = client.realize(LlmInvocationPackage(what: phase));
+        final utterance = await client.realize(LlmInvocationPackage(what: phase));
         expect(utterance.text.trim(), isNotEmpty, reason: phase.name);
       }
     });
 
-    test('never emits empty text when shaping context is present', () {
+    test('never emits empty text when shaping context is present', () async {
       final workingMind = WorkingMindView(model: _emptyModel());
       for (final phase in speakable) {
-        final utterance = client.realize(
+        final utterance = await client.realize(
           LlmInvocationPackage(
             what: phase,
             understanding: const ValidatedUnderstanding(),
@@ -68,8 +72,8 @@ void main() {
       }
     });
 
-    test('returns exactly one candidate utterance object', () {
-      final utterance = client.realize(
+    test('returns exactly one candidate utterance object', () async {
+      final utterance = await client.realize(
         LlmInvocationPackage(what: ConversationPhase.validation),
       );
       expect(utterance, isA<ConversationUtterance>());
@@ -254,19 +258,19 @@ void main() {
       );
     });
 
-    test('client candidates for speakable WHAT pass the guard', () {
+    test('client candidates for speakable WHAT pass the guard', () async {
       for (final phase in speakable) {
-        final candidate = client.realize(LlmInvocationPackage(what: phase));
+        final candidate = await client.realize(LlmInvocationPackage(what: phase));
         final admitted = guard.allow(utterance: candidate, what: phase);
         expect(admitted, isNotNull, reason: phase.name);
         expect(admitted!.text.trim(), isNotEmpty, reason: phase.name);
       }
     });
 
-    test('shaped client candidates pass the guard', () {
+    test('shaped client candidates pass the guard', () async {
       final workingMind = WorkingMindView(model: _emptyModel());
       for (final phase in speakable) {
-        final candidate = client.realize(
+        final candidate = await client.realize(
           LlmInvocationPackage(
             what: phase,
             understanding: const ValidatedUnderstanding(),

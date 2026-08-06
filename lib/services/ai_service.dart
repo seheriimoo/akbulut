@@ -6,6 +6,14 @@ import '../content/nocta_conversations.dart';
 import '../models/conversation_types.dart';
 import 'conversation_flow.dart';
 
+/// Deprecated legacy generation / theme-routing service.
+///
+/// Sprint 6 Cutover Gap #4: not part of the live production flow.
+/// Production cognition uses [CognitiveOrchestrator.processTurn] only.
+@Deprecated(
+  'Sprint 6 Cutover: AIService is not part of the live production flow; '
+  'use CognitiveOrchestrator.processTurn',
+)
 class AIService {
   // removed (now SessionManager)
   static String get apiKey => dotenv.env['OPENAI_API_KEY'] ?? "";
@@ -25,6 +33,9 @@ class AIService {
     return choice;
   }
 
+  @Deprecated(
+    'Sprint 6 Cutover: AIService is not part of the live production flow',
+  )
   static SleepState detectState(String input) {
     final text = input.toLowerCase();
 
@@ -279,6 +290,14 @@ Rules:
     return null;
   }
 
+  /// Transitional legacy generation path. Not HCOS cognition.
+  ///
+  /// Sprint 6 Cutover: use CognitiveOrchestrator.processTurn as the sole
+  /// production cognitive entry.
+  @Deprecated(
+    'Sprint 6 Cutover: CognitiveOrchestrator.processTurn is the sole '
+    'production cognitive entry',
+  )
   static Future<String> generateReply({
     required String userInput,
     required int aiMessageCount,

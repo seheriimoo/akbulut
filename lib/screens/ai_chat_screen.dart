@@ -1,7 +1,14 @@
 import 'package:flutter/material.dart';
-import '../services/ai_service.dart';
+import '../billing/premium_product_access.dart';
+import '../core/brain/cognitive_orchestrator.dart';
+import '../core/brain/cognitive_turn_result.dart';
+import '../core/brain/exit_decision.dart';
+import '../core/brain/hcos_live_entry.dart';
+import '../core/brain/living_mind_model.dart';
+import '../core/brain/night_session.dart';
 import '../features/player/player_screen.dart';
-import '../models/conversation_types.dart';
+import 'night_complete_screen.dart';
+import 'paywall_screen.dart';
 
 class AISleepChatScreen extends StatefulWidget {
   const AISleepChatScreen({super.key});
@@ -15,16 +22,37 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
   final ScrollController _scrollController = ScrollController();
   final List<_ChatMessage> _messages = [];
 
-  int aiMessageCount = 0;
+  /// Sole production cognitive entry (Sprint 6 Cutover).
+  late final CognitiveOrchestrator _orchestrator;
+
+  /// Durable mind host for session-end write only (not mutated mid-turn).
+  late LivingMindModel _mindModel;
+
+  /// Temporary NightSession carried across turns (app shell lifecycle host).
+  /// WorkingMindView is read only from this session.
+  NightSession? _session;
+
+  /// Sole production turn result returned to the app (Sprint 6 Gap #2).
+  CognitiveTurnResult? _lastTurnResult;
+
   bool isTyping = false;
   bool isLoadingAudio = false;
-  String _lastUserInput = "";
-  SleepState? _conversationState;
-  final List<String> _userMessages = [];
+
+  bool get _acceptsUserInput {
+    if (isTyping || isLoadingAudio) return false;
+    if (_session == null) return false;
+    final exit = _lastTurnResult?.exitDecision;
+    if (exit == null) return true;
+    return exit == ExitDecision.continueConversation;
+  }
 
   @override
   void initState() {
     super.initState();
+
+    _orchestrator = HcosLiveEntry.createOrchestrator();
+    _mindModel = HcosLiveEntry.emptyMindModel();
+    _session = HcosLiveEntry.openNightSession(_mindModel);
 
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _sendInitialMessage();
@@ -56,11 +84,7 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
 
   Future<void> _handleSend() async {
     final text = _controller.text.trim();
-    if (text.isEmpty || isTyping || isLoadingAudio) return;
-
-    _lastUserInput = text;
-    _conversationState ??= AIService.detectState(text);
-    _userMessages.add(text);
+    if (text.isEmpty || !_acceptsUserInput) return;
 
     _controller.clear();
 
@@ -75,30 +99,74 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
   Future<void> _generateAIResponse(String userInput) async {
     if (!mounted) return;
 
+    final session = _session;
+    if (session == null) return;
+
     setState(() => isTyping = true);
 
     await Future.delayed(const Duration(milliseconds: 900));
-    _conversationState ??= AIService.detectState(userInput);
 
-    final reply = await AIService.generateReply(
-      userInput: userInput,
-      aiMessageCount: aiMessageCount,
-      conversationHistory: _userMessages,
-      conversationState: _conversationState,
+    // Sole production turn result: CognitiveTurnResult.
+    // WorkingMindView comes only from the carried NightSession.
+    // No AIService / NoctaAIBrain / ReasoningEngine in the live path.
+    final CognitiveTurnResult result = await _orchestrator.processTurn(
+      message: userInput,
+      session: session,
+      workingMind: HcosLiveEntry.workingMindOf(session),
     );
+
+    // Mid-session NightSession updates come only from CognitiveTurnResult.
+    _session = HcosLiveEntry.applyTurnResult(result);
+    _lastTurnResult = result;
+
     if (!mounted) return;
 
     setState(() => isTyping = false);
 
-    if (reply.isNotEmpty) {
+    final reply = result.utterance?.text;
+    if (reply != null && reply.isNotEmpty) {
       await _addAIMessage(reply);
     }
 
-    aiMessageCount++;
-
-    if (aiMessageCount >= 3) {
-      await _startAudioFlow();
+    // Production exit cutover: ExitDecision from CognitiveTurnResult only.
+    // completeNightSession runs after audio (or immediately on silence).
+    switch (result.exitDecision) {
+      case ExitDecision.continueConversation:
+        break;
+      case ExitDecision.transitionToAudio:
+        await _startAudioFlow();
+        break;
+      case ExitDecision.silence:
+        await _finishNightAndShowClosing();
+        break;
     }
+  }
+
+  /// Ends the temporary NightSession through the canonical session-end path.
+  /// Discards the session afterward. Does not mutate WorkingMindView ad hoc.
+  Future<void> _closeNightSession() async {
+    final session = _session;
+    if (session == null) return;
+
+    _mindModel = HcosLiveEntry.completeNightSession(
+      orchestrator: _orchestrator,
+      session: session,
+      model: _mindModel,
+    );
+    _session = null;
+  }
+
+  /// Canonical MemoryEngine write, then calm closing presentation.
+  Future<void> _finishNightAndShowClosing() async {
+    await _closeNightSession();
+
+    if (!mounted) return;
+
+    setState(() => isLoadingAudio = false);
+
+    await Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const NightCompleteScreen()),
+    );
   }
 
   Future<void> _addAIMessage(String text) async {
@@ -120,68 +188,40 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
 
     if (!mounted) return;
 
-    final analysis = _analyzeSleepInput(_lastUserInput);
+    // Premium is offered at the live Conversation → Audio boundary.
+    // Entitlement ownership stays in BillingService; HCOS is unchanged.
+    var access = await PremiumProductAccess.resolve();
+    if (!access.isPremium && mounted) {
+      await Navigator.push<bool>(
+        context,
+        MaterialPageRoute(builder: (_) => const PaywallScreen()),
+      );
+      if (!mounted) return;
+      access = await PremiumProductAccess.resolve();
+    }
 
-    final blocker = switch (_conversationState) {
-      SleepState.overthinking => "mind",
-      SleepState.workStress => "stress",
-      SleepState.emotional => "stress",
-      SleepState.relationship => "relationship",
-      SleepState.loneliness => "loneliness",
-      SleepState.physical => "body",
-      _ => "mind",
-    };
+    if (!mounted) return;
 
-    Navigator.push(
+    // Presentation-only player handoff. Not HCOS cognition.
+    // NightSession stays open until audio ends → completeNightSession.
+    await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => PlayerScreen(
-          goal: "sleep",
-          blocker: blocker,
-          sleepLatency: "medium",
-          energy: "medium",
-          sessionLength: const Duration(minutes: 20),
+          goal: 'sleep',
+          blocker: 'mind',
+          sleepLatency: 'medium',
+          energy: 'medium',
+          sessionLength: access.sessionLength,
+          audioAssetPath: access.sleepBedAsset,
+          premiumUnlocked: access.isPremium,
         ),
       ),
     );
-  }
 
-  Map<String, int> _analyzeSleepInput(String input) {
-    final text = input.toLowerCase();
+    if (!mounted) return;
 
-    int sleepLatency = 1;
-    int energy = 1;
-
-    if (text.contains("düşün") ||
-        text.contains("zihin") ||
-        text.contains("kafam") ||
-        text.contains("kuruntu") ||
-        text.contains("takıldım")) {
-      sleepLatency = 2;
-    }
-
-    if (text.contains("rahat") ||
-        text.contains("sakin") ||
-        text.contains("uykum var")) {
-      sleepLatency = 0;
-    }
-
-    if (text.contains("stres") ||
-        text.contains("gergin") ||
-        text.contains("kaygı") ||
-        text.contains("panik") ||
-        text.contains("huzursuz")) {
-      energy = 2;
-    }
-
-    if (text.contains("yorgun") ||
-        text.contains("bitkin") ||
-        text.contains("tükendim") ||
-        text.contains("halsiz")) {
-      energy = 0;
-    }
-
-    return {"sleepLatency": sleepLatency, "energy": energy};
+    await _finishNightAndShowClosing();
   }
 
   void _scrollToBottom() {
@@ -273,7 +313,7 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
                 ),
                 child: TextField(
                   controller: _controller,
-                  enabled: aiMessageCount < 3 && !isLoadingAudio && !isTyping,
+                  enabled: _acceptsUserInput,
                   style: const TextStyle(color: Colors.white, fontSize: 16),
                   minLines: 1,
                   maxLines: 4,

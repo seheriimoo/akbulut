@@ -10,15 +10,24 @@ import 'preference_detector.dart';
 import 'reasoning_engine.dart';
 import 'validated_understanding.dart';
 
+// Transitional path retained for cutover; production uses CognitiveTurnResult.
+// ignore_for_file: deprecated_member_use_from_same_package
+
 /// NoctaAIBrain
 ///
-/// Transitional entry point pending cutover to CognitiveOrchestrator.
+/// Deprecated transitional entry. Not part of the live production flow.
+///
+/// Sprint 6 Cutover Gap #4: production uses CognitiveOrchestrator.processTurn.
 ///
 /// Mid-turn persistent memory writes are not part of the
 /// canonical HCOS Architecture v1.1 path.
 ///
 /// MemoryEngine remains the sole LivingMindModel writer and accepts
 /// SessionSummary at session end only.
+@Deprecated(
+  'Sprint 6 Cutover: NoctaAIBrain is not part of the live production flow; '
+  'use CognitiveOrchestrator.processTurn',
+)
 class NoctaAIBrain {
   final LivingMindModel mindModel;
 
@@ -48,6 +57,13 @@ class NoctaAIBrain {
     required this.reasoningEngine,
   });
 
+  /// Transitional only. Not a production cognitive entry.
+  ///
+  /// Sprint 6 Cutover: use [CognitiveOrchestrator.processTurn] instead.
+  @Deprecated(
+    'Sprint 6 Cutover: CognitiveOrchestrator.processTurn is the sole '
+    'production cognitive entry',
+  )
   BrainTurnResult processMessage(String message) {
     final evidence = perceptionEngine.perceive(message);
 

@@ -74,11 +74,13 @@ class CognitiveOrchestrator {
   ///
   /// Updates temporary NightSession state only.
   /// Does not write persistent memory.
-  CognitiveTurnResult processTurn({
+  ///
+  /// Awaitable so Conversation expression (LanguageModelClient) may be async.
+  Future<CognitiveTurnResult> processTurn({
     required String message,
     required NightSession session,
     required WorkingMindView workingMind,
-  }) {
+  }) async {
     final evidence = perceptionEngine.perceive(message);
 
     final understanding = ValidatedUnderstanding(
@@ -92,6 +94,7 @@ class CognitiveOrchestrator {
     final releaseDecision = releaseEngine.evaluate(
       understanding: understanding,
       workingMind: workingMind,
+      session: session,
     );
 
     final conversationDecision = conversationPolicy.decide(
@@ -106,7 +109,7 @@ class CognitiveOrchestrator {
 
     // Sprint 4 Conversation handoff: authorized inputs only, unchanged.
     // ConversationEngine is invoked exactly once after Exit.
-    final ConversationUtterance? utterance = _handoffToConversation(
+    final ConversationUtterance? utterance = await _handoffToConversation(
       conversationDecision: conversationDecision,
       exitDecision: exitDecision,
       understanding: understanding,
@@ -136,7 +139,7 @@ class CognitiveOrchestrator {
   ///
   /// Does not pass release decisions, memory-write authority, or other
   /// forbidden Conversation inputs. Does not write memory.
-  ConversationUtterance? _handoffToConversation({
+  Future<ConversationUtterance?> _handoffToConversation({
     required ConversationDecision conversationDecision,
     required ExitDecision exitDecision,
     ValidatedUnderstanding? understanding,

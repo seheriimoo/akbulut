@@ -10,6 +10,7 @@ import 'package:slowave/core/brain/emotional_pattern_detector.dart';
 import 'package:slowave/core/brain/exit_decision.dart';
 import 'package:slowave/core/brain/exit_intelligence.dart';
 import 'package:slowave/core/brain/identity.dart';
+import 'package:slowave/core/brain/language_model_client.dart';
 import 'package:slowave/core/brain/living_mind_model.dart';
 import 'package:slowave/core/brain/memory_engine.dart';
 import 'package:slowave/core/brain/mental_pattern_detector.dart';
@@ -24,9 +25,11 @@ import 'package:slowave/core/brain/session_summarizer.dart';
 import 'package:slowave/core/brain/validated_understanding.dart';
 import 'package:slowave/core/brain/working_mind_view.dart';
 
+import 'faithful_test_vendor_provider.dart';
+
 void main() {
   group('CognitiveOrchestrator conversation flow', () {
-    test('preserves canonical Release → Policy → Exit → Conversation order', () {
+    test('preserves canonical Release → Policy → Exit → Conversation order', () async {
       final order = <String>[];
       final orchestrator = _buildOrchestrator(
         releaseEngine: _TrackingReleaseEngine(order),
@@ -39,7 +42,7 @@ void main() {
       final workingMind = WorkingMindView(model: _emptyModel());
       final session = NightSession(workingMind: workingMind, turns: const []);
 
-      orchestrator.processTurn(
+      await orchestrator.processTurn(
         message: 'I am thinking',
         session: session,
         workingMind: workingMind,
@@ -53,7 +56,7 @@ void main() {
       ]);
     });
 
-    test('invokes Conversation once and emits one speech outcome when speaking', () {
+    test('invokes Conversation once and emits one speech outcome when speaking', () async {
       final conversation = _TrackingConversationEngine([]);
       final memory = _CountingMemoryEngine();
       final orchestrator = _buildOrchestrator(
@@ -62,7 +65,7 @@ void main() {
       );
 
       final workingMind = WorkingMindView(model: _emptyModel());
-      final result = orchestrator.processTurn(
+      final result = await orchestrator.processTurn(
         message: 'I am thinking',
         session: NightSession(workingMind: workingMind, turns: const []),
         workingMind: workingMind,
@@ -76,7 +79,7 @@ void main() {
       expect(result.conversationDecision.shouldSpeak, isTrue);
     });
 
-    test('non-speech path yields no conversational language', () {
+    test('non-speech path yields no conversational language', () async {
       final conversation = _TrackingConversationEngine([]);
       final memory = _CountingMemoryEngine();
       final orchestrator = _buildOrchestrator(
@@ -86,7 +89,7 @@ void main() {
       );
 
       final workingMind = WorkingMindView(model: _emptyModel());
-      final result = orchestrator.processTurn(
+      final result = await orchestrator.processTurn(
         message: 'I am thinking',
         session: NightSession(workingMind: workingMind, turns: const []),
         workingMind: workingMind,
@@ -98,7 +101,7 @@ void main() {
       expect(result.utterance, isNull);
     });
 
-    test('passes authorized Conversation inputs only and unchanged', () {
+    test('passes authorized Conversation inputs only and unchanged', () async {
       final conversation = _CapturingConversationEngine();
       final orchestrator = _buildOrchestrator(
         conversationEngine: conversation,
@@ -106,7 +109,7 @@ void main() {
       );
 
       final workingMind = WorkingMindView(model: _emptyModel());
-      final result = orchestrator.processTurn(
+      final result = await orchestrator.processTurn(
         message: 'I am thinking',
         session: NightSession(workingMind: workingMind, turns: const []),
         workingMind: workingMind,
@@ -119,13 +122,13 @@ void main() {
       expect(conversation.receivedReleaseDecision, isFalse);
     });
 
-    test('does not write memory mid-turn', () {
+    test('does not write memory mid-turn', () async {
       final memory = _CountingMemoryEngine();
       final orchestrator = _buildOrchestrator(memoryEngine: memory);
       final model = _emptyModel();
       final workingMind = WorkingMindView(model: model);
 
-      orchestrator.processTurn(
+      await orchestrator.processTurn(
         message: 'I am thinking',
         session: NightSession(workingMind: workingMind, turns: const []),
         workingMind: workingMind,
@@ -134,14 +137,14 @@ void main() {
       expect(memory.updateCount, 0);
     });
 
-    test('session-end memory write remains outside the turn path', () {
+    test('session-end memory write remains outside the turn path', () async {
       final memory = _CountingMemoryEngine();
       final orchestrator = _buildOrchestrator(memoryEngine: memory);
       final model = _emptyModel();
       final workingMind = WorkingMindView(model: model);
       final session = NightSession(workingMind: workingMind, turns: const []);
 
-      final turnResult = orchestrator.processTurn(
+      final turnResult = await orchestrator.processTurn(
         message: 'I am thinking',
         session: session,
         workingMind: workingMind,
@@ -161,7 +164,11 @@ CognitiveOrchestrator _buildOrchestrator({
   ReleaseEngine releaseEngine = const ReleaseEngine(),
   ConversationPolicy conversationPolicy = const ConversationPolicy(),
   ExitIntelligence exitIntelligence = const ExitIntelligence(),
-  ConversationEngine conversationEngine = const ConversationEngine(),
+  ConversationEngine conversationEngine = const ConversationEngine(
+    languageModelClient: LanguageModelClient(
+      vendorProvider: FaithfulTestVendorProvider(),
+    ),
+  ),
   required MemoryEngine memoryEngine,
 }) {
   return CognitiveOrchestrator(
@@ -219,11 +226,13 @@ class _TrackingReleaseEngine extends ReleaseEngine {
   ReleaseDecision evaluate({
     required ValidatedUnderstanding understanding,
     required WorkingMindView workingMind,
+    required NightSession session,
   }) {
     order.add('release');
     return super.evaluate(
       understanding: understanding,
       workingMind: workingMind,
+      session: session,
     );
   }
 }
@@ -235,6 +244,7 @@ class _TransitionReadyReleaseEngine extends ReleaseEngine {
   ReleaseDecision evaluate({
     required ValidatedUnderstanding understanding,
     required WorkingMindView workingMind,
+    required NightSession session,
   }) {
     return const ReleaseDecision(
       readiness: ReleaseReadiness.transitionReady,
@@ -279,15 +289,20 @@ class _TrackingConversationEngine extends ConversationEngine {
   final List<String> order;
   int invokeCount = 0;
 
-  _TrackingConversationEngine(this.order);
+  _TrackingConversationEngine(this.order)
+      : super(
+          languageModelClient: const LanguageModelClient(
+            vendorProvider: FaithfulTestVendorProvider(),
+          ),
+        );
 
   @override
-  ConversationUtterance? generate({
+  Future<ConversationUtterance?> generate({
     required ConversationDecision conversationDecision,
     required ExitDecision exitDecision,
     ValidatedUnderstanding? understanding,
     WorkingMindView? workingMind,
-  }) {
+  }) async {
     order.add('conversation');
     invokeCount++;
     return super.generate(
@@ -306,13 +321,20 @@ class _CapturingConversationEngine extends ConversationEngine {
   WorkingMindView? lastWorkingMind;
   bool receivedReleaseDecision = false;
 
+  _CapturingConversationEngine()
+      : super(
+          languageModelClient: const LanguageModelClient(
+            vendorProvider: FaithfulTestVendorProvider(),
+          ),
+        );
+
   @override
-  ConversationUtterance? generate({
+  Future<ConversationUtterance?> generate({
     required ConversationDecision conversationDecision,
     required ExitDecision exitDecision,
     ValidatedUnderstanding? understanding,
     WorkingMindView? workingMind,
-  }) {
+  }) async {
     lastConversationDecision = conversationDecision;
     lastExitDecision = exitDecision;
     lastUnderstanding = understanding;

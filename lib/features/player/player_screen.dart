@@ -6,12 +6,20 @@ import 'package:flutter/services.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 
+import 'sleep_audio_session.dart';
+
 class PlayerScreen extends StatefulWidget {
   final String blocker;
   final String sleepLatency;
   final String energy;
   final String goal;
   final Duration sessionLength;
+
+  /// Sleep bed asset resolved by entitlement access (free vs premium).
+  final String audioAssetPath;
+
+  /// True when [BillingService] premium entitlement unlocked this session.
+  final bool premiumUnlocked;
 
   const PlayerScreen({
     super.key,
@@ -20,6 +28,9 @@ class PlayerScreen extends StatefulWidget {
     required this.energy,
     required this.goal,
     required this.sessionLength,
+    this.audioAssetPath =
+        'assets/audio/bg/CoreDefaultAir/CoreDefaultAir_BG_30m.m4a',
+    this.premiumUnlocked = false,
   });
 
   @override
@@ -27,7 +38,7 @@ class PlayerScreen extends StatefulWidget {
 }
 
 class _PlayerScreenState extends State<PlayerScreen>
-    with SingleTickerProviderStateMixin {
+    with SingleTickerProviderStateMixin, WidgetsBindingObserver {
   final AudioPlayer _bgPlayer = AudioPlayer();
   final FlutterTts _tts = FlutterTts();
 
@@ -35,8 +46,10 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   bool _ready = false;
   bool _playing = false;
+  bool _finishing = false;
 
   Timer? _sessionTimer;
+  StreamSubscription<AudioInterruptionEvent>? _interruptionSub;
 
   late final AnimationController _breathController;
   late final Animation<double> _breathAnimation;
@@ -44,6 +57,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   @override
   void initState() {
     super.initState();
+    WidgetsBinding.instance.addObserver(this);
 
     _breathController = AnimationController(
       vsync: this,
@@ -64,22 +78,37 @@ class _PlayerScreenState extends State<PlayerScreen>
     _initAudio();
   }
 
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    // Background / lock-screen: keep sleep bed playing; do not pause on inactive.
+    if (state == AppLifecycleState.resumed && _playing) {
+      unawaited(SleepAudioSession.activate());
+    }
+  }
+
   Future<void> _initAudio() async {
     try {
-      print("INIT AUDIO START");
+      await SleepAudioSession.configureForBackgroundPlayback(_bgPlayer);
+
       final session = await AudioSession.instance;
-      await session.configure(const AudioSessionConfiguration.speech());
+      _interruptionSub = session.interruptionEventStream.listen((event) async {
+        if (event.begin) {
+          return;
+        }
+        // Resume after transient interruptions when the sleep session is active.
+        if (_playing &&
+            (event.type == AudioInterruptionType.pause ||
+                event.type == AudioInterruptionType.unknown)) {
+          await SleepAudioSession.activate();
+          await _bgPlayer.resume();
+        }
+      });
 
       final audioPath = _buildAudioPath();
-      final assetPath = audioPath.replaceFirst("assets/", "");
+      final assetPath = audioPath.replaceFirst('assets/', '');
 
-      final test = await rootBundle.load(audioPath);
-      print("ROOT BUNDLE OK: ${test.lengthInBytes} bytes");
+      await rootBundle.load(audioPath);
 
-      print("🎧 Selected audio: $audioPath");
-      print("ASSET PATH = $assetPath");
-
-      await _bgPlayer.setReleaseMode(ReleaseMode.stop);
       await _bgPlayer.setVolume(_targetVolume);
       await _bgPlayer.setSourceAsset(assetPath);
 
@@ -87,120 +116,109 @@ class _PlayerScreenState extends State<PlayerScreen>
 
       setState(() {
         _ready = true;
-        _playing = false;
       });
-      print("_ready SET TRUE");
+
+      // Complete Conversation → Audio handoff by starting the sleep bed.
+      await _startPlayback();
     } catch (e, st) {
-      print("AUDIO ERROR: $e");
-      print(st);
+      debugPrint('AUDIO ERROR: $e');
+      debugPrint('$st');
     }
   }
 
-  String _buildAudioPath() {
-    switch (widget.blocker) {
-      case "mind":
-        return "assets/audio/bg/CoreDefaultAir/CoreDefaultAir_BG_30m.m4a";
-      case "stress":
-        return "assets/audio/bg/CoreDefaultAir/CoreDefaultAir_BG_30m.m4a";
-      case "body":
-        return "assets/audio/bg/CoreDefaultAir/CoreDefaultAir_BG_30m.m4a";
-      case "overstimulated":
-        return "assets/audio/bg/CoreDefaultAir/CoreDefaultAir_BG_30m.m4a";
-      case "wired":
-        return "assets/audio/bg/CoreDefaultAir/CoreDefaultAir_BG_30m.m4a";
-      case "deep":
-        return "assets/audio/bg/CoreDefaultAir/CoreDefaultAir_BG_30m.m4a";
-      case "relationship":
-        return "assets/audio/bg/CoreDefaultAir/CoreDefaultAir_BG_30m.m4a";
-      case "loneliness":
-        return "assets/audio/bg/CoreDefaultAir/CoreDefaultAir_BG_30m.m4a";
-      default:
-        return "assets/audio/bg/CoreDefaultAir/CoreDefaultAir_BG_30m.m4a";
-    }
-  }
+  String _buildAudioPath() => widget.audioAssetPath;
 
   String _buildSessionTitle() {
     switch (widget.blocker) {
-      case "mind":
-        return "Quiet Mind";
-      case "stress":
-        return "Stress Release";
-      case "body":
-        return "Body Relaxation";
-      case "overstimulated":
-        return "Deep Calm";
-      case "wired":
-        return "Wind Down";
-      case "deep":
-        return "Deep Sleep";
-      case "relationship":
-        return "Letting Go";
-      case "loneliness":
-        return "Comfort";
+      case 'mind':
+        return 'Quiet Mind';
+      case 'stress':
+        return 'Stress Release';
+      case 'body':
+        return 'Body Relaxation';
+      case 'overstimulated':
+        return 'Deep Calm';
+      case 'wired':
+        return 'Wind Down';
+      case 'deep':
+        return 'Deep Sleep';
+      case 'relationship':
+        return 'Letting Go';
+      case 'loneliness':
+        return 'Comfort';
       default:
-        return "Personalized Sleep";
+        return 'Personalized Sleep';
     }
   }
 
   void _startSessionTimer() {
     _sessionTimer?.cancel();
-    _sessionTimer = Timer(widget.sessionLength, () async {
-      await _bgPlayer.stop();
-
-      if (!mounted) return;
-
-      setState(() {
-        _playing = false;
-      });
+    _sessionTimer = Timer(widget.sessionLength, () {
+      unawaited(_finishAudioSession(completedNaturally: true));
     });
   }
 
+  /// Stops the sleep bed and returns to the night host for session-end.
+  Future<void> _finishAudioSession({required bool completedNaturally}) async {
+    if (_finishing) return;
+    _finishing = true;
+
+    _sessionTimer?.cancel();
+    _sessionTimer = null;
+
+    try {
+      await _bgPlayer.stop();
+      await SleepAudioSession.deactivate();
+    } catch (_) {
+      // Best-effort teardown before leaving the player.
+    }
+
+    if (!mounted) return;
+
+    setState(() => _playing = false);
+    Navigator.of(context).pop(completedNaturally);
+  }
+
+  Future<void> _startPlayback() async {
+    if (!_ready && mounted) {
+      // Source may already be set during init before _ready flips.
+    }
+
+    await SleepAudioSession.activate();
+    await _bgPlayer.resume();
+    await _bgPlayer.setVolume(_targetVolume);
+
+    if (!mounted) return;
+
+    setState(() {
+      _playing = true;
+      _ready = true;
+    });
+
+    _startSessionTimer();
+  }
+
   Future<void> _togglePlay() async {
-    if (!_ready) {
-      print("_READY BLOCKED PLAY");
+    if (!_ready || _finishing) return;
+
+    if (_playing) {
+      await _bgPlayer.pause();
+      if (!mounted) return;
+      setState(() => _playing = false);
       return;
     }
 
-    if (_playing) {
-      print("PAUSE PRESSED");
-      await _bgPlayer.pause();
-
-      if (!mounted) return;
-
-      setState(() {
-        _playing = false;
-      });
-    } else {
-      print("START / RESUME PRESSED");
-      await _bgPlayer.resume();
-      await _bgPlayer.setVolume(_targetVolume);
-
-      if (!mounted) return;
-
-      setState(() {
-        _playing = true;
-      });
-
-      _startSessionTimer();
-
-      await _tts.setLanguage("en-US");
-      await _tts.setSpeechRate(0.42);
-      await _tts.setVolume(1.0);
-      await _tts.setPitch(0.95);
-
-      Future.delayed(const Duration(seconds: 30), () async {
-        print("TTS START");
-        final result = await _tts.speak("Tomorrow can stay where it is. Nothing more is needed from you tonight.");
-        print("TTS RESULT = $result");
-      });
-    }
+    await _startPlayback();
   }
 
   @override
   void dispose() {
+    WidgetsBinding.instance.removeObserver(this);
     _sessionTimer?.cancel();
+    _interruptionSub?.cancel();
     _breathController.dispose();
-    _bgPlayer.dispose();
+    unawaited(_bgPlayer.dispose());
+    unawaited(_tts.stop());
     super.dispose();
   }
 
@@ -208,108 +226,120 @@ class _PlayerScreenState extends State<PlayerScreen>
   Widget build(BuildContext context) {
     final sessionTitle = _buildSessionTitle();
 
-    return Scaffold(
-      backgroundColor: const Color(0xFF05060A),
-      appBar: AppBar(
-        backgroundColor: Colors.transparent,
-        elevation: 0,
-        title: const Text(
-          "Nocta",
-          style: TextStyle(
-            color: Colors.white,
-            fontWeight: FontWeight.w400,
+    return PopScope(
+      canPop: false,
+      onPopInvokedWithResult: (didPop, result) {
+        if (didPop) return;
+        unawaited(_finishAudioSession(completedNaturally: false));
+      },
+      child: Scaffold(
+        backgroundColor: const Color(0xFF05060A),
+        appBar: AppBar(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          title: const Text(
+            'Nocta',
+            style: TextStyle(
+              color: Colors.white,
+              fontWeight: FontWeight.w400,
+            ),
           ),
+          iconTheme: const IconThemeData(color: Colors.white),
         ),
-        iconTheme: const IconThemeData(color: Colors.white),
-      ),
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            children: [
-              const Spacer(),
-
-              AnimatedBuilder(
-                animation: _breathAnimation,
-                builder: (context, child) {
-                  return Transform.scale(
-                    scale: _breathAnimation.value,
-                    child: Container(
-                      width: 150,
-                      height: 150,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        shape: BoxShape.circle,
-                        color: Colors.white.withOpacity(0.06),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.08),
-                          width: 1,
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              children: [
+                const Spacer(),
+                AnimatedBuilder(
+                  animation: _breathAnimation,
+                  builder: (context, child) {
+                    return Transform.scale(
+                      scale: _breathAnimation.value,
+                      child: Container(
+                        width: 150,
+                        height: 150,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: Colors.white.withValues(alpha: 0.06),
+                          border: Border.all(
+                            color: Colors.white.withValues(alpha: 0.08),
+                            width: 1,
+                          ),
+                        ),
+                        child: const Text(
+                          '✦',
+                          style: TextStyle(
+                            color: Colors.white,
+                            fontSize: 58,
+                            fontWeight: FontWeight.w300,
+                          ),
                         ),
                       ),
-                      child: const Text(
-                        "✦",
-                        style: TextStyle(
-                          color: Colors.white,
-                          fontSize: 58,
-                          fontWeight: FontWeight.w300,
-                        ),
-                      ),
-                    ),
-                  );
-                },
-              ),
-
-              const SizedBox(height: 40),
-
-              const Text(
-                "Tonight's Session",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white,
-                  fontSize: 30,
-                  fontWeight: FontWeight.w300,
-                  letterSpacing: 0.2,
+                    );
+                  },
                 ),
-              ),
-
-              const SizedBox(height: 12),
-
-              Text(
-                sessionTitle,
-                textAlign: TextAlign.center,
-                style: const TextStyle(
-                  color: Colors.white70,
-                  fontSize: 16,
-                  fontWeight: FontWeight.w300,
-                  letterSpacing: 0.2,
-                ),
-              ),
-
-              const Spacer(),
-
-              GestureDetector(
-                onTap: _togglePlay,
-                child: Container(
-                  width: double.infinity,
-                  height: 58,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
+                const SizedBox(height: 40),
+                const Text(
+                  "Tonight's Session",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
                     color: Colors.white,
-                    borderRadius: BorderRadius.circular(29),
+                    fontSize: 30,
+                    fontWeight: FontWeight.w300,
+                    letterSpacing: 0.2,
                   ),
-                  child: Text(
-                    _playing ? "Pause Session" : "Start Session",
-                    style: const TextStyle(
-                      color: Colors.black,
-                      fontSize: 17,
-                      fontWeight: FontWeight.w600,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  sessionTitle,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white70,
+                    fontSize: 16,
+                    fontWeight: FontWeight.w300,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Text(
+                  widget.premiumUnlocked
+                      ? '${widget.sessionLength.inMinutes}-minute premium session'
+                      : '${widget.sessionLength.inMinutes}-minute session',
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    color: Colors.white54,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w300,
+                    letterSpacing: 0.2,
+                  ),
+                ),
+                const Spacer(),
+                GestureDetector(
+                  onTap: _togglePlay,
+                  child: Container(
+                    width: double.infinity,
+                    height: 58,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(
+                      color: Colors.white,
+                      borderRadius: BorderRadius.circular(29),
+                    ),
+                    child: Text(
+                      _playing ? 'Pause Session' : 'Start Session',
+                      style: const TextStyle(
+                        color: Colors.black,
+                        fontSize: 17,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
                   ),
                 ),
-              ),
-
-              const SizedBox(height: 40),
-            ],
+                const SizedBox(height: 40),
+              ],
+            ),
           ),
         ),
       ),

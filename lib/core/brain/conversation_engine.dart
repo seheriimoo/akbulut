@@ -5,6 +5,7 @@ import 'language_model_client.dart';
 import 'prompt_architecture.dart';
 import 'utterance_guard.dart';
 import 'validated_understanding.dart';
+import 'vendor_provider.dart';
 import 'working_mind_view.dart';
 
 /// ConversationEngine
@@ -35,12 +36,16 @@ class ConversationEngine {
   ///
   /// Expression path:
   /// PromptArchitecture → (abstain | LanguageModelClient) → UtteranceGuard.
-  ConversationUtterance? generate({
+  ///
+  /// On [LanguageModelClient] / [VendorError] failure, fails closed to `null`.
+  /// Does not reopen WHAT, Exit, Release, or protocol. Does not retry after
+  /// [UtteranceGuard] rejection.
+  Future<ConversationUtterance?> generate({
     required ConversationDecision conversationDecision,
     required ExitDecision exitDecision,
     ValidatedUnderstanding? understanding,
     WorkingMindView? workingMind,
-  }) {
+  }) async {
     final package = promptArchitecture.package(
       conversationDecision: conversationDecision,
       exitDecision: exitDecision,
@@ -52,8 +57,19 @@ class ConversationEngine {
       return null;
     }
 
-    final utterance = languageModelClient.realize(package);
+    final ConversationUtterance utterance;
+    try {
+      utterance = await languageModelClient.realize(package);
+    } on VendorError {
+      // Expression-plane failure → no conversational language.
+      // Upstream ExitDecision / protocol remain authoritative.
+      return null;
+    } on StateError {
+      // Package integrity / configuration failure before a candidate exists.
+      return null;
+    }
 
+    // Guard reject → null. Not a retry trigger.
     return utteranceGuard.allow(
       utterance: utterance,
       what: package.what,

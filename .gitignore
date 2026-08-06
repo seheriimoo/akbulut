@@ -43,3 +43,11 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Secrets — never commit (SHIP-01)
+.env
+.env.*
+!.env.example
+config/secrets.local.json
+config/secrets.json
+**/secrets.local.json

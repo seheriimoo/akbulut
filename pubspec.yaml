@@ -42,6 +42,7 @@ dependencies:
   purchases_flutter: ^10.2.2
   shared_preferences: ^2.5.5
   audioplayers: ^6.7.1
+  sentry_flutter: ^8.14.2
 
 dev_dependencies:
   flutter_test:
@@ -70,7 +71,7 @@ flutter:
     - assets/audio/voice/session_01.mp3
     - assets/audio/voice/silence_10s.mp3
     - assets/audio/bg/CoreDefaultAir/CoreDefaultAir_BG_30m.m4a
-    - .env
+    - assets/audio/bg/CoreDefaultAir/CoreDefaultAir_BG_45m_premium.m4a
 
   # To add assets to your application, add an assets section, like this:
   # assets:

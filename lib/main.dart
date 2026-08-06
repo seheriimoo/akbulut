@@ -1,28 +1,35 @@
+import 'dart:async';
 import 'dart:ui';
 import 'package:flutter/material.dart';
-import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
+import 'config/app_config.dart';
+import 'compliance/consent_store.dart';
 import 'features/player/player_screen.dart';
+import 'infrastructure/crash_reporting.dart';
 import 'screens/ai_chat_screen.dart';
 import 'screens/choice_screen.dart';
+import 'screens/compliance/consent_gate_screen.dart';
+import 'screens/compliance/legal_document_screen.dart';
+import 'screens/premium_paywall_screen.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
+  await runZonedGuarded(() async {
+    WidgetsFlutterBinding.ensureInitialized();
 
-  try {
-    await dotenv.load(fileName: ".env");
-    print("ENV LOADED: ${dotenv.env['OPENAI_API_KEY']}");
-  } catch (e) {
-    print("ENV ERROR: $e");
-  }
+    // SHIP-01: secrets only from dart-define / dart-define-from-file.
+    await AppConfig.load();
 
-  const revenueCatApiKey = "appl_OgWoESIjCkMyLVivnrgtkoRUrHm";
-
-  await Purchases.configure(
-    PurchasesConfiguration(revenueCatApiKey),
-  );
-
-  runApp(const SleepWaveApp());
+    await CrashReporting.bootstrap(
+      appRunner: () async {
+        if (AppConfig.hasRevenueCatApiKey) {
+          await Purchases.configure(
+            PurchasesConfiguration(AppConfig.revenueCatApiKey),
+          );
+        }
+        runApp(const SleepWaveApp());
+      },
+    );
+  }, CrashReporting.zoneErrorHandler);
 }
 
 class AppRoutes {
@@ -31,6 +38,9 @@ class AppRoutes {
   static const String sleepAnalysis = '/sleep-analysis';
   static const String directSleep = '/direct-sleep';
   static const String premium = '/premium';
+  static const String consent = '/consent';
+  static const String privacy = '/privacy';
+  static const String terms = '/terms';
 }
 
 class SleepWaveApp extends StatelessWidget {
@@ -81,21 +91,29 @@ class AppRouter {
       case AppRoutes.welcome:
         return _fade(const WelcomeScreen(), settings);
       case AppRoutes.choice:
-  return _fade(const ChoiceScreen(), settings);
-
-case '/ai-chat':
-  return _fade(const AISleepChatScreen(), settings);
-
-case AppRoutes.sleepAnalysis:
-  return _fade(const SleepAnalysisScreen(), settings);
-
-case AppRoutes.directSleep:
-  return _fade(const DirectSleepScreen(), settings);
-
-case AppRoutes.premium:
-  return _fade(const PremiumPaywallScreen(), settings);
-default:
-  return _fade(const WelcomeScreen(), settings);
+        return _fade(const ChoiceScreen(), settings);
+      case '/ai-chat':
+        return _fade(const AISleepChatScreen(), settings);
+      case AppRoutes.sleepAnalysis:
+        return _fade(const SleepAnalysisScreen(), settings);
+      case AppRoutes.directSleep:
+        return _fade(const DirectSleepScreen(), settings);
+      case AppRoutes.premium:
+        return _fade(const PremiumPaywallScreen(), settings);
+      case AppRoutes.consent:
+        return _fade(const ConsentGateScreen(), settings);
+      case AppRoutes.privacy:
+        return _fade(
+          const LegalDocumentScreen(kind: LegalDocumentKind.privacyPolicy),
+          settings,
+        );
+      case AppRoutes.terms:
+        return _fade(
+          const LegalDocumentScreen(kind: LegalDocumentKind.termsOfService),
+          settings,
+        );
+      default:
+        return _fade(const WelcomeScreen(), settings);
     }
   }
 
@@ -112,8 +130,14 @@ default:
 class WelcomeScreen extends StatelessWidget {
   const WelcomeScreen({super.key});
 
-  void _openChoiceScreen(BuildContext context) {
-    Navigator.pushNamed(context, '/ai-chat');
+  Future<void> _openNight(BuildContext context) async {
+    final accepted = await ConsentStore.hasAcceptedBaseline();
+    if (!context.mounted) return;
+    if (accepted) {
+      Navigator.pushNamed(context, '/ai-chat');
+    } else {
+      Navigator.pushNamed(context, AppRoutes.consent);
+    }
   }
 
   @override
@@ -171,7 +195,7 @@ class WelcomeScreen extends StatelessWidget {
               ),
               const Spacer(flex: 2),
               GestureDetector(
-                onTap: () => _openChoiceScreen(context),
+                onTap: () => _openNight(context),
                 child: ClipRRect(
                   borderRadius: BorderRadius.circular(18),
                   child: BackdropFilter(
@@ -199,7 +223,40 @@ class WelcomeScreen extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(height: 45),
+              const SizedBox(height: 18),
+              Wrap(
+                alignment: WrapAlignment.center,
+                spacing: 18,
+                children: [
+                  TextButton(
+                    onPressed: () =>
+                        Navigator.pushNamed(context, AppRoutes.privacy),
+                    child: Text(
+                      'Privacy Policy',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.7),
+                        fontSize: 12,
+                        decoration: TextDecoration.underline,
+                        decorationColor: Colors.white.withOpacity(0.35),
+                      ),
+                    ),
+                  ),
+                  TextButton(
+                    onPressed: () =>
+                        Navigator.pushNamed(context, AppRoutes.terms),
+                    child: Text(
+                      'Terms of Service',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.7),
+                        fontSize: 12,
+                        decoration: TextDecoration.underline,
+                        decorationColor: Colors.white.withOpacity(0.35),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 24),
             ],
           ),
         ),
@@ -366,17 +423,6 @@ class DirectSleepScreen extends StatelessWidget {
           ),
         ),
       ),
-    );
-  }
-}
-
-class PremiumPaywallScreen extends StatelessWidget {
-  const PremiumPaywallScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: Text("Premium")),
     );
   }
 }

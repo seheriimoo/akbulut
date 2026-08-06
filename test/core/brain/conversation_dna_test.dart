@@ -8,6 +8,8 @@ import 'package:slowave/core/brain/exit_decision.dart';
 import 'package:slowave/core/brain/language_model_client.dart';
 import 'package:slowave/core/brain/llm_invocation_package.dart';
 
+import 'faithful_test_vendor_provider.dart';
+
 void main() {
   group('ConversationDNA model', () {
     test('exposes exactly ten frozen principles', () {
@@ -35,7 +37,7 @@ void main() {
   });
 
   group('ConversationDNA enforcement via Conversation emission', () {
-    test('clinical framing cannot leave Conversation layer', () {
+    test('clinical framing cannot leave Conversation layer', () async {
       final engine = ConversationEngine(
         languageModelClient: const _FixedLanguageModelClient(
           'As your therapist, that makes sense.',
@@ -43,7 +45,7 @@ void main() {
       );
 
       expect(
-        engine.generate(
+        await engine.generate(
           conversationDecision: const ConversationDecision(
             phase: ConversationPhase.validation,
             shouldSpeak: true,
@@ -54,7 +56,7 @@ void main() {
       );
     });
 
-    test('sleep-command language cannot leave Conversation layer', () {
+    test('sleep-command language cannot leave Conversation layer', () async {
       final engine = ConversationEngine(
         languageModelClient: const _FixedLanguageModelClient(
           'You should sleep now.',
@@ -62,7 +64,7 @@ void main() {
       );
 
       expect(
-        engine.generate(
+        await engine.generate(
           conversationDecision: const ConversationDecision(
             phase: ConversationPhase.validation,
             shouldSpeak: true,
@@ -73,10 +75,14 @@ void main() {
       );
     });
 
-    test('faithful placeholder language can leave Conversation layer', () {
-      const engine = ConversationEngine();
+    test('faithful placeholder language can leave Conversation layer', () async {
+      const engine = ConversationEngine(
+        languageModelClient: LanguageModelClient(
+          vendorProvider: FaithfulTestVendorProvider(),
+        ),
+      );
 
-      final utterance = engine.generate(
+      final utterance = await engine.generate(
         conversationDecision: const ConversationDecision(
           phase: ConversationPhase.permission,
           shouldSpeak: true,
@@ -96,7 +102,7 @@ class _FixedLanguageModelClient extends LanguageModelClient {
   const _FixedLanguageModelClient(this.fixedText);
 
   @override
-  ConversationUtterance realize(LlmInvocationPackage package) {
+  Future<ConversationUtterance> realize(LlmInvocationPackage package) async {
     return ConversationUtterance(text: fixedText);
   }
 }

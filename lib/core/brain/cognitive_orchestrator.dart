@@ -159,6 +159,7 @@ class CognitiveOrchestrator {
       releaseDecision: releaseDecision,
       conversationDecision: conversationDecision,
       session: session,
+      message: message,
     );
 
     // Conversation handoff: authorized inputs only.

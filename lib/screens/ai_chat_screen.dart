@@ -24,6 +24,7 @@ class AISleepChatScreen extends StatefulWidget {
 
 class _AISleepChatScreenState extends State<AISleepChatScreen> {
   final TextEditingController _controller = TextEditingController();
+  final FocusNode _inputFocus = FocusNode();
   final ScrollController _scrollController = ScrollController();
   final List<_ChatMessage> _messages = [];
   final LivingMindStore _mindStore = const LivingMindStore();
@@ -61,14 +62,31 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
   /// while conversation may continue. Not assistant speech. Not invented dialogue.
   bool _expressionQuiet = false;
 
+  /// Blocks re-entrant send while a turn is already accepted.
+  bool _sendInFlight = false;
+
+  /// Ensures paywall/Player handoff starts at most once per transition.
+  bool _audioFlowRunning = false;
+
   bool get _acceptsUserInput {
-    if (isTyping || isLoadingAudio) return false;
-    if (_audioHandoffFailed) return false;
+    if (_sendInFlight || isTyping || isLoadingAudio) return false;
+    if (_audioFlowRunning) return false;
     if (_audioContinueAvailable) return false;
     if (_session == null) return false;
     final exit = _lastTurnResult?.exitDecision;
     if (exit == null) return true;
+    // After load-fail, reopen free text despite transition exit still standing.
+    if (exit == ExitDecision.transitionToAudio) {
+      return _audioHandoffFailed;
+    }
+    if (exit == ExitDecision.silence) return false;
     return exit == ExitDecision.continueConversation;
+  }
+
+  void _dismissKeyboardAndClearDraft() {
+    _inputFocus.unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
+    _controller.clear();
   }
 
   /// Same-language mirror for chrome CTAs (EN/TR). Not a localization system.
@@ -126,14 +144,20 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
   @override
   void dispose() {
     _controller.dispose();
+    _inputFocus.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
   Future<void> _handleSend() async {
+    if (!_acceptsUserInput) return;
     final text = _controller.text.trim();
-    if (text.isEmpty || !_acceptsUserInput) return;
+    if (text.isEmpty) return;
 
+    // Accept once: lock before any await so rapid double-submit cannot fork.
+    _sendInFlight = true;
+    _inputFocus.unfocus();
+    FocusManager.instance.primaryFocus?.unfocus();
     _controller.clear();
 
     setState(() {
@@ -142,7 +166,15 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
     });
 
     _scrollToBottom();
-    await _generateAIResponse(text);
+    try {
+      await _generateAIResponse(text);
+    } finally {
+      if (mounted) {
+        setState(() => _sendInFlight = false);
+      } else {
+        _sendInFlight = false;
+      }
+    }
   }
 
   Future<void> _generateAIResponse(String userInput) async {
@@ -181,12 +213,23 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
       final reply = result.utterance?.text;
       final hasExpression = reply != null && reply.isNotEmpty;
 
+      // Lock conversation chrome the instant Exit is definitive.
+      if (result.exitDecision == ExitDecision.transitionToAudio ||
+          result.exitDecision == ExitDecision.silence) {
+        _dismissKeyboardAndClearDraft();
+      }
+
       // Hide typing immediately on completion / null / Guard reject.
       // No fabricated assistant speech.
       setState(() {
         isTyping = false;
         _expressionQuiet = !hasExpression &&
             result.exitDecision == ExitDecision.continueConversation;
+        if (result.exitDecision == ExitDecision.transitionToAudio) {
+          isLoadingAudio = true;
+          _audioHandoffFailed = false;
+          _audioContinueAvailable = false;
+        }
       });
 
       if (hasExpression) {
@@ -200,15 +243,6 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
         case ExitDecision.continueConversation:
           break;
         case ExitDecision.transitionToAudio:
-          // Visible prep cue before delay/paywall/player so the UI does not
-          // feel frozen after the handoff line.
-          if (mounted) {
-            setState(() {
-              isLoadingAudio = true;
-              _audioHandoffFailed = false;
-              _audioContinueAvailable = false;
-            });
-          }
           if (hasExpression) {
             await Future<void>.delayed(const Duration(milliseconds: 1600));
             if (!mounted) return;
@@ -241,14 +275,16 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
 
   Future<void> _startAudioFlow() async {
     if (!mounted) return;
+    // Single-flight: ignore re-entrant calls from double submit / double CTA.
+    if (_audioFlowRunning) return;
+    _audioFlowRunning = true;
 
     setState(() {
       isLoadingAudio = true;
       _audioHandoffFailed = false;
       _audioContinueAvailable = false;
     });
-
-    if (!mounted) return;
+    _dismissKeyboardAndClearDraft();
 
     // Premium is offered at the live Conversation → Audio boundary.
     // Entitlement ownership stays in BillingService; HCOS is unchanged.
@@ -300,6 +336,7 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
 
     if (playerOk == false) {
       // Do not auto-complete the night on audio failure.
+      _audioFlowRunning = false;
       setState(() {
         isLoadingAudio = false;
         _audioHandoffFailed = true;
@@ -311,6 +348,7 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
 
     if (playerOk == null) {
       // Early leave is not failure and not night completion.
+      _audioFlowRunning = false;
       setState(() {
         isLoadingAudio = false;
         _audioHandoffFailed = false;
@@ -324,7 +362,7 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
   }
 
   Future<void> _retryAudioHandoff() async {
-    if (!mounted || isLoadingAudio) return;
+    if (!mounted || isLoadingAudio || _audioFlowRunning) return;
     if (_lastTurnResult?.exitDecision != ExitDecision.transitionToAudio) {
       return;
     }
@@ -337,7 +375,7 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
 
   /// Re-opens the same handoff bed after an intentional early Player leave.
   Future<void> _continueAudioHandoff() async {
-    if (!mounted || isLoadingAudio) return;
+    if (!mounted || isLoadingAudio || _audioFlowRunning) return;
     if (_lastTurnResult?.exitDecision != ExitDecision.transitionToAudio) {
       return;
     }
@@ -490,7 +528,9 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
                 ),
                 child: TextField(
                   controller: _controller,
+                  focusNode: _inputFocus,
                   enabled: _acceptsUserInput,
+                  readOnly: !_acceptsUserInput,
                   style: const TextStyle(color: Colors.white, fontSize: 16),
                   minLines: 1,
                   maxLines: 4,
@@ -499,7 +539,11 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
                     hintStyle: TextStyle(color: Colors.white38, fontSize: 14),
                     border: InputBorder.none,
                   ),
-                  onSubmitted: (_) => _handleSend(),
+                  onSubmitted: (_) {
+                    if (_acceptsUserInput) {
+                      unawaited(_handleSend());
+                    }
+                  },
                 ),
               ),
             ),

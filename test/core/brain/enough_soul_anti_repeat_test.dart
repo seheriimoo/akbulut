@@ -5,6 +5,7 @@ import 'package:slowave/core/brain/conversation_phase.dart';
 import 'package:slowave/core/brain/conversation_policy.dart';
 import 'package:slowave/core/brain/conversation_utterance.dart';
 import 'package:slowave/core/brain/enough_intelligence.dart';
+import 'package:slowave/core/brain/exit_decision.dart';
 import 'package:slowave/core/brain/hcos_live_entry.dart';
 import 'package:slowave/core/brain/llm_invocation_package.dart';
 import 'package:slowave/core/brain/night_session.dart';
@@ -92,10 +93,13 @@ void main() {
     });
 
     test('EnoughIntelligence forbids default catchphrase stamp', () {
-      final slice = enough.compile(stage: enoughStage);
+      final slice = enough.compile(
+        stage: enoughStage,
+        authorizeRestAudioHandoff: true,
+      );
       final all = '${slice.userContent}\n${slice.systemAppendix}\n'
           '${slice.forbiddenMoves.join('\n')}';
-      expect(EnoughIntelligence.version, '1.2');
+      expect(EnoughIntelligence.version, '1.3');
       expect(all, contains('Anti-catchphrase'));
       expect(all.toLowerCase(), contains('enough for now'));
       expect(all, contains('do not default'));
@@ -106,9 +110,12 @@ void main() {
 
     test('compiler Enough overlay carries Enough Intelligence', () {
       final compiled = compiler.compile(
-        LlmInvocationPackage(what: ConversationPhase.continuity),
+        LlmInvocationPackage(
+          what: ConversationPhase.continuity,
+          exitDecision: ExitDecision.transitionToAudio,
+        ),
       )!;
-      expect(compiled.systemContent, contains('Enough Intelligence v1.2'));
+      expect(compiled.systemContent, contains('Enough Intelligence v1.3'));
       expect(compiled.systemContent, contains('Anti-catchphrase'));
       expect(compiled.userContent, contains('No catchphrase stamp'));
     });

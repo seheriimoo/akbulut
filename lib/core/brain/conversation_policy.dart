@@ -1,5 +1,6 @@
 import 'conversation_decision.dart';
 import 'conversation_phase.dart';
+import 'explicit_exit_intent.dart';
 import 'neutral_entry_detector.dart';
 import 'night_session.dart';
 import 'release_decision.dart';
@@ -27,9 +28,11 @@ import 'validated_understanding.dart';
 class ConversationPolicy {
   const ConversationPolicy({
     this.neutralEntryDetector = const NeutralEntryDetector(),
+    this.explicitExitIntent = const ExplicitExitIntent(),
   });
 
   final NeutralEntryDetector neutralEntryDetector;
+  final ExplicitExitIntent explicitExitIntent;
 
   ConversationDecision decide({
     required ReleaseDecision releaseDecision,
@@ -37,6 +40,15 @@ class ConversationPolicy {
     NightSession? session,
     ValidatedUnderstanding? understanding,
   }) {
+    // Explicit exit intent → Enough close that may soft-handoff into audio.
+    // Readiness ladder is not required when the person clearly asks to leave.
+    if (message != null && explicitExitIntent.matches(message)) {
+      return const ConversationDecision(
+        phase: ConversationPhase.continuity,
+        shouldSpeak: true,
+      );
+    }
+
     if (_isNeutralEntry(
       releaseDecision: releaseDecision,
       message: message,

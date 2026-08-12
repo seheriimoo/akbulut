@@ -165,8 +165,8 @@ void main() {
 
       // Must not close the night before starting audio on the transition path.
       final transitionBlock = source.substring(
-        source.indexOf('ExitDecision.transitionToAudio'),
-        source.indexOf('ExitDecision.silence'),
+        source.indexOf('case ExitDecision.transitionToAudio:'),
+        source.indexOf('case ExitDecision.silence:'),
       );
       expect(transitionBlock.contains('_startAudioFlow'), isTrue);
       expect(transitionBlock.contains('_closeNightSession'), isFalse);
@@ -233,7 +233,7 @@ void main() {
 
     test('Silence exit still uses canonical complete path', () {
       final source = File('lib/screens/ai_chat_screen.dart').readAsStringSync();
-      final silenceIdx = source.indexOf('ExitDecision.silence');
+      final silenceIdx = source.indexOf('case ExitDecision.silence:');
       final silenceBlock = source.substring(silenceIdx, silenceIdx + 120);
       expect(silenceBlock.contains('_finishNightAndShowClosing'), isTrue);
     });

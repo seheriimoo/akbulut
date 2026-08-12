@@ -1,6 +1,7 @@
 import 'conversation_decision.dart';
 import 'conversation_phase.dart';
 import 'exit_decision.dart';
+import 'explicit_exit_intent.dart';
 import 'night_session.dart';
 import 'release_decision.dart';
 
@@ -18,13 +19,23 @@ import 'release_decision.dart';
 ///
 /// Owns no memory.
 class ExitIntelligence {
-  const ExitIntelligence();
+  const ExitIntelligence({
+    this.explicitExitIntent = const ExplicitExitIntent(),
+  });
+
+  final ExplicitExitIntent explicitExitIntent;
 
   ExitDecision decide({
     required ReleaseDecision releaseDecision,
     required ConversationDecision conversationDecision,
     required NightSession session,
+    String? message,
   }) {
+    // Explicit user intent to end talk and enter audio outranks readiness.
+    if (message != null && explicitExitIntent.matches(message)) {
+      return ExitDecision.transitionToAudio;
+    }
+
     if (conversationDecision.phase == ConversationPhase.audio) {
       return ExitDecision.transitionToAudio;
     }

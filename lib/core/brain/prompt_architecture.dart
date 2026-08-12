@@ -63,6 +63,7 @@ class PromptArchitecture {
       livedExpression: livedExpression,
       conversationGrounding: conversationGrounding,
       priorAdmittedExpression: priorAdmittedExpression,
+      exitDecision: exitDecision,
       dna: ConversationDNA.instance,
     );
   }

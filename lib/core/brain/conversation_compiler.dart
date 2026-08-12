@@ -4,11 +4,12 @@ import 'conversation_dna.dart';
 import 'conversation_grounding_buffer.dart';
 import 'conversation_philosophy.dart';
 import 'compiled_instruction_package.dart';
+import 'enough_intelligence.dart';
+import 'exit_decision.dart';
 import 'language_style.dart';
 import 'llm_invocation_package.dart';
 import 'naming_intelligence.dart';
 import 'neutral_entry_intelligence.dart';
-import 'enough_intelligence.dart';
 import 'permission_intelligence.dart';
 import 'receipt_intelligence.dart';
 import 'release_intelligence.dart';
@@ -187,6 +188,9 @@ class ConversationCompiler {
           stage: stage,
           conversationGrounding: package.conversationGrounding,
           priorAdmittedExpression: package.priorAdmittedExpression,
+          // Spoken rest-audio promise only when Exit already chose transition.
+          authorizeRestAudioHandoff:
+              package.exitDecision == ExitDecision.transitionToAudio,
         );
         return _StageOverlay(
           aim: slice.aim,

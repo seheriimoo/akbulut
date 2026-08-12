@@ -490,12 +490,14 @@ class _OrderExitIntelligence extends ExitIntelligence {
     required releaseDecision,
     required conversationDecision,
     required session,
+    String? message,
   }) {
     order.add('exit');
     return super.decide(
       releaseDecision: releaseDecision,
       conversationDecision: conversationDecision,
       session: session,
+      message: message,
     );
   }
 }

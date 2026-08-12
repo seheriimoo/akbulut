@@ -164,9 +164,12 @@ void main() {
 
     test('Enough compile prefers soft rest-audio handoff TYPE', () {
       final compiled = compiler.compile(
-        LlmInvocationPackage(what: ConversationPhase.continuity),
+        LlmInvocationPackage(
+          what: ConversationPhase.continuity,
+          exitDecision: ExitDecision.transitionToAudio,
+        ),
       )!;
-      expect(compiled.systemContent, contains('Enough Intelligence v1.2'));
+      expect(compiled.systemContent, contains('Enough Intelligence v1.3'));
       expect(compiled.systemContent.toLowerCase(), contains('handoff'));
       expect(compiled.systemContent, contains('preparing'));
     });

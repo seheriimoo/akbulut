@@ -326,12 +326,14 @@ class _TrackingExitIntelligence extends ExitIntelligence {
     required ReleaseDecision releaseDecision,
     required ConversationDecision conversationDecision,
     required NightSession session,
+    String? message,
   }) {
     order.add('exit');
     return super.decide(
       releaseDecision: releaseDecision,
       conversationDecision: conversationDecision,
       session: session,
+      message: message,
     );
   }
 }

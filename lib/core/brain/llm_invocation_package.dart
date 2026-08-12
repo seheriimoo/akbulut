@@ -3,6 +3,7 @@ import 'dart:collection';
 import 'conversation_dna.dart';
 import 'conversation_grounding_buffer.dart';
 import 'conversation_phase.dart';
+import 'exit_decision.dart';
 import 'prior_admitted_expression.dart';
 import 'validated_understanding.dart';
 import 'working_mind_view.dart';
@@ -44,6 +45,12 @@ class LlmInvocationPackage {
   /// Expression anti-repeat shaping only. Not user grounding. Not authority.
   final PriorAdmittedExpression? priorAdmittedExpression;
 
+  /// Optional ExitDecision for expression shaping only (Enough handoff gate).
+  ///
+  /// Not authority to reopen exit. Compiler/Enough may authorize rest-audio
+  /// promise language only when this is [ExitDecision.transitionToAudio].
+  final ExitDecision? exitDecision;
+
   /// Bound Conversation DNA constraints (not enforced by this package).
   final ConversationDNA dna;
 
@@ -69,6 +76,7 @@ class LlmInvocationPackage {
     this.livedExpression,
     this.conversationGrounding,
     this.priorAdmittedExpression,
+    this.exitDecision,
     this.dna = ConversationDNA.instance,
   }) {
     if (!_isSpeakableWhat(what)) {

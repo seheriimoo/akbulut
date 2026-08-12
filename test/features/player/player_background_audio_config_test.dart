@@ -44,8 +44,8 @@ void main() {
     expect(completeIdx, greaterThan(0));
 
     final transitionBlock = chat.substring(
-      chat.indexOf('ExitDecision.transitionToAudio'),
-      chat.indexOf('ExitDecision.silence'),
+      chat.indexOf('case ExitDecision.transitionToAudio:'),
+      chat.indexOf('case ExitDecision.silence:'),
     );
     expect(transitionBlock.contains('_startAudioFlow'), isTrue);
     // Night close runs after audio returns, not before Player starts.

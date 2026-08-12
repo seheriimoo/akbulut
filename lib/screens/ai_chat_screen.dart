@@ -49,12 +49,17 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
   bool isTyping = false;
   bool isLoadingAudio = false;
 
+  /// True when Player returned load-failure; stay on chat and offer retry.
+  /// Does not invent dialogue. Does not close the NightSession.
+  bool _audioHandoffFailed = false;
+
   /// Visible idle cue when expression returned no utterance (null / Guard reject)
   /// while conversation may continue. Not assistant speech. Not invented dialogue.
   bool _expressionQuiet = false;
 
   bool get _acceptsUserInput {
     if (isTyping || isLoadingAudio) return false;
+    if (_audioHandoffFailed) return false;
     if (_session == null) return false;
     final exit = _lastTurnResult?.exitDecision;
     if (exit == null) return true;
@@ -164,11 +169,6 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
 
       if (hasExpression) {
         await _addAIMessage(reply);
-        // Let the audio-handoff line land before navigating to player.
-        if (result.exitDecision == ExitDecision.transitionToAudio) {
-          await Future<void>.delayed(const Duration(milliseconds: 1600));
-          if (!mounted) return;
-        }
       }
 
       // Production exit cutover: ExitDecision from CognitiveTurnResult only.
@@ -178,6 +178,18 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
         case ExitDecision.continueConversation:
           break;
         case ExitDecision.transitionToAudio:
+          // Visible prep cue before delay/paywall/player so the UI does not
+          // feel frozen after the handoff line.
+          if (mounted) {
+            setState(() {
+              isLoadingAudio = true;
+              _audioHandoffFailed = false;
+            });
+          }
+          if (hasExpression) {
+            await Future<void>.delayed(const Duration(milliseconds: 1600));
+            if (!mounted) return;
+          }
           await _startAudioFlow();
           break;
         case ExitDecision.silence:
@@ -207,7 +219,10 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
   Future<void> _startAudioFlow() async {
     if (!mounted) return;
 
-    setState(() => isLoadingAudio = true);
+    setState(() {
+      isLoadingAudio = true;
+      _audioHandoffFailed = false;
+    });
 
     if (!mounted) return;
 
@@ -236,6 +251,10 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
 
     // Presentation-only player handoff. Not HCOS cognition.
     // NightSession stays open until audio ends → completeNightSession.
+    // Player return contract:
+    //   true  → bed completed naturally → close night
+    //   false → bed load/play failed → stay on chat + retry
+    //   null  → user left player early → close night
     final playerOk = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
@@ -253,15 +272,28 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
 
     if (!mounted) return;
 
+    _lastBlockerHint = blocker;
+
     if (playerOk == false) {
+      // Do not auto-complete the night on audio failure.
       setState(() {
         isLoadingAudio = false;
-        _expressionQuiet = true;
+        _audioHandoffFailed = true;
+        _expressionQuiet = false;
       });
+      return;
     }
 
-    _lastBlockerHint = blocker;
     await _finishNightAndShowClosing(blockerHint: blocker);
+  }
+
+  Future<void> _retryAudioHandoff() async {
+    if (!mounted || isLoadingAudio) return;
+    if (_lastTurnResult?.exitDecision != ExitDecision.transitionToAudio) {
+      return;
+    }
+    setState(() => _audioHandoffFailed = false);
+    await _startAudioFlow();
   }
 
   /// Ends the temporary NightSession through the canonical session-end path.
@@ -372,6 +404,9 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
               },
             ),
           ),
+          if (isLoadingAudio) const _AudioPreparingCue(),
+          if (_audioHandoffFailed && !isLoadingAudio)
+            _AudioRetryCue(onRetry: _retryAudioHandoff),
           _buildInput(),
         ],
       ),
@@ -517,6 +552,90 @@ class _QuietHoldCue extends StatelessWidget {
             fontSize: 14,
             height: 1.2,
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Soft prep cue while paywall/player handoff is in flight.
+/// Not assistant speech. Matches Nocta quiet chrome language.
+class _AudioPreparingCue extends StatelessWidget {
+  const _AudioPreparingCue();
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 4, 24, 8),
+        child: Text(
+          'Preparing a little quiet…',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.55),
+            fontSize: 14,
+            fontWeight: FontWeight.w300,
+            letterSpacing: 0.2,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Shown only after Player load/play failure. Offers retry without closing night.
+class _AudioRetryCue extends StatelessWidget {
+  const _AudioRetryCue({required this.onRetry});
+
+  final Future<void> Function() onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 4, 24, 10),
+        child: Column(
+          children: [
+            Text(
+              'This quiet session could not start.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.65),
+                fontSize: 14,
+                fontWeight: FontWeight.w300,
+                height: 1.4,
+              ),
+            ),
+            const SizedBox(height: 12),
+            GestureDetector(
+              onTap: () => unawaited(onRetry()),
+              child: Container(
+                width: double.infinity,
+                height: 48,
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: Colors.white.withValues(alpha: 0.08),
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(
+                    color: Colors.white.withValues(alpha: 0.18),
+                  ),
+                ),
+                child: Text(
+                  'Tekrar dene',
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.92),
+                    fontSize: 14,
+                    letterSpacing: 0.6,
+                    fontWeight: FontWeight.w400,
+                  ),
+                ),
+              ),
+            ),
+          ],
         ),
       ),
     );

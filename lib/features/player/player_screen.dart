@@ -51,6 +51,9 @@ class _PlayerScreenState extends State<PlayerScreen>
   bool _loadFailed = false;
 
   Timer? _sessionTimer;
+  /// Remaining bed time; shrinks only while the session timer is armed.
+  late Duration _remaining;
+  DateTime? _timerArmedAt;
   StreamSubscription<AudioInterruptionEvent>? _interruptionSub;
 
   late final AnimationController _breathController;
@@ -60,6 +63,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
+    _remaining = widget.sessionLength;
 
     _breathController = AnimationController(
       vsync: this,
@@ -171,18 +175,43 @@ class _PlayerScreenState extends State<PlayerScreen>
 
   void _startSessionTimer() {
     _sessionTimer?.cancel();
-    _sessionTimer = Timer(widget.sessionLength, () {
+    if (_remaining <= Duration.zero) {
+      unawaited(_finishAudioSession(completedNaturally: true));
+      return;
+    }
+    _timerArmedAt = DateTime.now();
+    _sessionTimer = Timer(_remaining, () {
       unawaited(_finishAudioSession(completedNaturally: true));
     });
   }
 
-  /// Stops the sleep bed and returns to the night host for session-end.
+  /// Stops countdown while paused so remaining time does not advance.
+  void _pauseSessionTimer() {
+    final armedAt = _timerArmedAt;
+    if (armedAt != null) {
+      _remaining = sessionRemainingAfterElapsed(
+        remaining: _remaining,
+        elapsed: DateTime.now().difference(armedAt),
+      );
+    }
+    _sessionTimer?.cancel();
+    _sessionTimer = null;
+    _timerArmedAt = null;
+  }
+
+  /// Stops the sleep bed and returns to the night host.
+  ///
+  /// Pop contract for [AISleepChatScreen]:
+  ///   true  → bed completed naturally → close night
+  ///   null  → user left early → close night
+  ///   false → load/play failure (via [_leaveAfterLoadFailure]) → stay + retry
   Future<void> _finishAudioSession({required bool completedNaturally}) async {
     if (_finishing) return;
     setState(() => _finishing = true);
 
     _sessionTimer?.cancel();
     _sessionTimer = null;
+    _timerArmedAt = null;
 
     // Only tear down platform audio when a bed was actually armed.
     // Avoid hanging End Session on load-failure recovery.
@@ -198,7 +227,8 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (!mounted) return;
 
     setState(() => _playing = false);
-    Navigator.of(context).pop(completedNaturally);
+    // true = natural end; null = user left early (not a load failure).
+    Navigator.of(context).pop(completedNaturally ? true : null);
   }
 
   Future<void> _startPlayback() async {
@@ -246,6 +276,7 @@ class _PlayerScreenState extends State<PlayerScreen>
 
     if (_playing) {
       await _bgPlayer.pause();
+      _pauseSessionTimer();
       if (!mounted) return;
       setState(() => _playing = false);
       return;
@@ -452,4 +483,14 @@ class _PlayerScreenState extends State<PlayerScreen>
       ),
     );
   }
+}
+
+/// Remaining bed time after a pause interval. Does not go negative.
+@visibleForTesting
+Duration sessionRemainingAfterElapsed({
+  required Duration remaining,
+  required Duration elapsed,
+}) {
+  final next = remaining - elapsed;
+  return next.isNegative ? Duration.zero : next;
 }

@@ -31,4 +31,59 @@ void main() {
       expect(find.text('Preparing session…'), findsNothing);
     },
   );
+
+  testWidgets(
+    'End Session after load failure pops false for chat stay+retry',
+    (tester) async {
+      bool? playerResult;
+      var nightFinished = false;
+
+      await tester.pumpWidget(
+        MaterialApp(
+          home: Builder(
+            builder: (context) {
+              return Scaffold(
+                body: TextButton(
+                  onPressed: () async {
+                    playerResult = await Navigator.of(context).push<bool>(
+                      MaterialPageRoute(
+                        builder: (_) => const PlayerScreen(
+                          blocker: 'mind',
+                          sleepLatency: 'medium',
+                          energy: 'medium',
+                          goal: 'sleep',
+                          sessionLength: Duration(minutes: 30),
+                          audioAssetPath:
+                              'assets/audio/bg/CoreDefaultAir/does_not_exist.m4a',
+                        ),
+                      ),
+                    );
+                    // Mirror AISleepChatScreen contract: false → stay, else finish.
+                    if (playerResult != false) {
+                      nightFinished = true;
+                    }
+                  },
+                  child: const Text('open-player'),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+
+      await tester.tap(find.text('open-player'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(find.text('End Session'), findsOneWidget);
+      await tester.tap(find.text('End Session'));
+      await tester.pump();
+      await tester.pump(const Duration(milliseconds: 50));
+
+      expect(playerResult, isFalse);
+      expect(nightFinished, isFalse);
+      expect(find.text('open-player'), findsOneWidget);
+      expect(find.text('Tonight is complete'), findsNothing);
+    },
+  );
 }

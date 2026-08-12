@@ -1,10 +1,15 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import '../billing/premium_product_access.dart';
+import '../billing/sleep_bed_catalog.dart';
 import '../core/brain/cognitive_orchestrator.dart';
 import '../core/brain/cognitive_turn_result.dart';
 import '../core/brain/exit_decision.dart';
 import '../core/brain/hcos_live_entry.dart';
 import '../core/brain/living_mind_model.dart';
+import '../core/brain/living_mind_store.dart';
+import '../core/brain/night_audio_handoff.dart';
 import '../core/brain/night_session.dart';
 import '../features/player/player_screen.dart';
 import 'night_complete_screen.dart';
@@ -21,6 +26,9 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
   final TextEditingController _controller = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   final List<_ChatMessage> _messages = [];
+  final LivingMindStore _mindStore = const LivingMindStore();
+  final NightAudioHandoff _audioHandoff = const NightAudioHandoff();
+  final SleepBedCatalog _sleepBeds = const SleepBedCatalog();
 
   /// Sole production cognitive entry (Sprint 6 Cutover).
   late final CognitiveOrchestrator _orchestrator;
@@ -35,8 +43,15 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
   /// Sole production turn result returned to the app (Sprint 6 Gap #2).
   CognitiveTurnResult? _lastTurnResult;
 
+  /// Last night's blocker hint for continuity when this night is thin.
+  String? _lastBlockerHint;
+
   bool isTyping = false;
   bool isLoadingAudio = false;
+
+  /// Visible idle cue when expression returned no utterance (null / Guard reject)
+  /// while conversation may continue. Not assistant speech. Not invented dialogue.
+  bool _expressionQuiet = false;
 
   bool get _acceptsUserInput {
     if (isTyping || isLoadingAudio) return false;
@@ -50,12 +65,34 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
   void initState() {
     super.initState();
 
+    // Open a clean NightSession host only. Do not call processTurn, do not
+    // invent an opening assistant utterance, and do not show typing.
+    // The first HCOS turn begins only after the user submits a non-empty message.
     _orchestrator = HcosLiveEntry.createOrchestrator();
     _mindModel = HcosLiveEntry.emptyMindModel();
     _session = HcosLiveEntry.openNightSession(_mindModel);
+    unawaited(_bootstrapMindContinuity());
+  }
 
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      _sendInitialMessage();
+  Future<void> _bootstrapMindContinuity() async {
+    final sessions = await _mindStore.loadTotalSessions();
+    final blocker = await _mindStore.loadLastBlocker();
+    final mental = await _mindStore.loadMentalPatterns();
+    final emotional = await _mindStore.loadEmotionalPatterns();
+    if (!mounted) return;
+    setState(() {
+      _lastBlockerHint = blocker;
+      _mindModel = _mindModel.copyWith(
+        identity: _mindModel.identity.copyWith(
+          totalSessions: sessions > 0
+              ? sessions
+              : _mindModel.identity.totalSessions,
+        ),
+        mentalPatterns:
+            mental.isEmpty ? _mindModel.mentalPatterns : mental,
+        emotionalPatterns:
+            emotional.isEmpty ? _mindModel.emotionalPatterns : emotional,
+      );
     });
   }
 
@@ -66,22 +103,6 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
     super.dispose();
   }
 
-  Future<void> _sendInitialMessage() async {
-    if (!mounted) return;
-
-    setState(() {
-      _messages.add(
-        const _ChatMessage(
-          text:
-              "I'm here to understand what your mind is carrying tonight.\n\nWhenever you're ready, tell me what's on your mind.",
-          isUser: false,
-        ),
-      );
-    });
-
-    _scrollToBottom();
-  }
-
   Future<void> _handleSend() async {
     final text = _controller.text.trim();
     if (text.isEmpty || !_acceptsUserInput) return;
@@ -89,6 +110,7 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
     _controller.clear();
 
     setState(() {
+      _expressionQuiet = false;
       _messages.add(_ChatMessage(text: text, isUser: true));
     });
 
@@ -102,71 +124,74 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
     final session = _session;
     if (session == null) return;
 
-    setState(() => isTyping = true);
+    setState(() {
+      isTyping = true;
+      _expressionQuiet = false;
+    });
 
-    await Future.delayed(const Duration(milliseconds: 900));
+    try {
+      // Sole production turn result: CognitiveTurnResult.
+      // Typing is shown only while processTurn is in flight (no artificial wait).
+      // WorkingMindView comes only from the carried NightSession.
+      // Grounding buffer is rehydrated from the prior turn result (session host).
+      // No AIService / NoctaAIBrain / ReasoningEngine in the live path.
+      final priorGrounding = _lastTurnResult == null
+          ? null
+          : HcosLiveEntry.groundingBufferOf(_lastTurnResult!);
+      final CognitiveTurnResult result = await _orchestrator.processTurn(
+        message: userInput,
+        session: session,
+        workingMind: HcosLiveEntry.workingMindOf(session),
+        conversationGroundingBuffer: priorGrounding,
+      );
 
-    // Sole production turn result: CognitiveTurnResult.
-    // WorkingMindView comes only from the carried NightSession.
-    // No AIService / NoctaAIBrain / ReasoningEngine in the live path.
-    final CognitiveTurnResult result = await _orchestrator.processTurn(
-      message: userInput,
-      session: session,
-      workingMind: HcosLiveEntry.workingMindOf(session),
-    );
+      // Mid-session NightSession updates come only from CognitiveTurnResult.
+      _session = HcosLiveEntry.applyTurnResult(result);
+      _lastTurnResult = result;
 
-    // Mid-session NightSession updates come only from CognitiveTurnResult.
-    _session = HcosLiveEntry.applyTurnResult(result);
-    _lastTurnResult = result;
+      if (!mounted) return;
 
-    if (!mounted) return;
+      final reply = result.utterance?.text;
+      final hasExpression = reply != null && reply.isNotEmpty;
 
-    setState(() => isTyping = false);
+      // Hide typing immediately on completion / null / Guard reject.
+      // No fabricated assistant speech.
+      setState(() {
+        isTyping = false;
+        _expressionQuiet = !hasExpression &&
+            result.exitDecision == ExitDecision.continueConversation;
+      });
 
-    final reply = result.utterance?.text;
-    if (reply != null && reply.isNotEmpty) {
-      await _addAIMessage(reply);
+      if (hasExpression) {
+        await _addAIMessage(reply);
+        // Let the audio-handoff line land before navigating to player.
+        if (result.exitDecision == ExitDecision.transitionToAudio) {
+          await Future<void>.delayed(const Duration(milliseconds: 1600));
+          if (!mounted) return;
+        }
+      }
+
+      // Production exit cutover: ExitDecision from CognitiveTurnResult only.
+      // completeNightSession runs after audio (or immediately on silence).
+      // Exit flows proceed even when expression was null (no filler speech).
+      switch (result.exitDecision) {
+        case ExitDecision.continueConversation:
+          break;
+        case ExitDecision.transitionToAudio:
+          await _startAudioFlow();
+          break;
+        case ExitDecision.silence:
+          await _finishNightAndShowClosing();
+          break;
+      }
+    } catch (_) {
+      // Fail closed in UI: never crash, never invent assistant speech.
+      if (!mounted) return;
+      setState(() {
+        isTyping = false;
+        _expressionQuiet = _session != null;
+      });
     }
-
-    // Production exit cutover: ExitDecision from CognitiveTurnResult only.
-    // completeNightSession runs after audio (or immediately on silence).
-    switch (result.exitDecision) {
-      case ExitDecision.continueConversation:
-        break;
-      case ExitDecision.transitionToAudio:
-        await _startAudioFlow();
-        break;
-      case ExitDecision.silence:
-        await _finishNightAndShowClosing();
-        break;
-    }
-  }
-
-  /// Ends the temporary NightSession through the canonical session-end path.
-  /// Discards the session afterward. Does not mutate WorkingMindView ad hoc.
-  Future<void> _closeNightSession() async {
-    final session = _session;
-    if (session == null) return;
-
-    _mindModel = HcosLiveEntry.completeNightSession(
-      orchestrator: _orchestrator,
-      session: session,
-      model: _mindModel,
-    );
-    _session = null;
-  }
-
-  /// Canonical MemoryEngine write, then calm closing presentation.
-  Future<void> _finishNightAndShowClosing() async {
-    await _closeNightSession();
-
-    if (!mounted) return;
-
-    setState(() => isLoadingAudio = false);
-
-    await Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const NightCompleteScreen()),
-    );
   }
 
   Future<void> _addAIMessage(String text) async {
@@ -184,8 +209,6 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
 
     setState(() => isLoadingAudio = true);
 
-    await Future.delayed(const Duration(seconds: 2));
-
     if (!mounted) return;
 
     // Premium is offered at the live Conversation → Audio boundary.
@@ -202,18 +225,27 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
 
     if (!mounted) return;
 
+    final session = _session;
+    final blocker = session == null
+        ? (_lastBlockerHint ?? 'mind')
+        : _audioHandoff.blockerFor(
+            session: session,
+            grounding: _lastTurnResult?.conversationGroundingBuffer,
+          );
+    final bedAsset = _sleepBeds.assetFor(blocker: blocker, access: access);
+
     // Presentation-only player handoff. Not HCOS cognition.
     // NightSession stays open until audio ends → completeNightSession.
-    await Navigator.push<bool>(
+    final playerOk = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => PlayerScreen(
           goal: 'sleep',
-          blocker: 'mind',
-          sleepLatency: 'medium',
-          energy: 'medium',
+          blocker: blocker,
+          sleepLatency: _sleepBeds.sleepLatencyFor(blocker),
+          energy: _sleepBeds.energyFor(blocker),
           sessionLength: access.sessionLength,
-          audioAssetPath: access.sleepBedAsset,
+          audioAssetPath: bedAsset,
           premiumUnlocked: access.isPremium,
         ),
       ),
@@ -221,7 +253,49 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
 
     if (!mounted) return;
 
-    await _finishNightAndShowClosing();
+    if (playerOk == false) {
+      setState(() {
+        isLoadingAudio = false;
+        _expressionQuiet = true;
+      });
+    }
+
+    _lastBlockerHint = blocker;
+    await _finishNightAndShowClosing(blockerHint: blocker);
+  }
+
+  /// Ends the temporary NightSession through the canonical session-end path.
+  /// Discards the session afterward. Does not mutate WorkingMindView ad hoc.
+  Future<void> _closeNightSession({String? blockerHint}) async {
+    final session = _session;
+    if (session == null) return;
+
+    _mindModel = HcosLiveEntry.completeNightSession(
+      orchestrator: _orchestrator,
+      session: session,
+      model: _mindModel,
+    );
+    _session = null;
+
+    await _mindStore.saveAfterNight(
+      totalSessions: _mindModel.identity.totalSessions,
+      blocker: blockerHint ?? _lastBlockerHint ?? 'mind',
+      mentalPatterns: _mindModel.mentalPatterns,
+      emotionalPatterns: _mindModel.emotionalPatterns,
+    );
+  }
+
+  /// Canonical MemoryEngine write, then calm closing presentation.
+  Future<void> _finishNightAndShowClosing({String? blockerHint}) async {
+    await _closeNightSession(blockerHint: blockerHint);
+
+    if (!mounted) return;
+
+    setState(() => isLoadingAudio = false);
+
+    await Navigator.of(context).pushReplacement(
+      MaterialPageRoute(builder: (_) => const NightCompleteScreen()),
+    );
   }
 
   void _scrollToBottom() {
@@ -260,10 +334,18 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
               controller: _scrollController,
               keyboardDismissBehavior: ScrollViewKeyboardDismissBehavior.onDrag,
               padding: const EdgeInsets.fromLTRB(16, 18, 16, 18),
-              itemCount: _messages.length + (isTyping ? 1 : 0),
+              itemCount: _messages.length +
+                  (isTyping ? 1 : 0) +
+                  (_expressionQuiet && !isTyping ? 1 : 0),
               itemBuilder: (context, index) {
                 if (isTyping && index == _messages.length) {
                   return const _TypingBubble();
+                }
+
+                if (_expressionQuiet &&
+                    !isTyping &&
+                    index == _messages.length) {
+                  return const _QuietHoldCue();
                 }
 
                 final message = _messages[index];
@@ -328,12 +410,10 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
             ),
             const SizedBox(width: 8),
             IconButton(
-              onPressed: (isLoadingAudio || isTyping) ? null : _handleSend,
+              onPressed: _acceptsUserInput ? _handleSend : null,
               icon: Icon(
                 Icons.arrow_upward_rounded,
-                color: (isLoadingAudio || isTyping)
-                    ? Colors.white24
-                    : Colors.white70,
+                color: _acceptsUserInput ? Colors.white70 : Colors.white24,
               ),
             ),
           ],
@@ -395,6 +475,7 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
+/// In-flight expression cue only. Not assistant speech. Not invented dialogue.
 class _TypingBubble extends StatelessWidget {
   const _TypingBubble();
 
@@ -405,11 +486,36 @@ class _TypingBubble extends StatelessWidget {
       child: Padding(
         padding: EdgeInsets.symmetric(vertical: 8),
         child: Text(
-          "hazırlanıyor…",
+          '…',
           style: TextStyle(
             color: Colors.white38,
-            fontSize: 12,
-            fontStyle: FontStyle.italic,
+            fontSize: 16,
+            height: 1.2,
+            fontWeight: FontWeight.w300,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Minimal non-conversational chrome when expression is absent.
+/// Not an assistant reply. Not invented dialogue.
+class _QuietHoldCue extends StatelessWidget {
+  const _QuietHoldCue();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Align(
+      alignment: Alignment.centerLeft,
+      child: Padding(
+        padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
+        child: Text(
+          '·',
+          style: TextStyle(
+            color: Colors.white24,
+            fontSize: 14,
+            height: 1.2,
           ),
         ),
       ),

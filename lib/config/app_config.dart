@@ -37,11 +37,21 @@ class AppConfig {
   /// Resolved Sentry DSN (never log this value).
   static String get sentryDsn => _sentryDsn;
 
-  static bool get hasOpenAiApiKey => _openAiApiKey.trim().isNotEmpty;
+  static bool get hasOpenAiApiKey => isUsableSecret(_openAiApiKey);
 
-  static bool get hasRevenueCatApiKey => _revenueCatApiKey.trim().isNotEmpty;
+  static bool get hasRevenueCatApiKey => isUsableSecret(_revenueCatApiKey);
 
-  static bool get hasSentryDsn => _sentryDsn.trim().isNotEmpty;
+  static bool get hasSentryDsn => isUsableSecret(_sentryDsn);
+
+  /// True when a dart-define secret is present and not a placeholder stub.
+  static bool isUsableSecret(String value) {
+    final key = value.trim();
+    if (key.isEmpty) return false;
+    final upper = key.toUpperCase();
+    if (upper.startsWith('REPLACE_WITH_')) return false;
+    if (upper == 'YOUR_KEY_HERE' || upper == 'TODO') return false;
+    return true;
+  }
 
   /// Load production configuration from dart-defines and seed dotenv.
   ///

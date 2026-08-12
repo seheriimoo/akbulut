@@ -154,3 +154,143 @@ Impact:
 - Changes to the template require a new version (V2) rather than modifying the locked version.
 - The locked template serves as the canonical reference for V1.
 
+
+---
+
+# DECISION XXX — Conversation Memory V1
+
+Status: APPROVED
+
+Conversation Memory is not Vendor chat history.
+
+Conversation Memory is not WorkingMind.
+
+Conversation Memory is temporary night-scoped shaping context.
+
+Ownership:
+
+- CognitiveOrchestrator owns the temporary grounding buffer.
+- PromptArchitecture admits shaping only.
+- ConversationCompiler materializes admitted grounding.
+- VendorProvider transports compiled instructions only.
+
+V1 Scope:
+
+- current user utterance
+- up to two previous user utterances
+- prior assistant utterances excluded
+
+Conversation Memory never becomes durable memory.
+
+Conversation Memory is discarded at NightSession completion.
+
+
+---
+
+# DECISION XXX — Amendment 001 Approved
+
+Status: FROZEN
+
+Approved Contract:
+
+HCOS Principle 3 + Memory Storage Clarification
+
+Summary:
+
+HCOS permits temporary runtime conversation grounding during an active NightSession.
+
+Temporary grounding:
+
+- remains governed by HCOS principles
+- is volatile runtime memory only
+- never becomes durable memory
+- is discarded at NightSession completion
+- never reaches LivingMindModel
+- never reaches MemoryEngine
+- never becomes vendor-maintained conversation history
+
+Conversation Memory scope remains owned by the Conversation Memory Contract.
+
+
+---
+
+# DECISION XXX — Amendment 003 Approved
+
+Status: FROZEN
+
+Approved Contract:
+
+ConversationCompiler Shaping Contract
+
+Summary:
+
+ConversationCompiler remains a deterministic translation component.
+
+Compiler owns no cognition.
+
+Compiler owns no authority.
+
+Compiler owns no memory.
+
+Compiler may consume shaping only from the sealed LlmInvocationPackage.
+
+Field-specific shaping modes:
+
+- understanding → presence-only
+- workingMind → presence-only
+- conversationGrounding → deterministic materialization
+
+Compiler must never:
+
+- infer
+- invent
+- reopen cognition
+- change WHAT
+- narrate analysis
+- write memory
+- generate user-facing speech
+
+Unknown shaping fields cause fail-closed compilation.
+
+Cognitive authority remains upstream.
+
+ConversationGrounding is the sole canonical user-grounding shaping field.
+
+
+---
+
+# DECISION XXX — Amendment 002 Approved
+
+Status: FROZEN
+
+Approved Contract:
+
+LlmInvocationPackage Conversation Grounding
+
+Summary:
+
+LlmInvocationPackage is the sole canonical handoff into the LLM expression plane.
+
+Conversation Grounding is an optional shaping field.
+
+Ownership:
+
+- CognitiveOrchestrator owns the temporary grounding buffer lifecycle.
+- PromptArchitecture admits or rejects Conversation Grounding.
+- PromptArchitecture is the sole writer of the package field.
+- ConversationCompiler may read the admitted field only for deterministic materialization according to the frozen Compiler contract.
+- LanguageModelClient carries the sealed package.
+- VendorProvider transports compiled instructions only.
+
+Conversation Grounding:
+
+- is optional
+- has zero cognitive authority
+- never changes WHAT
+- never changes ReleaseDecision
+- never changes ExitDecision
+- never changes ConversationPolicy
+- never becomes durable memory
+
+After package emission, the Conversation Grounding field is immutable.
+

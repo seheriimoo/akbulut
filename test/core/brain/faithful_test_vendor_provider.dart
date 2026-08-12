@@ -29,6 +29,8 @@ class FaithfulTestVendorProvider implements VendorProvider {
         return 'You can let this rest for now.';
       case ConversationPhase.continuity:
         return 'Nothing more is needed right now.';
+      case ConversationPhase.neutralEntry:
+        return "Hi whenever you're ready.";
       case ConversationPhase.audio:
       case ConversationPhase.silence:
         throw VendorError(
@@ -49,7 +51,9 @@ class FaithfulTestVendorProvider implements VendorProvider {
       case ConversationPhase.release:
         return 'You can let it rest for now.';
       case ConversationPhase.continuity:
-        return "That's enough for now.";
+        return "I'm preparing a little quiet for you now.";
+      case ConversationPhase.neutralEntry:
+        return "Hello whenever you're ready.";
       case ConversationPhase.audio:
       case ConversationPhase.silence:
         throw VendorError(

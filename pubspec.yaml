@@ -47,6 +47,8 @@ dependencies:
 dev_dependencies:
   flutter_test:
     sdk: flutter
+  integration_test:
+    sdk: flutter
 
   # The "flutter_lints" package below contains a set of recommended lints to
   # encourage good coding practices. The lint set provided by the package is
@@ -72,6 +74,7 @@ flutter:
     - assets/audio/voice/silence_10s.mp3
     - assets/audio/bg/CoreDefaultAir/CoreDefaultAir_BG_30m.m4a
     - assets/audio/bg/CoreDefaultAir/CoreDefaultAir_BG_45m_premium.m4a
+    - assets/audio/bg/CoreDefaultAir/CoreDefaultAir_BG_GlobalSleep.m4a
 
   # To add assets to your application, add an assets section, like this:
   # assets:

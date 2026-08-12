@@ -24,6 +24,7 @@ void main() {
     ConversationPhase.permission,
     ConversationPhase.release,
     ConversationPhase.continuity,
+    ConversationPhase.neutralEntry,
   ];
 
   group('Conversation LLM Contract compliance — LlmInvocationPackage', () {
@@ -126,13 +127,24 @@ void main() {
       );
     });
 
-    test('rejects multi-message speech bundles', () {
+    test('soft newlines normalize into one speech plane', () {
+      final admitted = guard.allow(
+        utterance: const ConversationUtterance(
+          text: 'Something is weighing on your mind.\nIt is still there.',
+        ),
+        what: ConversationPhase.naming,
+      );
+      expect(admitted, isNotNull);
+      expect(admitted!.text.contains('\n'), isFalse);
+    });
+
+    test('rejects over-long speech stacks past sentence cap', () {
       expect(
         guard.allow(
           utterance: const ConversationUtterance(
-            text: 'That makes sense.\nI hear that.',
+            text: 'One. Two. Three. Four. Five. Six.',
           ),
-          what: ConversationPhase.validation,
+          what: ConversationPhase.naming,
         ),
         isNull,
       );
@@ -218,6 +230,7 @@ void main() {
             'You do not have to solve this tonight.',
         ConversationPhase.release: 'You can let this rest for now.',
         ConversationPhase.continuity: 'Nothing more is needed right now.',
+        ConversationPhase.neutralEntry: "Hi whenever you're ready.",
       };
 
       for (final entry in expected.entries) {

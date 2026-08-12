@@ -29,8 +29,21 @@ class ExitIntelligence {
       return ExitDecision.transitionToAudio;
     }
 
+    // Spoken Enough / audio-handoff while already transition-ready:
+    // show the directing line, then enter audio on the same turn.
+    if (conversationDecision.phase == ConversationPhase.continuity &&
+        conversationDecision.shouldSpeak &&
+        releaseDecision.readiness == ReleaseReadiness.transitionReady) {
+      return ExitDecision.transitionToAudio;
+    }
+
     if (conversationDecision.shouldSpeak) {
       return ExitDecision.continueConversation;
+    }
+
+    // Post-Enough quiet (anti-restamp): bridge to audio instead of dead silence.
+    if (conversationDecision.phase == ConversationPhase.continuity) {
+      return ExitDecision.transitionToAudio;
     }
 
     return ExitDecision.silence;

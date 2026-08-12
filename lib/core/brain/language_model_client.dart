@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'conversation_compiler.dart';
 import 'conversation_dna.dart';
 import 'conversation_utterance.dart';
 import 'llm_invocation_package.dart';
@@ -12,14 +13,16 @@ import 'vendor_provider.dart';
 /// Accepts exactly one [LlmInvocationPackage] and returns exactly one
 /// non-empty candidate [ConversationUtterance] realizing the sealed WHAT.
 ///
-/// Depends only on the [VendorProvider] abstraction for vendor transport —
-/// never on a concrete vendor SDK. Builds one [VendorRequest] from the
-/// sealed package, invokes the configured provider, and maps
-/// [VendorResponse] to one candidate utterance.
+/// Compiles the sealed package via [ConversationCompiler] into a
+/// [CompiledInstructionPackage], then depends only on the [VendorProvider]
+/// abstraction for vendor transport — never on a concrete vendor SDK.
+/// Builds one [VendorRequest] from the compiled instructions, invokes the
+/// configured provider, and maps [VendorResponse] to one candidate utterance.
 ///
 /// Owns vendor timeout policy and limited same-request retry for transient
 /// transport failures only. Propagates [VendorError] without fallback,
 /// DNA enforcement, release, protocol, exit, or memory ownership.
+/// Does not choose WHAT; compilation is deterministic translation only.
 class LanguageModelClient {
   /// Default client-owned vendor call timeout (V1).
   static const Duration defaultTimeout = Duration(seconds: 10);
@@ -31,18 +34,24 @@ class LanguageModelClient {
   /// Client-owned timeout supplied on every [VendorRequest].
   final Duration timeout;
 
+  /// Deterministic compiler from sealed package → vendor-ready instructions.
+  final ConversationCompiler compiler;
+
   const LanguageModelClient({
     this.vendorProvider,
     this.timeout = defaultTimeout,
+    this.compiler = const ConversationCompiler(),
   });
 
   /// Realize the sealed package as a single non-empty candidate utterance.
   ///
-  /// Builds one [VendorRequest] (with [timeout]), invokes the provider,
-  /// and maps completed text to one [ConversationUtterance].
+  /// Compiles instructions, builds one [VendorRequest] (with [timeout]),
+  /// invokes the provider, and maps completed text to one
+  /// [ConversationUtterance].
   ///
   /// On a transient [VendorError], retries once with the identical request.
   /// Non-transient errors and a failed retry propagate without fallback.
+  /// Compiler failure fails closed as [StateError] (no conversational language).
   Future<ConversationUtterance> realize(LlmInvocationPackage package) async {
     _requireFrozenBounds(package);
     _requireBoundDna(package.dna);
@@ -54,8 +63,19 @@ class LanguageModelClient {
       );
     }
 
+    final compiled = compiler.compile(package);
+    if (compiled == null) {
+      throw StateError(
+        'ConversationCompiler failed closed: no CompiledInstructionPackage',
+      );
+    }
+
     // Identical request object for the initial call and any single retry.
-    final request = VendorRequest(package: package, timeout: timeout);
+    final request = VendorRequest(
+      package: package,
+      compiled: compiled,
+      timeout: timeout,
+    );
 
     final response = await _invoke(provider, request);
     return ConversationUtterance(text: response.text);

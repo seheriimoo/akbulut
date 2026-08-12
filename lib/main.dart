@@ -4,13 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'config/app_config.dart';
 import 'compliance/consent_store.dart';
-import 'features/player/player_screen.dart';
 import 'infrastructure/crash_reporting.dart';
 import 'screens/ai_chat_screen.dart';
-import 'screens/choice_screen.dart';
 import 'screens/compliance/consent_gate_screen.dart';
 import 'screens/compliance/legal_document_screen.dart';
-import 'screens/premium_paywall_screen.dart';
 
 Future<void> main() async {
   await runZonedGuarded(() async {
@@ -22,6 +19,7 @@ Future<void> main() async {
     await CrashReporting.bootstrap(
       appRunner: () async {
         if (AppConfig.hasRevenueCatApiKey) {
+          // Apple public SDK key only (appl_…). Configure before any paywall.
           await Purchases.configure(
             PurchasesConfiguration(AppConfig.revenueCatApiKey),
           );
@@ -34,13 +32,10 @@ Future<void> main() async {
 
 class AppRoutes {
   static const String welcome = '/';
-  static const String choice = '/choice';
-  static const String sleepAnalysis = '/sleep-analysis';
-  static const String directSleep = '/direct-sleep';
-  static const String premium = '/premium';
   static const String consent = '/consent';
   static const String privacy = '/privacy';
   static const String terms = '/terms';
+  static const String aiChat = '/ai-chat';
 }
 
 class SleepWaveApp extends StatelessWidget {
@@ -49,7 +44,7 @@ class SleepWaveApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: 'SleepWave',
+      title: 'Nocta',
       debugShowCheckedModeBanner: false,
       theme: ThemeData.dark(),
       builder: (context, child) {
@@ -90,16 +85,8 @@ class AppRouter {
     switch (settings.name) {
       case AppRoutes.welcome:
         return _fade(const WelcomeScreen(), settings);
-      case AppRoutes.choice:
-        return _fade(const ChoiceScreen(), settings);
-      case '/ai-chat':
+      case AppRoutes.aiChat:
         return _fade(const AISleepChatScreen(), settings);
-      case AppRoutes.sleepAnalysis:
-        return _fade(const SleepAnalysisScreen(), settings);
-      case AppRoutes.directSleep:
-        return _fade(const DirectSleepScreen(), settings);
-      case AppRoutes.premium:
-        return _fade(const PremiumPaywallScreen(), settings);
       case AppRoutes.consent:
         return _fade(const ConsentGateScreen(), settings);
       case AppRoutes.privacy:
@@ -134,7 +121,7 @@ class WelcomeScreen extends StatelessWidget {
     final accepted = await ConsentStore.hasAcceptedBaseline();
     if (!context.mounted) return;
     if (accepted) {
-      Navigator.pushNamed(context, '/ai-chat');
+      Navigator.pushNamed(context, AppRoutes.aiChat);
     } else {
       Navigator.pushNamed(context, AppRoutes.consent);
     }
@@ -267,162 +254,3 @@ class WelcomeScreen extends StatelessWidget {
   }
 }
 
-////////////////////////////////////////////////////////////
-/// 🔥 EKSİK CLASSLARI EKLEDİM (SORUN BURADAYDI)
-////////////////////////////////////////////////////////////
-
-class SleepAnalysisScreen extends StatelessWidget {
-  const SleepAnalysisScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          child: Column(
-            children: [
-              const Spacer(),
-
-              Text(
-                "Your mind seems active tonight",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.92),
-                  fontSize: 26,
-                  fontWeight: FontWeight.w300,
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              Text(
-                "We'll help you slow down and settle into sleep.",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.65),
-                  fontSize: 8,
-                ),
-              ),
-
-              const Spacer(),
-
-              GestureDetector(
-                onTap: () {
-                  Navigator.pushNamed(
-                    context,
-                    AppRoutes.directSleep,
-                  );
-                },
-                child: Container(
-                  height: 52,
-                  width: double.infinity,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.18),
-                    ),
-                  ),
-                  child: const Text(
-                    "Continue",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 40),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class DirectSleepScreen extends StatelessWidget {
-  const DirectSleepScreen({super.key});
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: Colors.transparent,
-      body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 28),
-          child: Column(
-            children: [
-              const Spacer(),
-
-              Text(
-                "Ready to sleep?",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.92),
-                  fontSize: 28,
-                  fontWeight: FontWeight.w300,
-                ),
-              ),
-
-              const SizedBox(height: 16),
-
-              Text(
-                "We'll begin your sleep session now.",
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: Colors.white.withOpacity(0.65),
-                  fontSize: 15,
-                ),
-              ),
-
-              const Spacer(),
-
-              GestureDetector(
-                onTap: () {
-                  Navigator.push(
-                    context,
-                    MaterialPageRoute(
-                      builder: (_) => PlayerScreen(
-                        blocker: "mind",
-                        sleepLatency: "30",
-                        energy: "low",
-                        goal: "sleep",
-                        sessionLength: const Duration(minutes: 30),
-                      ),
-                    ),
-                  );
-                },
-                child: Container(
-                  height: 52,
-                  width: double.infinity,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.08),
-                    borderRadius: BorderRadius.circular(18),
-                    border: Border.all(
-                      color: Colors.white.withOpacity(0.18),
-                    ),
-                  ),
-                  child: const Text(
-                    "Start Session",
-                    style: TextStyle(
-                      color: Colors.white,
-                      fontSize: 15,
-                    ),
-                  ),
-                ),
-              ),
-
-              const SizedBox(height: 40),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-}

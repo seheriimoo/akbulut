@@ -7,12 +7,13 @@ class MentalPatternDetector {
 
   List<MentalPattern> detect(List<Evidence> evidence) {
     final hasThinking = evidence.any((e) => e.value == 'repetitive_thinking');
-
     final hasUncertainty = evidence.any((e) => e.value == 'future_uncertainty');
-
     final hasMentalOverload = evidence.any((e) => e.value == 'mental_overload');
 
-    if (hasThinking && (hasUncertainty || hasMentalOverload)) {
+    // Any cognitive-load signal is enough to mark an active mental pattern.
+    // Previously required thinking AND (uncertainty|overload), which missed
+    // common night language like "I'm spiraling" / "I can't let go".
+    if (hasMentalOverload || hasThinking || hasUncertainty) {
       return [
         const MentalPattern(
           id: 'overanalyzing',

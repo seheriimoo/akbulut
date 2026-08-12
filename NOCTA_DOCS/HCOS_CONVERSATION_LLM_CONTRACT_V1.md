@@ -2,13 +2,15 @@
 
 ## Version
 
-1.0
+1.1
 
 ## Status
 
 Architecture Design — Sprint 5 Canonical
 
-Effective Date: 2026-08-06
+Effective Date: 2026-08-07
+
+Incorporates frozen Amendment 002 — LlmInvocationPackage Conversation Grounding field.
 
 This document is the canonical architecture specification for the Conversation LLM Contract.
 
@@ -57,7 +59,7 @@ Inside Conversation, the expression path is:
 
 ```
 ConversationDecision + ExitDecision
-(+ optional ValidatedUnderstanding, WorkingMindView)
+(+ optional understanding, workingMind, conversationGrounding)
         │
         ▼
 PromptArchitecture
@@ -114,10 +116,23 @@ No other invocation input is canonical.
 | `what` | Sealed expression intent (`ConversationPhase`) | Immutable |
 | `understanding` | Optional wording-shaping context | Read-only shaping |
 | `workingMind` | Optional wording-shaping context | Read-only shaping |
+| `conversationGrounding` | Optional same-night conversation grounding | Read-only shaping; zero cognitive authority |
 | `dna` | Bound Conversation DNA constraints | Immutable reference |
 | `llmRequired` | Bound LLM Contract required duties | Immutable |
 | `llmAllowed` | Bound LLM Contract allowed duties | Immutable |
 | `llmForbidden` | Bound LLM Contract forbidden duties | Immutable |
+
+The optional shaping surface is closed:
+
+- `understanding`
+- `workingMind`
+- `conversationGrounding`
+
+Standalone `livedExpression` is not a package field.
+Its current-turn shaping role is superseded by `conversationGrounding`.
+No fourth optional shaping field is permitted.
+
+`conversationGrounding` is optional. Absence does not invalidate a package.
 
 ### Authorized speakable WHAT values
 
@@ -139,6 +154,11 @@ Only these phases may appear in an invoked package:
 - Alternate or candidate WHAT values
 - Permission to choose silence vs speech
 - Permission to choose exit or protocol phase
+- `conversationGrounding` used as decision authority
+- Standalone `livedExpression`
+
+Admitted `conversationGrounding` may reach the LLM only as shaping-only context.
+It must never choose WHAT, release, protocol, or exit.
 
 ### Invocation eligibility
 
@@ -149,6 +169,9 @@ Non-speech turns produce no package and therefore no LLM input.
 Absence of invocation is the canonical non-speech path.
 
 It is not an LLM-invented silence.
+
+Absence of `conversationGrounding` must never block invocation.
+ExitDecision and HCOS protocol remain the sole invoke/abstain gate.
 
 ---
 
@@ -226,7 +249,7 @@ It packages. It does not speak. It does not invoke. It does not enforce DNA.
 
 1. Gate invoke vs abstain from Exit permission and protocol speak intent.
 2. Seal the authorized protocol phase as immutable WHAT.
-3. Admit optional `ValidatedUnderstanding` and `WorkingMindView` as shaping-only context.
+3. Admit optional closed-surface shaping only: `understanding`, `workingMind`, and `conversationGrounding` as shaping-only context.
 4. Exclude forbidden inputs from the invocation package.
 5. Bind LLM Contract required / allowed / forbidden bounds.
 6. Bind Conversation DNA as expression constraints on the package.
@@ -235,6 +258,7 @@ It packages. It does not speak. It does not invoke. It does not enforce DNA.
 ### Allowed
 
 - Include optional shaping context when present.
+- Omit `conversationGrounding` when absent.
 - Abstain with no model call when speaking is unauthorized or the phase is non-speech (`audio`, `silence`).
 
 ### Forbidden
@@ -248,10 +272,16 @@ It packages. It does not speak. It does not invoke. It does not enforce DNA.
 - Enforce Conversation DNA as emission validation.
 - Open a memory-write or durable-learning path.
 - Feed back into upstream owners in the same turn.
+- Own the temporary conversation grounding buffer.
+- Invent `conversationGrounding`.
+- Treat `conversationGrounding` as decision authority.
+- Admit standalone `livedExpression` onto the package.
 
 ### Ownership summary
 
-PromptArchitecture owns packaging of WHAT + constraints.
+PromptArchitecture owns packaging of WHAT + constraints, including admit/omit of the closed optional shaping surface.
+
+It does not own the temporary grounding buffer lifecycle.
 
 It does not own HOW wording.
 
@@ -479,7 +509,7 @@ PromptArchitecture never owns language.
 
 | Component | Owns | Does not own |
 |---|---|---|
-| PromptArchitecture | Invoke/abstain gate; sealed WHAT package; constraint binding | Language generation; model invocation; DNA enforcement; final utterance |
+| PromptArchitecture | Invoke/abstain gate; sealed WHAT package; constraint binding; closed optional shaping admission | Language generation; model invocation; DNA enforcement; final utterance; grounding buffer lifecycle |
 | LanguageModelClient | HOW realization; candidate utterance | WHAT; exit/release/protocol; validation; final utterance; memory |
 | UtteranceGuard | Output Contract + DNA + WHAT-faithfulness validation | Generation; decisions; packaging; stage emission authority |
 | ConversationEngine | Expression-path coordination; final speech outcome | Upstream cognitive judgment; memory writes |
@@ -509,11 +539,14 @@ Implementation conforms to this contract when all of the following are true:
 6. Non-speech remains absence of conversational language, never empty text as a product output.
 7. No expression-plane component writes persistent memory.
 8. HCOS Architecture v1.1 ownership and turn order remain intact.
+9. `LlmInvocationPackage` optional shaping is only `understanding`, `workingMind`, and `conversationGrounding`.
+10. Absence of `conversationGrounding` never blocks invocation.
+11. Standalone `livedExpression` is not admitted onto the package.
 
 ## Authority
 
 HCOS Architecture v1.1 remains the single source of truth for overall HCOS architecture.
 
-This document is the single source of truth for the Conversation LLM Contract boundary between PromptArchitecture and LanguageModelClient.
+This document is the single source of truth for the Conversation LLM Contract boundary between PromptArchitecture and LanguageModelClient, including the `LlmInvocationPackage` surface after Amendment 002.
 
 Where implementation and this document conflict, this document governs the Conversation LLM Contract until a formal Architecture Review revises it.

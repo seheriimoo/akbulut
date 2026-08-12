@@ -1,3 +1,4 @@
+import 'compiled_instruction_package.dart';
 import 'llm_invocation_package.dart';
 
 /// Transport-only vendor adapter behind [LanguageModelClient].
@@ -7,6 +8,8 @@ import 'llm_invocation_package.dart';
 ///
 /// Owns wire transport only. Does not own WHAT, release, protocol, exit,
 /// DNA/Output Contract enforcement, memory, retries, or Conversation emission.
+/// Does not perform cognitive prompt translation — that belongs to
+/// [ConversationCompiler] via [CompiledInstructionPackage].
 ///
 /// V1: returns a completed single text result — no streaming into the
 /// Conversation stage.
@@ -18,19 +21,24 @@ abstract class VendorProvider {
   Future<VendorResponse> complete(VendorRequest request);
 }
 
-/// Provider request derived solely from one [LlmInvocationPackage].
+/// Provider request derived from one sealed package + compiled instructions.
 ///
-/// Built by [LanguageModelClient]. Contains no credentials, API keys,
-/// model endpoints, or cognitive decision authority.
+/// Built by [LanguageModelClient] after ConversationCompiler succeeds.
+/// Contains no credentials, API keys, model endpoints, or cognitive
+/// decision authority.
 class VendorRequest {
   /// Sealed package this request realizes (speakable WHAT + bounds + DNA).
   final LlmInvocationPackage package;
+
+  /// Deterministic compiled instruction material for transport serialization.
+  final CompiledInstructionPackage compiled;
 
   /// Client-supplied transport timeout. Enforced on the wire by the provider.
   final Duration? timeout;
 
   const VendorRequest({
     required this.package,
+    required this.compiled,
     this.timeout,
   });
 }

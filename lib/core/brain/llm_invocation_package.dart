@@ -1,7 +1,9 @@
 import 'dart:collection';
 
 import 'conversation_dna.dart';
+import 'conversation_grounding_buffer.dart';
 import 'conversation_phase.dart';
+import 'prior_admitted_expression.dart';
 import 'validated_understanding.dart';
 import 'working_mind_view.dart';
 
@@ -23,6 +25,24 @@ class LlmInvocationPackage {
 
   /// Optional WorkingMindView for wording shaping only.
   final WorkingMindView? workingMind;
+
+  /// Optional current-turn lived expression for wording shaping only.
+  ///
+  /// Used by Receipt compilation to ground First Stop Moment receipt.
+  /// Never decision authority. Never a transcript store. Never raw memory.
+  final String? livedExpression;
+
+  /// Optional same-night conversation grounding for wording shaping only.
+  ///
+  /// Admitted temporary user grounding (current + up to two prior user
+  /// utterances). Read-only after construction. Zero cognitive authority.
+  /// Never durable memory. Never Release / protocol / exit decision input.
+  final ConversationGroundingBuffer? conversationGrounding;
+
+  /// Optional prior Guard-admitted assistant line (same night).
+  ///
+  /// Expression anti-repeat shaping only. Not user grounding. Not authority.
+  final PriorAdmittedExpression? priorAdmittedExpression;
 
   /// Bound Conversation DNA constraints (not enforced by this package).
   final ConversationDNA dna;
@@ -46,6 +66,9 @@ class LlmInvocationPackage {
     required this.what,
     this.understanding,
     this.workingMind,
+    this.livedExpression,
+    this.conversationGrounding,
+    this.priorAdmittedExpression,
     this.dna = ConversationDNA.instance,
   }) {
     if (!_isSpeakableWhat(what)) {
@@ -53,7 +76,8 @@ class LlmInvocationPackage {
         what,
         'what',
         'LlmInvocationPackage WHAT must be speakable '
-        '(validation, naming, permission, release, or continuity)',
+        '(validation, naming, permission, release, continuity, '
+        'or neutralEntry)',
       );
     }
   }
@@ -65,6 +89,7 @@ class LlmInvocationPackage {
       case ConversationPhase.permission:
       case ConversationPhase.release:
       case ConversationPhase.continuity:
+      case ConversationPhase.neutralEntry:
         return true;
       case ConversationPhase.audio:
       case ConversationPhase.silence:

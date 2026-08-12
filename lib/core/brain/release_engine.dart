@@ -1,5 +1,7 @@
+import 'conversation_phase.dart';
 import 'night_session.dart';
 import 'release_decision.dart';
+import 'turn_response_stance.dart';
 import 'validated_understanding.dart';
 import 'working_mind_view.dart';
 
@@ -17,13 +19,15 @@ import 'working_mind_view.dart';
 ///
 /// Decision Rules (V1)
 ///
-/// HOLD → High activation
-/// REGULATED → User feels received
+/// HOLD → High activation / active load
+/// REGULATED → Load eased; user feels received enough to soften
 /// SETTLING → Activation decreasing
 /// RECEPTIVE → Ready for gentle release
 /// TRANSITION_READY → Conversation should end
 ///
-/// Progression is one step at a time (Release Engine Spec).
+/// Progression is one step at a time (Release Engine Spec), except the
+/// post-Release softening path may advance out of the Release dwell so
+/// absence of load is never treated as permission to repeat Release.
 class ReleaseEngine {
   const ReleaseEngine();
 
@@ -38,14 +42,19 @@ class ReleaseEngine {
     final previous = session.turns.isEmpty
         ? null
         : session.turns.last.releaseDecision.readiness;
+    final previousPhase =
+        session.turns.isEmpty ? null : session.turns.last.phase;
 
-    final highActivation = understanding.mentalPatterns.isNotEmpty;
-    final feelsReceived = understanding.emotionalPatterns.isNotEmpty;
+    // Mental OR emotional patterns both mean active night load.
+    // Emotional load must never be read as "feels received".
+    final highActivation = understanding.mentalPatterns.isNotEmpty ||
+        understanding.emotionalPatterns.isNotEmpty;
 
     final readiness = _nextReadiness(
       previous: previous,
+      previousPhase: previousPhase,
       highActivation: highActivation,
-      feelsReceived: feelsReceived,
+      stance: understanding.turnResponseStance,
     );
 
     return ReleaseDecision(
@@ -54,28 +63,66 @@ class ReleaseEngine {
     );
   }
 
-  /// Advances at most one allowed step; may step back under high activation.
   ReleaseReadiness _nextReadiness({
     required ReleaseReadiness? previous,
+    required ConversationPhase? previousPhase,
     required bool highActivation,
-    required bool feelsReceived,
+    required TurnResponseStance stance,
   }) {
     if (previous == null) {
-      if (highActivation) return ReleaseReadiness.hold;
-      if (feelsReceived) return ReleaseReadiness.regulated;
+      // First turn: always begin at hold. Load or not, Receipt comes first.
       return ReleaseReadiness.hold;
     }
 
-    if (highActivation) {
+    final priorWasRelease = previousPhase == ConversationPhase.release;
+    final resisting = stance == TurnResponseStance.holdingAgainstEase ||
+        stance == TurnResponseStance.continuedLoad ||
+        highActivation;
+
+    // Resistance / continued load after a Release (or while still in the
+    // Release readiness band) must leave the Release-capable band.
+    if (resisting) {
+      if (priorWasRelease ||
+          previous == ReleaseReadiness.settling ||
+          previous == ReleaseReadiness.receptive) {
+        return _stepBackAtMostRegulated(previous);
+      }
       return _stepBack(previous);
     }
 
-    // Calm continuation: move one step toward transition readiness.
-    if (previous == ReleaseReadiness.hold && feelsReceived) {
-      return ReleaseReadiness.regulated;
+    // Softening after Release / Release-band: advance toward transition;
+    // do not dwell for another Release-capable turn.
+    if (stance == TurnResponseStance.softeningAcceptance &&
+        (priorWasRelease ||
+            previous == ReleaseReadiness.settling ||
+            previous == ReleaseReadiness.receptive)) {
+      return ReleaseReadiness.transitionReady;
     }
 
+    // Fail-closed after a spoken Release: unclear must not invent acceptance
+    // and absence of load alone must not advance into another Release dwell.
+    if (priorWasRelease && stance == TurnResponseStance.unclear) {
+      return previous;
+    }
+
+    // Pre-Release calm continuation: move one step toward rest.
     return _stepForward(previous);
+  }
+
+  /// Step back, but never remain on settling/receptive while resisting ease.
+  ReleaseReadiness _stepBackAtMostRegulated(ReleaseReadiness current) {
+    switch (current) {
+      case ReleaseReadiness.hold:
+        return ReleaseReadiness.hold;
+      case ReleaseReadiness.regulated:
+        return ReleaseReadiness.hold;
+      case ReleaseReadiness.settling:
+        return ReleaseReadiness.regulated;
+      case ReleaseReadiness.receptive:
+        return ReleaseReadiness.regulated;
+      case ReleaseReadiness.transitionReady:
+        return ReleaseReadiness.regulated;
+    }
   }
 
   ReleaseReadiness _stepForward(ReleaseReadiness current) {

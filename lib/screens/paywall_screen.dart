@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 
+import '../billing/billing_catalog.dart';
 import '../billing/billing_service.dart';
+import '../billing/premium_product_access.dart';
 
 /// Production paywall backed by live RevenueCat offerings.
 ///
@@ -55,7 +57,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
         _selected = packages.isEmpty ? null : packages.first;
         _loading = false;
         if (packages.isEmpty && !premium) {
-          _error = 'No live offerings are available yet.';
+          _error =
+              'No live offerings are available yet. Confirm RevenueCat '
+              'offering "${BillingCatalog.offeringId}" is Current and products '
+              '${BillingCatalog.premiumProductIds.join(", ")} are attached.';
         }
       });
     } catch (error) {
@@ -203,11 +208,15 @@ class _PaywallScreenState extends State<PaywallScreen> {
                     'AI-supported transitions tailored to what is keeping you awake.',
               ),
               const SizedBox(height: 14),
-              const _FeatureCard(
+              _FeatureCard(
                 icon: Icons.nightlight_round,
                 title: 'Deeper sleep sessions',
                 subtitle:
-                    'Access calming audio experiences designed for faster downshifting.',
+                    'Extend beyond the free '
+                    '${PremiumProductAccess.freeSessionLength.inMinutes}-minute '
+                    'bed to a '
+                    '${PremiumProductAccess.premiumSessionLength.inMinutes}-minute '
+                    'premium session.',
               ),
               const SizedBox(height: 14),
               const _FeatureCard(

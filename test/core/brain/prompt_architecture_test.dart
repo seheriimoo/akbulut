@@ -1,6 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:slowave/core/brain/conversation_decision.dart';
 import 'package:slowave/core/brain/conversation_dna.dart';
+import 'package:slowave/core/brain/conversation_grounding_buffer.dart';
 import 'package:slowave/core/brain/conversation_phase.dart';
 import 'package:slowave/core/brain/exit_decision.dart';
 import 'package:slowave/core/brain/identity.dart';
@@ -104,6 +105,8 @@ void main() {
     test('admits optional shaping context without changing WHAT', () {
       const understanding = ValidatedUnderstanding();
       final workingMind = WorkingMindView(model: _emptyModel());
+      final grounding = const ConversationGroundingBuffer.empty()
+          .appendUserUtterance('night continuity line');
 
       final package = architecture.package(
         conversationDecision: const ConversationDecision(
@@ -113,12 +116,26 @@ void main() {
         exitDecision: ExitDecision.continueConversation,
         understanding: understanding,
         workingMind: workingMind,
+        conversationGrounding: grounding,
       );
 
       expect(package, isNotNull);
       expect(package!.what, ConversationPhase.release);
       expect(identical(package.understanding, understanding), isTrue);
       expect(identical(package.workingMind, workingMind), isTrue);
+      expect(identical(package.conversationGrounding, grounding), isTrue);
+    });
+
+    test('omits conversationGrounding when null and never invents it', () {
+      final package = architecture.package(
+        conversationDecision: const ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
+        ),
+        exitDecision: ExitDecision.continueConversation,
+      )!;
+
+      expect(package.conversationGrounding, isNull);
     });
 
     test('binds frozen immutable LLM Contract bounds', () {

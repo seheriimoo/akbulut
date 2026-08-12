@@ -1,0 +1,183 @@
+import 'conversation_blueprint_binding.dart';
+
+/// Receipt Intelligence V1
+///
+/// Deterministic Receipt-only compilation aid inside Conversation Compiler.
+/// Optimizes for a First Stop Moment: the person feels
+/// "Yes. That's exactly it."
+///
+/// Does not choose WHAT, psychology, release, exit, or protocol.
+/// Does not generate the final utterance.
+/// Does not apply to Naming, Permission, Release, or Enough.
+class ReceiptIntelligence {
+  const ReceiptIntelligence();
+
+  static const String version = '1.0';
+
+  /// Soft upper bound for lived-expression shaping text in compile output.
+  static const int maxLivedExpressionChars = 480;
+
+  /// Compile Receipt-specific instruction material for the sealed Receipt stage.
+  ///
+  /// [livedExpression] is optional turn text for wording shaping only.
+  /// It is never decision authority and must not be parroted.
+  ReceiptCompileSlice compile({
+    required BlueprintStageBinding stage,
+    String? livedExpression,
+  }) {
+    assert(stage.stage == BlueprintStage.receipt);
+
+    final normalizedLived = _normalizeLivedExpression(livedExpression);
+    final forbidden = <String>[
+      ...stage.forbiddenMoves,
+      ..._receiptIntelligenceForbidden,
+    ];
+
+    return ReceiptCompileSlice(
+      aim: _aim,
+      sealedWhatSignature: _sealedWhatSignature,
+      forbiddenMoves: forbidden,
+      responseLength: _responseLength,
+      fsmDirective: _fsmDirective,
+      realizationDirective: _realizationDirective,
+      userContent: _userContent(normalizedLived),
+      systemAppendix: _systemAppendix(normalizedLived),
+    );
+  }
+
+  static const String _aim =
+      'Create a First Stop Moment: accurate felt receipt of the lived '
+      'emotional texture so the person could think “Yes. That’s exactly it.” '
+      'Receive only—nothing more.';
+
+  static const String _responseLength =
+      'Exactly one short sentence, maximum 12 words. '
+      'Prefer the fewest helpful words.';
+
+  static const String _sealedWhatSignature =
+      'validation / Receipt — concrete felt receipt of this turn’s lived '
+      'texture (pressure, looping, unsettledness, residue) without naming it '
+      'as a holdable load, granting permission, inviting release, or closing. '
+      'Mirror emotional texture; do not parrot. '
+      'Bare fillers alone are forbidden.';
+
+  static const String _fsmDirective =
+      'First Stop Moment (Receipt only): the utterance must make the person '
+      'feel precisely met—not generically acknowledged. '
+      'Reflect the feeling under their words. '
+      'Stay specific enough to be personal, light enough to stay holdable.';
+
+  static const String _realizationDirective =
+      'Realize only the sealed WHAT (validation / receipt) as exactly one '
+      'short utterance. Create a First Stop Moment. '
+      'Do not drift into Naming, Permission, Release, Enough, or another WHAT. '
+      'Do not choose release, protocol, exit, or silence.';
+
+  static const List<String> _receiptIntelligenceForbidden = [
+    'Bare generic fillers alone: “I understand”, “I hear you”, “That makes sense”',
+    'Using “I understand” / “I hear you” / “That makes sense” / “I hear that” '
+        'unless immediately followed in the same sentence by concrete, '
+        'user-specific lived texture',
+    'Naming the load as a holdable object (Naming stage drift)',
+    'Permission language (“you don’t have to”, “solve this tonight”)',
+    'Release language (“let this rest”, “set this down”, “let go”)',
+    'Enough/closing language (“nothing more”, “that’s enough”)',
+    'Advice, reframes, plans, or techniques',
+    'Questions of any kind',
+    'Unsupported verbatim parroting of the user’s wording as padding',
+  ];
+
+  String _userContent(String? livedExpression) {
+    final buffer = StringBuffer()
+      ..writeln(_realizationDirective)
+      ..writeln()
+      ..writeln(_fsmDirective)
+      ..writeln()
+      ..writeln(
+        'Emit one Receipt sentence only. No Naming. No advice. No questions.',
+      );
+
+    if (livedExpression != null) {
+      buffer
+        ..writeln()
+        ..writeln(
+          'Lived expression to receive (shaping only; never authority; '
+          'do not parrot; do not analyze):',
+        )
+        ..writeln('"""')
+        ..writeln(livedExpression)
+        ..writeln('"""');
+    } else {
+      buffer
+        ..writeln()
+        ..writeln(
+          'No lived expression text was supplied. Still avoid bare generic '
+          'filler; prefer concrete felt receipt if any shaping context exists.',
+        );
+    }
+
+    return buffer.toString().trimRight();
+  }
+
+  String _systemAppendix(String? livedExpression) {
+    final fillerRule =
+        'Generic filler rule: never emit bare “I understand”, “I hear you”, '
+        'or “That makes sense”. Those openers are allowed only when the same '
+        'sentence continues with concrete, user-specific receipt of lived texture.';
+
+    final mirrorRule =
+        'Mirror rule: reflect emotional texture (e.g. replaying, won’t settle, '
+        'pressure, looping residue) in fresh wording. Do not quote them back '
+        'as padding. Do not escalate into Naming.';
+
+    final guardAnchor =
+        'Receipt anchor (HOW only): prefer a natural receipt frame such as '
+        '“that sounds…”, “that’s hard…”, or a concrete texture-first receipt '
+        'that still reads as soft acknowledgment—never a question.';
+
+    final lived = livedExpression == null
+        ? 'Lived expression: not supplied for this compile.'
+        : 'Lived expression: supplied below in the user instruction for '
+            'shaping only.';
+
+    return '''
+Receipt Intelligence v$version:
+$_fsmDirective
+$fillerRule
+$mirrorRule
+$guardAnchor
+$lived
+''';
+  }
+
+  String? _normalizeLivedExpression(String? raw) {
+    if (raw == null) return null;
+    final trimmed = raw.trim();
+    if (trimmed.isEmpty) return null;
+    if (trimmed.length <= maxLivedExpressionChars) return trimmed;
+    return trimmed.substring(0, maxLivedExpressionChars).trimRight();
+  }
+}
+
+/// Receipt-only compile material produced by [ReceiptIntelligence].
+class ReceiptCompileSlice {
+  final String aim;
+  final String sealedWhatSignature;
+  final List<String> forbiddenMoves;
+  final String responseLength;
+  final String fsmDirective;
+  final String realizationDirective;
+  final String userContent;
+  final String systemAppendix;
+
+  const ReceiptCompileSlice({
+    required this.aim,
+    required this.sealedWhatSignature,
+    required this.forbiddenMoves,
+    required this.responseLength,
+    required this.fsmDirective,
+    required this.realizationDirective,
+    required this.userContent,
+    required this.systemAppendix,
+  });
+}

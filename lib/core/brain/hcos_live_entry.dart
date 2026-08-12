@@ -2,6 +2,7 @@ import 'belief_detector.dart';
 import 'cognitive_orchestrator.dart';
 import 'cognitive_turn_result.dart';
 import 'conversation_engine.dart';
+import 'conversation_grounding_buffer.dart';
 import 'conversation_policy.dart';
 import 'emotional_pattern_detector.dart';
 import 'exit_intelligence.dart';
@@ -17,6 +18,7 @@ import 'perception_engine.dart';
 import 'preference_detector.dart';
 import 'release_engine.dart';
 import 'session_summarizer.dart';
+import 'turn_response_stance_detector.dart';
 import 'working_mind_view.dart';
 
 /// HCOS live production entry and temporary session lifecycle host helpers.
@@ -26,6 +28,8 @@ import 'working_mind_view.dart';
 /// - [NightSession] is carried across turns by the app shell.
 /// - [WorkingMindView] is read only from the current [NightSession].
 /// - Mid-session [NightSession] updates come only from [CognitiveTurnResult].
+/// - Temporary [ConversationGroundingBuffer] is owned by CognitiveOrchestrator,
+///   carried across turns via [CognitiveTurnResult], and discarded at session end.
 ///
 /// Owns no cognitive judgment.
 class HcosLiveEntry {
@@ -42,6 +46,7 @@ class HcosLiveEntry {
       beliefDetector: const BeliefDetector(),
       needDetector: const NeedDetector(),
       preferenceDetector: const PreferenceDetector(),
+      turnResponseStanceDetector: const TurnResponseStanceDetector(),
       releaseEngine: const ReleaseEngine(),
       conversationPolicy: const ConversationPolicy(),
       conversationEngine: ConversationEngine(
@@ -92,8 +97,17 @@ class HcosLiveEntry {
   static NightSession applyTurnResult(CognitiveTurnResult result) =>
       result.session;
 
+  /// Temporary grounding snapshot from the turn result for session-host carry.
+  ///
+  /// Not SessionTurn data. Not durable memory.
+  static ConversationGroundingBuffer groundingBufferOf(
+    CognitiveTurnResult result,
+  ) =>
+      result.conversationGroundingBuffer;
+
   /// Session-end durable write through the canonical MemoryEngine path.
   ///
+  /// Discards the Orchestrator-owned grounding buffer before durable write.
   /// Returns the updated LivingMindModel. The NightSession must be discarded
   /// by the app shell after this call.
   static LivingMindModel completeNightSession({

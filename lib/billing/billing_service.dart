@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 
+import 'billing_catalog.dart';
 import '../config/app_config.dart';
 
 /// RevenueCat billing for Nocta V1.
@@ -13,14 +14,22 @@ class BillingService {
   static final BillingService instance = BillingService._();
 
   /// Must match the active entitlement identifier in RevenueCat.
-  static const String premiumEntitlementId = 'nocta_premium';
+  /// See [BillingCatalog.premiumEntitlementId].
+  static const String premiumEntitlementId =
+      BillingCatalog.premiumEntitlementId;
 
   bool get isConfigured => AppConfig.hasRevenueCatApiKey;
 
   /// Live current offering from RevenueCat (null if none / unconfigured).
+  ///
+  /// Prefers [BillingCatalog.offeringId] when present; otherwise falls back to
+  /// RevenueCat's current offering so a correctly marked Current offering still
+  /// works during dashboard setup.
   Future<Offering?> loadCurrentOffering() async {
     if (!isConfigured) return null;
     final offerings = await Purchases.getOfferings();
+    final named = offerings.getOffering(BillingCatalog.offeringId);
+    if (named != null) return named;
     return offerings.current;
   }
 

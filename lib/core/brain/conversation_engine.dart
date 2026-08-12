@@ -1,7 +1,9 @@
 import 'conversation_decision.dart';
+import 'conversation_grounding_buffer.dart';
 import 'conversation_utterance.dart';
 import 'exit_decision.dart';
 import 'language_model_client.dart';
+import 'prior_admitted_expression.dart';
 import 'prompt_architecture.dart';
 import 'utterance_guard.dart';
 import 'validated_understanding.dart';
@@ -13,11 +15,13 @@ import 'working_mind_view.dart';
 /// Expression stage only. Renders language after upstream decisions.
 ///
 /// Required inputs: ConversationDecision, ExitDecision.
-/// Optional inputs: ValidatedUnderstanding, WorkingMindView (shaping only).
+/// Optional inputs: ValidatedUnderstanding, WorkingMindView,
+/// ConversationGroundingBuffer, livedExpression (shaping only).
 ///
 /// Output: one ConversationUtterance, or no conversational language.
 ///
 /// Owns no release, protocol, exit, or memory decisions.
+/// Does not own or invent conversation grounding.
 class ConversationEngine {
   final PromptArchitecture promptArchitecture;
 
@@ -35,7 +39,8 @@ class ConversationEngine {
   /// a single [ConversationUtterance], or `null` for no conversational language.
   ///
   /// Expression path:
-  /// PromptArchitecture → (abstain | LanguageModelClient) → UtteranceGuard.
+  /// PromptArchitecture → (abstain | LanguageModelClient
+  ///   [ConversationCompiler → VendorProvider]) → UtteranceGuard.
   ///
   /// On [LanguageModelClient] / [VendorError] failure, fails closed to `null`.
   /// Does not reopen WHAT, Exit, Release, or protocol. Does not retry after
@@ -45,12 +50,18 @@ class ConversationEngine {
     required ExitDecision exitDecision,
     ValidatedUnderstanding? understanding,
     WorkingMindView? workingMind,
+    String? livedExpression,
+    ConversationGroundingBuffer? conversationGrounding,
+    PriorAdmittedExpression? priorAdmittedExpression,
   }) async {
     final package = promptArchitecture.package(
       conversationDecision: conversationDecision,
       exitDecision: exitDecision,
       understanding: understanding,
       workingMind: workingMind,
+      livedExpression: livedExpression,
+      conversationGrounding: conversationGrounding,
+      priorAdmittedExpression: priorAdmittedExpression,
     );
 
     if (package == null) {

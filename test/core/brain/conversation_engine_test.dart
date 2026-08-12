@@ -63,6 +63,7 @@ void main() {
         ConversationPhase.permission: 'You do not have to solve this tonight.',
         ConversationPhase.release: 'You can let this rest for now.',
         ConversationPhase.continuity: 'Nothing more is needed right now.',
+        ConversationPhase.neutralEntry: "Hi whenever you're ready.",
       };
 
       for (final entry in phases.entries) {

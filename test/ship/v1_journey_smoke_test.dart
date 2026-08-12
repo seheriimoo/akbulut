@@ -4,10 +4,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:slowave/billing/premium_product_access.dart';
+import 'package:slowave/billing/sleep_bed_catalog.dart';
 import 'package:slowave/compliance/consent_store.dart';
+import 'package:slowave/core/brain/conversation_grounding_buffer.dart';
 import 'package:slowave/core/brain/conversation_phase.dart';
+import 'package:slowave/core/brain/emotional_pattern.dart';
 import 'package:slowave/core/brain/exit_decision.dart';
 import 'package:slowave/core/brain/hcos_live_entry.dart';
+import 'package:slowave/core/brain/mental_pattern.dart';
+import 'package:slowave/core/brain/mental_pattern_status.dart';
+import 'package:slowave/core/brain/night_audio_handoff.dart';
 import 'package:slowave/core/brain/night_session.dart';
 import 'package:slowave/core/brain/release_decision.dart';
 import 'package:slowave/core/brain/release_engine.dart';
@@ -102,6 +108,9 @@ void main() {
       const access = PremiumProductAccess(isPremium: false);
       expect(access.sessionLength, PremiumProductAccess.freeSessionLength);
       expect(access.sleepBedAsset, PremiumProductAccess.freeSleepBedAsset);
+      // V1 free duration matches shipped 30m bed asset (not a shorter timer).
+      expect(access.sessionLength, const Duration(minutes: 30));
+      expect(access.sleepBedAsset, contains('_30m'));
       expect(
         File(
           'assets/audio/bg/CoreDefaultAir/CoreDefaultAir_BG_30m.m4a',
@@ -114,6 +123,9 @@ void main() {
       const access = PremiumProductAccess(isPremium: true);
       expect(access.sessionLength, PremiumProductAccess.premiumSessionLength);
       expect(access.sleepBedAsset, PremiumProductAccess.premiumSleepBedAsset);
+      // V1 premium duration matches shipped 45m premium bed asset.
+      expect(access.sessionLength, const Duration(minutes: 45));
+      expect(access.sleepBedAsset, contains('_45m'));
       expect(
         File(
           'assets/audio/bg/CoreDefaultAir/CoreDefaultAir_BG_45m_premium.m4a',
@@ -167,6 +179,9 @@ void main() {
       expect(source.contains('SleepAudioSession.deactivate'), isTrue);
       expect(source.contains('Navigator.of(context).pop'), isTrue);
       expect(source.contains('configureForBackgroundPlayback'), isTrue);
+      expect(source.contains('_loadFailed'), isTrue);
+      expect(source.contains('This session could not start.'), isTrue);
+      expect(source.contains('End Session'), isTrue);
     });
 
     testWidgets('Night Complete returns to Welcome (/)', (tester) async {
@@ -203,9 +218,14 @@ void main() {
     test('Welcome Begin gates consent vs chat', () {
       final source = File('lib/main.dart').readAsStringSync();
       expect(source.contains('ConsentStore.hasAcceptedBaseline()'), isTrue);
-      expect(source.contains("Navigator.pushNamed(context, '/ai-chat')"), isTrue);
       expect(
-        source.contains('Navigator.pushNamed(context, AppRoutes.consent)'),
+        source.contains('Navigator.pushNamed(context, AppRoutes.aiChat)') ||
+            source.contains("Navigator.pushNamed(context, '/ai-chat')"),
+        isTrue,
+      );
+      expect(
+        source.contains('Navigator.pushNamed(context, AppRoutes.consent)') ||
+            source.contains("Navigator.pushNamed(context, '/consent')"),
         isTrue,
       );
       expect(source.contains('initialRoute: AppRoutes.welcome'), isTrue);
@@ -223,6 +243,120 @@ void main() {
         ExitDecision.values.contains(ExitDecision.transitionToAudio),
         isTrue,
       );
+    });
+
+    test('Handoff blocker → SleepBedCatalog → shipped GlobalSleep asset', () {
+      const handoff = NightAudioHandoff();
+      const beds = SleepBedCatalog();
+      const free = PremiumProductAccess(isPremium: false);
+      final mind = WorkingMindView(model: HcosLiveEntry.emptyMindModel());
+
+      final lonelySession = NightSession(
+        workingMind: mind,
+        turns: const [
+          SessionTurn(
+            releaseDecision: ReleaseDecision(
+              readiness: ReleaseReadiness.hold,
+              confidence: 1,
+            ),
+            phase: ConversationPhase.validation,
+            emotionalPatterns: [
+              EmotionalPattern(
+                id: 'loneliness',
+                name: 'Loneliness',
+                description: 'alone',
+                confidence: 0.9,
+                observations: 1,
+              ),
+            ],
+          ),
+        ],
+      );
+      final lonelyBlocker = handoff.blockerFor(
+        session: lonelySession,
+        grounding: const ConversationGroundingBuffer.empty()
+            .appendUserUtterance('Bu gece kendimi çok yalnız hissediyorum.'),
+      );
+      expect(lonelyBlocker, 'loneliness');
+      final lonelyAsset =
+          beds.assetFor(blocker: lonelyBlocker, access: free);
+      expect(lonelyAsset, SleepBedCatalog.globalSleepBed);
+      expect(File(lonelyAsset).existsSync(), isTrue);
+
+      final mindSession = NightSession(
+        workingMind: mind,
+        turns: const [
+          SessionTurn(
+            releaseDecision: ReleaseDecision(
+              readiness: ReleaseReadiness.hold,
+              confidence: 1,
+            ),
+            phase: ConversationPhase.validation,
+            mentalPatterns: [
+              MentalPattern(
+                id: 'repetitive_thinking',
+                name: 'Repetitive thinking',
+                description: 'overthinking',
+                confidence: 0.9,
+                observations: 1,
+                status: MentalPatternStatus.observed,
+              ),
+            ],
+          ),
+        ],
+      );
+      final mindBlocker = handoff.blockerFor(
+        session: mindSession,
+        grounding: const ConversationGroundingBuffer.empty()
+            .appendUserUtterance("My mind won't stop."),
+      );
+      expect(mindBlocker, 'mind');
+      final mindAsset = beds.assetFor(blocker: mindBlocker, access: free);
+      expect(mindAsset, PremiumProductAccess.freeSleepBedAsset);
+      expect(File(mindAsset).existsSync(), isTrue);
+    });
+
+    test('Live chat shows spoken handoff before PlayerScreen', () {
+      final source = File('lib/screens/ai_chat_screen.dart').readAsStringSync();
+      expect(source.contains('_startAudioFlow'), isTrue);
+      expect(source.contains('_audioHandoff.blockerFor'), isTrue);
+      expect(source.contains('_sleepBeds.assetFor'), isTrue);
+      // Spoken Enough / handoff lands in the bubble list, then a short delay,
+      // then player navigation — not a silent jump.
+      final addIdx = source.indexOf('await _addAIMessage(reply)');
+      final delayIdx = source.indexOf(
+        'Duration(milliseconds: 1600)',
+        addIdx,
+      );
+      final startIdx = source.indexOf('await _startAudioFlow()', delayIdx);
+      expect(addIdx, greaterThan(0));
+      expect(delayIdx, greaterThan(addIdx));
+      expect(startIdx, greaterThan(delayIdx));
+    });
+
+    test('Chat→Player wires blocker bed into PlayerScreen audioAssetPath', () {
+      final chat = File('lib/screens/ai_chat_screen.dart').readAsStringSync();
+      final player =
+          File('lib/features/player/player_screen.dart').readAsStringSync();
+      final session =
+          File('lib/features/player/sleep_audio_session.dart').readAsStringSync();
+
+      expect(chat.contains('audioAssetPath: bedAsset'), isTrue);
+      expect(chat.contains('PlayerScreen('), isTrue);
+      expect(chat.contains('_finishNightAndShowClosing'), isTrue);
+      expect(player.contains('widget.audioAssetPath'), isTrue);
+      expect(player.contains('configureForBackgroundPlayback'), isTrue);
+      expect(player.contains('AppLifecycleState'), isTrue);
+      expect(player.contains('keep sleep bed playing'), isTrue);
+      expect(session.contains('configureForBackgroundPlayback'), isTrue);
+      expect(session.contains('AudioSessionConfiguration'), isTrue);
+
+      // Free + loneliness beds both ship on disk for the wired paths.
+      expect(
+        File(PremiumProductAccess.freeSleepBedAsset).existsSync(),
+        isTrue,
+      );
+      expect(File(SleepBedCatalog.globalSleepBed).existsSync(), isTrue);
     });
   });
 }

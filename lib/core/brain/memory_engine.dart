@@ -1,5 +1,7 @@
+import 'emotional_pattern.dart';
 import 'knowledge_merger.dart';
 import 'living_mind_model.dart';
+import 'mental_pattern.dart';
 import 'need_merger.dart';
 import 'session_summary.dart';
 
@@ -23,16 +25,16 @@ class MemoryEngine {
 
   LivingMindModel update(LivingMindModel model, SessionSummary summary) {
     final beliefs = knowledgeMerger.merge(model.beliefs, summary.beliefs);
-
     final needs = needMerger.merge(model.needs, summary.needs);
 
     return model.copyWith(
-      mentalPatterns: summary.mentalPatterns.isEmpty
-          ? model.mentalPatterns
-          : summary.mentalPatterns,
-      emotionalPatterns: summary.emotionalPatterns.isEmpty
-          ? model.emotionalPatterns
-          : summary.emotionalPatterns,
+      identity: model.identity.copyWith(
+        totalSessions: model.identity.totalSessions + 1,
+        lastInteractionAt: DateTime.now().toUtc(),
+      ),
+      mentalPatterns: _mergeMental(model.mentalPatterns, summary.mentalPatterns),
+      emotionalPatterns:
+          _mergeEmotional(model.emotionalPatterns, summary.emotionalPatterns),
       triggers: summary.triggers.isEmpty ? model.triggers : summary.triggers,
       beliefs: beliefs,
       needs: needs,
@@ -40,5 +42,51 @@ class MemoryEngine {
           ? model.preferences
           : summary.preferences,
     );
+  }
+
+  List<MentalPattern> _mergeMental(
+    List<MentalPattern> prior,
+    List<MentalPattern> incoming,
+  ) {
+    if (incoming.isEmpty) return prior;
+    final map = <String, MentalPattern>{
+      for (final p in prior) p.id: p,
+    };
+    for (final p in incoming) {
+      final old = map[p.id];
+      if (old == null) {
+        map[p.id] = p;
+      } else {
+        map[p.id] = p.copyWith(
+          observations: old.observations + p.observations,
+          confidence:
+              p.confidence > old.confidence ? p.confidence : old.confidence,
+        );
+      }
+    }
+    return map.values.toList(growable: false);
+  }
+
+  List<EmotionalPattern> _mergeEmotional(
+    List<EmotionalPattern> prior,
+    List<EmotionalPattern> incoming,
+  ) {
+    if (incoming.isEmpty) return prior;
+    final map = <String, EmotionalPattern>{
+      for (final p in prior) p.id: p,
+    };
+    for (final p in incoming) {
+      final old = map[p.id];
+      if (old == null) {
+        map[p.id] = p;
+      } else {
+        map[p.id] = p.copyWith(
+          observations: old.observations + p.observations,
+          confidence:
+              p.confidence > old.confidence ? p.confidence : old.confidence,
+        );
+      }
+    }
+    return map.values.toList(growable: false);
   }
 }

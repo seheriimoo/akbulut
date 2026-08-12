@@ -1,6 +1,8 @@
 import 'conversation_dna.dart';
 import 'conversation_phase.dart';
 import 'conversation_utterance.dart';
+import 'permission_realization_contract.dart';
+import 'receipt_realization_contract.dart';
 
 /// UtteranceGuard
 ///
@@ -9,8 +11,40 @@ import 'conversation_utterance.dart';
 /// Expression-plane only. Does not decide release, protocol, or exit.
 /// Does not generate language. Does not write memory.
 /// Admit/reject only — never rewrites or repairs wording.
+///
+/// Naming admission follows Guard Naming Contract V2: canonical stems plus
+/// semantic quiet-recognition patterns. Fail closed on ambiguity.
+///
+/// Receipt admission follows Guard Receipt Contract V1.6: classic soft stems
+/// plus texture-first / soft-functional patterns from the shared
+/// [ReceiptRealizationContract].
+/// Fail closed on invention, Naming-stem drift, and compound second moves.
+/// Guard stays mechanism-agnostic — no Exactly-It psychology scoring.
+///
+/// Permission admission follows Guard Permission Contract V1.0 via shared
+/// [PermissionRealizationContract]: classic obligation-ease stems, leave-be
+/// family, and natural non-resolution variants. Fail closed on Release
+/// enactment / advice / invented problems / other-WHAT drift.
+///
+/// Release admission follows Guard Release Contract V1.1: classic putting-down
+/// stems, bounded set-down pattern, and natural set-down variants. Fail closed
+/// on sleep commands / other-WHAT drift.
 class UtteranceGuard {
   const UtteranceGuard();
+
+  /// Guard Naming Contract version bound in this guard.
+  static const String namingContractVersion = '2.0';
+
+  /// Guard Receipt Contract version bound in this guard.
+  static const String receiptContractVersion = '1.6';
+
+  /// Guard Permission Contract version bound in this guard.
+  /// Aligned with [PermissionRealizationContract.version].
+  static const String permissionContractVersion =
+      PermissionRealizationContract.version;
+
+  /// Guard Release Contract version bound in this guard.
+  static const String releaseContractVersion = '1.1';
 
   static const List<ConversationPhase> _speakablePhases = [
     ConversationPhase.validation,
@@ -18,11 +52,16 @@ class UtteranceGuard {
     ConversationPhase.permission,
     ConversationPhase.release,
     ConversationPhase.continuity,
+    ConversationPhase.neutralEntry,
   ];
 
+  /// Guard Neutral Entry Contract version bound in this guard.
+  static const String neutralEntryContractVersion = '1.0';
+
   /// Soft upper bound for DNA principle 2 (fewest helpful words).
-  /// Placeholders remain well under this; essays are rejected.
-  static const int _maxHelpfulWords = 20;
+  /// Golden Conversations V2 short-line Receipt/Naming may use more lines
+  /// without becoming an essay.
+  static const int _maxHelpfulWords = 65;
 
   /// Returns [utterance] if it may leave the Conversation layer; otherwise
   /// `null` (no conversational language).
@@ -41,32 +80,60 @@ class UtteranceGuard {
       return null;
     }
 
-    // Output Contract: exactly one speech artifact (no multi-message bundles).
-    if (!_singleSpeechOutcome(text)) {
+    // Soft line-breaks from the model are formatting, not multi-message
+    // bundles. Collapse all whitespace into one speech plane, then enforce
+    // sentence-count limits by WHAT.
+    final normalized = text.replaceAll(RegExp(r'\s+'), ' ').trim();
+    if (normalized.isEmpty) {
+      return null;
+    }
+
+    // Output Contract: one speech artifact (no multi-message bundles).
+    // Receipt/Naming may use two short sentences for soft perspective.
+    if (!_singleSpeechOutcome(normalized, what)) {
+      return null;
+    }
+
+    // One reply, one language (EN or TR) — mixed replies fail closed.
+    if (_isMixedLanguage(normalized)) {
       return null;
     }
 
     // Stay inside the decided WHAT (DNA principle 9 / anti-rule rewrite).
-    if (!_faithfulToWhat(text, what)) {
+    if (!_faithfulToWhat(normalized, what)) {
       return null;
     }
 
     // Bound Conversation DNA: every anti-rule and principle must hold.
-    if (!_satisfiesDna(text: text, what: what, dna: dna)) {
+    if (!_satisfiesDna(text: normalized, what: what, dna: dna)) {
       return null;
     }
 
     // Emit the validated single utterance (normalized trim). No rewrite.
-    return ConversationUtterance(text: text);
+    return ConversationUtterance(text: normalized);
   }
 
-  bool _singleSpeechOutcome(String text) {
+  bool _singleSpeechOutcome(String text, ConversationPhase what) {
     if (text.contains('\n')) {
       return false;
     }
-    // More than one terminal sentence marks stacked help.
+    // Receipt / Naming: Golden Conversations V2 short-line breath (up to 5).
+    // Enough: up to 2 short lines for soft rest-audio handoff.
+    // Release: up to 2 short lines (put-down + night-hold breath).
+    // Other stages: one sentence keeps restward moves tight.
     final sentenceEnds = RegExp(r'[.!?]+').allMatches(text).length;
-    return sentenceEnds <= 1;
+    final int maxEnds;
+    if (what == ConversationPhase.validation ||
+        what == ConversationPhase.naming) {
+      maxEnds = 5;
+    } else if (what == ConversationPhase.continuity ||
+        what == ConversationPhase.release ||
+        what == ConversationPhase.permission) {
+      maxEnds = 3;
+    } else {
+      maxEnds = 1;
+    }
+    return sentenceEnds <= maxEnds;
   }
 
   /// Contract-level WHAT faithfulness.
@@ -83,10 +150,11 @@ class UtteranceGuard {
       case ConversationPhase.permission:
       case ConversationPhase.release:
       case ConversationPhase.continuity:
+      case ConversationPhase.neutralEntry:
         break;
     }
 
-    final lower = text.toLowerCase();
+    final lower = _normalizeForMatch(text);
 
     if (!_matchesPhase(lower, what)) {
       return false;
@@ -94,6 +162,101 @@ class UtteranceGuard {
 
     for (final other in _speakablePhases) {
       if (other == what) continue;
+      // Later-phase lines often contain incidental soft frames (“perhaps…”,
+      // “it’s…”) + textures (“quiet”, “carry”) that false-match Receipt
+      // texture-first. Only classic Receipt stems collide.
+      // Naming is excluded here — soft Receipt openers (“it sounds…”) are
+      // legal Naming lead-ins (handled below).
+      if (other == ConversationPhase.validation &&
+          (what == ConversationPhase.continuity ||
+              what == ConversationPhase.release ||
+              what == ConversationPhase.permission)) {
+        if (ReceiptRealizationContract.hasClassicStem(lower)) {
+          return false;
+        }
+        continue;
+      }
+      // Enough soft handoffs may echo “night can hold…”; only hard put-down
+      // stems count as Release drift under continuity.
+      if (what == ConversationPhase.continuity &&
+          other == ConversationPhase.release) {
+        if (_containsAny(lower, const [
+          'set this down',
+          'set it down',
+          'let it rest',
+          'let this rest',
+          'let go for now',
+          'leave it here',
+          'leave this here',
+          'leave some of',
+        ])) {
+          return false;
+        }
+        continue;
+      }
+      // Enough handoffs may say “take your time…” while settling into quiet;
+      // that must not count as Neutral Entry drift.
+      if (what == ConversationPhase.continuity &&
+          other == ConversationPhase.neutralEntry) {
+        if (_containsAny(lower, const [
+          'preparing a',
+          'preparing something',
+          'leave you with',
+          'leaving you with',
+          'quiet for you',
+          'rest for you',
+          'a little rest',
+          'a little quiet',
+          'biraz sessizlik',
+          'biraz dinlenme',
+          'dinlenmeyle bırakıyorum',
+          'sessizlikle bırakıyorum',
+        ])) {
+          continue;
+        }
+      }
+      // Naming may open with soft Receipt frames (“it sounds…”) while naming
+      // the load with a Guard Naming stem — do not cross-reject on Receipt.
+      if (what == ConversationPhase.naming &&
+          other == ConversationPhase.validation) {
+        continue;
+      }
+      // Receipt may mention overthinking / won't-stop texture without being
+      // a Naming speech-act. Only English Naming speech-act stems collide;
+      // TR night-texture (“zihninde / dönüp duruyor”) is legal Receipt.
+      if (what == ConversationPhase.validation &&
+          other == ConversationPhase.naming) {
+        if (_containsAny(lower, const [
+          'holding on',
+          'weighing',
+          'still there',
+          'lingering',
+          'on your mind',
+        ])) {
+          return false;
+        }
+        continue;
+      }
+      // Release put-down may include “don’t need to carry” idiom; that must
+      // not count as Permission obligation-ease under cross-phase.
+      if (what == ConversationPhase.release &&
+          other == ConversationPhase.permission) {
+        if (_containsAny(lower, const [
+          'night can hold',
+          'the night can hold',
+          'set this down',
+          'set it down',
+          'set some of',
+          'leave it here',
+          'leave some of',
+          'let go for now',
+          'let go of that',
+          'let go of this',
+          'let go tonight',
+        ])) {
+          continue;
+        }
+      }
       if (_matchesPhase(lower, other)) {
         return false;
       }
@@ -102,60 +265,161 @@ class UtteranceGuard {
     return true;
   }
 
+  /// Normalize typography so semantic Naming frames match reliably.
+  String _normalizeForMatch(String text) {
+    return text
+        .toLowerCase()
+        .replaceAll('’', "'")
+        .replaceAll('‘', "'")
+        .replaceAll('ʼ', "'")
+        .replaceAll('´', "'")
+        .replaceAll('`', "'")
+        .replaceAll('“', '"')
+        .replaceAll('”', '"')
+        .replaceAll('…', '...');
+  }
+
   /// Semantic signature of a speakable protocol phase.
   bool _matchesPhase(String lower, ConversationPhase phase) {
     switch (phase) {
       case ConversationPhase.validation:
-        return _containsAny(lower, const [
-          'makes sense',
-          'understand',
-          'hear you',
-          'hear that',
-          'that sounds',
-          "that's hard",
-          'thats hard',
-        ]);
+        return _matchesReceiptContract(lower);
       case ConversationPhase.naming:
-        return _containsAny(lower, const [
-          'holding on',
-          'weighing',
-          'still there',
-          'lingering',
-          'on your mind',
-        ]);
+        return _matchesNamingContract(lower);
       case ConversationPhase.permission:
-        return _containsAny(lower, const [
-          'do not have to',
-          "don't have to",
-          'dont have to',
-          'no need to solve',
-          'not something to solve',
-          'solve this tonight',
-        ]);
+        return _matchesPermissionContract(lower);
       case ConversationPhase.release:
-        return _containsAny(lower, const [
-          'let this rest',
-          'let it rest',
-          'set this down',
-          'set it down',
-          'put this down',
-          'put it down',
-          'release this',
-          'let go for now',
-        ]);
+        return _matchesReleaseContract(lower);
       case ConversationPhase.continuity:
-        return _containsAny(lower, const [
+        // Enough-only close cues. Do not share Release put-down stems
+        // (night can hold / can rest here) — cross-phase reject otherwise.
+        // Word-boundary end so “a little quiet” ≠ “a little quieter”.
+        return _containsAnyBounded(lower, const [
           'nothing more',
           'no more is needed',
           'nothing else needed',
+          'nothing else needs',
+          'nothing else',
           "that's enough",
           'thats enough',
           'enough for now',
+          "that's all for tonight",
+          'thats all for tonight',
+          'all for tonight',
+          'words can rest',
+          'the words can rest',
+          'this can end here',
+          'we can stop here',
+          'leave it at that',
+          'no more needed',
+          // Soft rest-audio handoff (Golden Conversations V2 TYPE)
+          'preparing a',
+          'preparing something',
+          'preparing a session',
+          'preparing a little',
+          'leave you with',
+          'leaving you with',
+          'quiet for you',
+          'rest for you',
+          'a little rest',
+          'a little quiet',
+          // Turkish Enough / handoff
+          'biraz sessizlik hazırlıyorum',
+          'biraz dinlenme hazırlıyorum',
+          'bir oturum hazırlıyorum',
+          'dinlenmeyle bırakıyorum',
+          'sessizlikle bırakıyorum',
+          'biraz dinlenmeyle',
+          'biraz sessizlikle',
+          'şimdi seni dinlenmeyle bırakıyorum',
+          'kelimeler dinlenebilir',
+          'bu kadar yeter',
+          'daha fazlası gerekmiyor',
         ]);
+      case ConversationPhase.neutralEntry:
+        return _matchesNeutralEntryContract(lower);
       case ConversationPhase.audio:
       case ConversationPhase.silence:
         return false;
     }
+  }
+
+  /// Guard Neutral Entry Contract V1.
+  ///
+  /// Admits brief greeting acknowledgment only.
+  /// Fail closed on invented emotion/presence, questions, and other-WHAT drift.
+  bool _matchesNeutralEntryContract(String lower) {
+    if (_neutralEntryUnsafe(lower)) {
+      return false;
+    }
+
+    // Word-boundary for short stems so "this"/"thinking" do not false-match.
+    if (RegExp(r'\bhi\b').hasMatch(lower) ||
+        RegExp(r'\bhey\b').hasMatch(lower)) {
+      return true;
+    }
+
+    return _containsAny(lower, _neutralEntryAckCues);
+  }
+
+  static const List<String> _neutralEntryAckCues = [
+    'hello',
+    'good evening',
+    'good night',
+    'good morning',
+    "whenever you're ready",
+    'whenever you are ready',
+    "when you're ready",
+    'when you are ready',
+    'take your time',
+  ];
+
+  bool _neutralEntryUnsafe(String lower) {
+    return _containsAny(lower, const [
+      '?',
+      'how are you',
+      'how are you feeling',
+      'tell me',
+      'what is keeping',
+      'what\'s keeping',
+      'stillness',
+      'being present',
+      'just being present',
+      "you're present",
+      'you are present',
+      'your presence',
+      'mindful',
+      'mindfulness',
+      'inner peace',
+      'heavy',
+      'heaviness',
+      'dread',
+      'lonely',
+      'loneliness',
+      'ache',
+      'anxious',
+      'anxiety',
+      'overwhelm',
+      'insomnia',
+      'can\'t sleep',
+      'cannot sleep',
+      'go to sleep',
+      'have you tried',
+      'you should',
+      'try this',
+      'that sounds',
+      'it sounds',
+      'makes sense',
+      'do not have to',
+      "don't have to",
+      'let it rest',
+      'let this rest',
+      'set this down',
+      'set it down',
+      'holding on',
+      'nothing more',
+      "that's enough",
+    ]);
   }
 
   bool _containsAny(String lower, List<String> markers) {
@@ -163,6 +427,452 @@ class UtteranceGuard {
       if (lower.contains(marker)) return true;
     }
     return false;
+  }
+
+  /// Like [_containsAny], but the marker must end on a word boundary.
+  /// Prevents “a little quiet” from matching inside “a little quieter”.
+  bool _containsAnyBounded(String lower, List<String> markers) {
+    for (final marker in markers) {
+      final escaped = RegExp.escape(marker);
+      if (RegExp('$escaped\\b').hasMatch(lower)) return true;
+    }
+    return false;
+  }
+
+  /// Fail closed on English+Turkish mixed inside one utterance.
+  bool _isMixedLanguage(String text) {
+    final lower = _normalizeForMatch(text);
+    final hasTurkishScript = RegExp(r'[ğüşıöçâîû]').hasMatch(lower);
+    final hasTurkishLexeme = _containsAny(lower, const [
+      'zorunda',
+      'bırak',
+      'birak',
+      'gece',
+      'belki',
+      'sanki',
+      'zihin',
+      'zihn',
+      'şimdi',
+      'simdi',
+      'değil',
+      'degil',
+      'gibi',
+      'yarın',
+      'yarin',
+      'dinlenme',
+      'sessizlik',
+      'hazırlıyorum',
+      'hazirliyorum',
+    ]);
+    final hasTurkish = hasTurkishScript || hasTurkishLexeme;
+    final hasEnglish = RegExp(
+      r"\b(you|your|the|tonight|don't|dont|need|perhaps|mind|leave|preparing|enough|softening)\b",
+    ).hasMatch(lower);
+    return hasTurkish && hasEnglish;
+  }
+
+  /// Guard Receipt Contract V1.6.
+  ///
+  /// Admits felt receipt / First Stop Moment wording via the shared
+  /// [ReceiptRealizationContract]: classic stems or texture-first /
+  /// soft-functional frame+texture pairs, excluding Naming-stem drift and
+  /// compound second moves. Fail closed on invented psychology / stillness /
+  /// presence / hard diagnosis. Mechanism-agnostic — no psychological scoring.
+  bool _matchesReceiptContract(String lower) {
+    if (_receiptOverInference(lower)) {
+      return false;
+    }
+
+    // Contract-level Receipt drift bans apply before classic or texture-first.
+    if (ReceiptRealizationContract.hasForbiddenNamingStem(lower)) {
+      return false;
+    }
+    if (ReceiptRealizationContract.hasCompoundSecondMove(lower)) {
+      return false;
+    }
+
+    // Classic soft stems (preserved — including FaithfulTestVendor paths).
+    if (ReceiptRealizationContract.hasClassicStem(lower)) {
+      return true;
+    }
+
+    return ReceiptRealizationContract.matchesTextureFirst(lower);
+  }
+
+  /// Fail-closed Receipt exclusions: invented stillness / presence / psychology.
+  bool _receiptOverInference(String lower) {
+    return _containsAny(lower, const [
+      'stillness',
+      'being present',
+      'just being present',
+      "you're present",
+      'youre present',
+      'you are present',
+      'just being here',
+      'your presence',
+      'mindful',
+      'mindfulness',
+      'inner peace',
+      'moment of peace',
+      'moment of stillness',
+      'because you',
+      'because your',
+      'this means',
+      'that means you',
+      'deep down',
+      'unconsciously',
+      'subconscious',
+      'root cause',
+      'attachment style',
+      'diagnos',
+      'disorder',
+      'psycholog',
+      'clinical',
+      'therapy',
+      'therapist',
+      'uykuya',
+      'go to sleep',
+      'fall asleep',
+      'hard to sleep',
+      // Naming speech-act drift inside Receipt (EN)
+      'on your mind',
+      'holding on',
+      'weighing on',
+      'still weighing',
+    ]);
+  }
+
+  /// Guard Permission Contract V1.0 ([PermissionRealizationContract]).
+  ///
+  /// Admits obligation-ease / non-resolution wording from the shared contract.
+  /// Rejects Release enactment speech acts (let go / set down / put down…).
+  /// Fail closed on advice, invented problems, and other-WHAT drift.
+  /// Structural only — not psychological scoring.
+  bool _matchesPermissionContract(String lower) {
+    return PermissionRealizationContract.matchesObligationEase(lower);
+  }
+
+  /// Guard Release Contract V1.1.
+  ///
+  /// Admits quiet putting-down wording.
+  /// Keeps classic stems (including FaithfulTestVendor) and adds natural
+  /// variants so “Let it rest for now” is not structurally required.
+  /// Includes bounded `set … down` put-down pattern (not universal).
+  /// Fail closed on sleep commands and other-WHAT drift (cross-phase).
+  bool _matchesReleaseContract(String lower) {
+    if (_releaseUnsafe(lower)) {
+      return false;
+    }
+
+    if (_containsAny(lower, _releaseClassicStems)) {
+      return true;
+    }
+
+    if (_matchesReleaseSetDownPattern(lower)) {
+      return true;
+    }
+
+    return _containsAny(lower, _releaseNaturalPutDownCues);
+  }
+
+  /// Bounded set-down pattern: `set` … `down` with restward/load cue.
+  ///
+  /// Admits short legal variants such as “set those thoughts down for now”
+  /// without admitting arbitrary “set … down” text.
+  bool _matchesReleaseSetDownPattern(String lower) {
+    if (!RegExp(r'\bset\b.{0,40}\bdown\b').hasMatch(lower)) {
+      return false;
+    }
+
+    return _containsAny(lower, const [
+      'for now',
+      'tonight',
+      'for tonight',
+      'thoughts',
+      'the weight',
+      'this weight',
+      'here for',
+      'some of that',
+      'some of this',
+      'some of it',
+      'of that down',
+      'of this down',
+    ]);
+  }
+
+  /// Classic Release stems — still valid (FaithfulTestVendor path).
+  static const List<String> _releaseClassicStems = [
+    'let this rest',
+    'let it rest',
+    'set this down',
+    'set it down',
+    'put this down',
+    'put it down',
+    'release this',
+    'let go for now',
+  ];
+
+  /// Natural putting-down cues (not a reply library).
+  /// Avoids Permission-like “no need to / don't have to” stems.
+  static const List<String> _releaseNaturalPutDownCues = [
+    'lay this down',
+    'lay it down',
+    'leave it here',
+    'leave this here',
+    'leave that here',
+    'leave some of that here',
+    'leave some of this here',
+    'leave some of it here',
+    'leave some of that',
+    'leave some of this',
+    'leave it for the night',
+    'leave this for the night',
+    'leave that for the night',
+    'loosen your grip',
+    'loosen the grip',
+    'stop holding',
+    'stop gripping',
+    'night can hold',
+    'the night can hold',
+    // Avoid “let the night hold…” — collides with Enough soft handoff lines.
+    'set it aside',
+    'set this aside',
+    'set the weight down',
+    'put the weight down',
+    'rest it here',
+    'rest this here',
+    'ease your hold',
+    'drop the grip',
+    // Bounded let-go (temporal/place) — not bare “let go” alone.
+    'let go for tonight',
+    'let go tonight',
+    'let go of that tonight',
+    'let go of this tonight',
+    'let go of it tonight',
+    'let go of that for now',
+    'let go of this for now',
+    // Turkish Release (same speech-act)
+    'gece tutabilir',
+    'gece taşıyabilir',
+    'gece seni tutsun',
+    'bir kenara bırak',
+    'bir kenara koy',
+    'şimdi kenara koy',
+    'simdi kenara koy',
+    'kenara koy',
+    'burada bırak',
+    'şimdilik bırak',
+    'simdilik birak',
+    'şimdilik burada bırak',
+    'bırakabilirsin',
+    'bırakmana izin',
+    'tutabilir',
+    'taşıyabilir',
+    'yumuşakça bırak',
+    'yumusakca birak',
+    'şimdi bırak',
+    'burada tut',
+    'geceye bırak',
+    'bu yükü bırak',
+    'bu yuku birak',
+    'bu yükü burada bırak',
+    'taşımayı bırak',
+    'tasiyi birak',
+    'tutuşunu gevşet',
+    'tutusunu gevset',
+    // Intentionally omit bare "can rest here" — collides with Enough
+    // “words can rest here …” under cross-phase faithfulness.
+  ];
+
+  bool _releaseUnsafe(String lower) {
+    return _containsAny(lower, const [
+      'go to sleep',
+      'you should sleep',
+      'fall asleep',
+      'make yourself sleep',
+      'force yourself to sleep',
+      'sleep now',
+      'have you tried',
+      'you should',
+      'try this',
+      'tip:',
+      'action plan',
+      'diagnos',
+      'therapist',
+      'therapy',
+    ]);
+  }
+
+  /// Guard Naming Contract V2.
+  ///
+  /// Admits quiet recognition of what is already evident.
+  /// Keeps V1 canonical stems and adds semantic Naming patterns.
+  /// Fail closed on interpretation, diagnosis, or psychology explanation.
+  bool _matchesNamingContract(String lower) {
+    // Fail closed: Naming must not become interpretation / diagnosis / psych.
+    if (_namingInterpretationOrDiagnosis(lower)) {
+      return false;
+    }
+
+    // V1 canonical stems (preserved).
+    if (_containsAny(lower, _namingCanonicalStems)) {
+      return true;
+    }
+
+    // V2 semantic quiet-recognition patterns.
+    return _matchesNamingSemanticPattern(lower);
+  }
+
+  /// V1 Naming stems — still valid admission paths.
+  static const List<String> _namingCanonicalStems = [
+    'holding on',
+    'weighing',
+    'still there',
+    'lingering',
+    'on your mind',
+    // Turkish quiet-recognition
+    'aklında',
+    'aklinda',
+    'zihninde',
+    'hâlâ orada',
+    'hala orada',
+    'duruyor',
+    'tutunuyor',
+    // Note: do not use bare “ağırlığı” here — Receipt loneliness texture
+    // (“yalnızlığın ağırlığı”) must not cross-reject under Naming stems.
+    'dönüp duruyor',
+    'donup duruyor',
+  ];
+
+  /// Evident ongoing-load tokens that may be quietly named.
+  static const List<String> _namingEvidentLoadTokens = [
+    'loop',
+    'loops',
+    'looping',
+    'replay',
+    'replaying',
+    'racing',
+    'spinning',
+    'churning',
+    'repeating',
+    'rumination',
+    'ruminating',
+    'overthink',
+    'overthinking',
+    'yalnız',
+    'yalnizlik',
+    'yalnızlık',
+    'yalniz',
+    'lonely',
+    'loneliness',
+  ];
+
+  /// Persistence / continuation cues paired with evident load.
+  static const List<String> _namingPersistenceCues = [
+    'keep ',
+    'keeps ',
+    'keeping ',
+    'still ',
+    'over and over',
+    "won't stop",
+    'wont stop',
+    'will not stop',
+    'coming back',
+    'won\'t quit',
+    'wont quit',
+  ];
+
+  /// Quiet-recognition frames that name what is happening (not Permission/Release).
+  static const List<String> _namingRecognitionFrames = [
+    "what's happening",
+    'whats happening',
+    'what is happening',
+    "that's what's happening",
+    'thats whats happening',
+    "that's what is happening",
+    'thats what is happening',
+  ];
+
+  /// Soft-perspective / golden-reframe TYPE cues (not positivity advice).
+  /// Admitted only when paired with evident load or canonical Naming stem.
+  static const List<String> _namingSoftPerspectiveCues = [
+    'the hard part',
+    'part of what',
+    'not the thought',
+    'not only the',
+    'keeping watch',
+    'staying safe',
+    'if you stop',
+    'cost of stopping',
+    'makes letting go',
+    'makes it hard to stop',
+  ];
+
+  bool _matchesNamingSemanticPattern(String lower) {
+    final hasLoad = _containsAny(lower, _namingEvidentLoadTokens);
+    final hasCanonical = _containsAny(lower, _namingCanonicalStems);
+    final hasMindHold = _containsAny(lower, const [
+      'thinking',
+      'your mind',
+      'the mind',
+      'holding',
+      'letting go',
+    ]);
+
+    // Pattern C: soft perspective + (load / canonical / mind-hold cue)
+    // Golden reframe TYPE — perspective shift, not positivity advice.
+    if (_containsAny(lower, _namingSoftPerspectiveCues) &&
+        (hasLoad || hasCanonical || hasMindHold)) {
+      return true;
+    }
+
+    if (!hasLoad) {
+      return false;
+    }
+
+    // Pattern A: recognition frame + evident load
+    // e.g. "that's what's happening: the loops keep repeating"
+    if (_containsAny(lower, _namingRecognitionFrames)) {
+      return true;
+    }
+
+    // Pattern B: evident load + persistence cue
+    // e.g. "those loops keep repeating"
+    // Intentionally requires persistence so Receipt lines like
+    // "that sounds exhausting, with your mind caught in a loop"
+    // do not collide into Naming for cross-phase rejection.
+    if (_containsAny(lower, _namingPersistenceCues)) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Fail-closed Naming exclusions: interpretation / diagnosis / psychology.
+  bool _namingInterpretationOrDiagnosis(String lower) {
+    return _containsAny(lower, const [
+      'because you',
+      'because your',
+      'this means',
+      'that means you',
+      'deep down',
+      'unconsciously',
+      'subconscious',
+      'root cause',
+      'the reason is',
+      'you are afraid',
+      'you\'re afraid',
+      'youre afraid',
+      'your trauma',
+      'attachment style',
+      'projection',
+      'diagnos',
+      'disorder',
+      'psycholog',
+      'clinical',
+      'therapy',
+      'therapist',
+    ]);
   }
 
   /// Enforces the bound [dna]: all anti-rules and all principles.
@@ -177,7 +887,7 @@ class UtteranceGuard {
       return false;
     }
 
-    final lower = text.toLowerCase();
+    final lower = _normalizeForMatch(text);
 
     for (final antiRule in ConversationDNA.antiRules) {
       if (!_antiRuleClear(lower: lower, what: what, antiRule: antiRule)) {
@@ -293,9 +1003,10 @@ class UtteranceGuard {
         return words <= _maxHelpfulWords;
       case 3: // One help, not many
         return !_containsAny(lower, const [
-          ' also ',
+          ' and also ',
+          ' also try ',
           ' additionally ',
-          ' another ',
+          ' another tip',
           'as well as',
           'not only',
         ]);

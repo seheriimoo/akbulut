@@ -3,6 +3,7 @@ import 'package:slowave/core/brain/belief_detector.dart';
 import 'package:slowave/core/brain/cognitive_orchestrator.dart';
 import 'package:slowave/core/brain/conversation_decision.dart';
 import 'package:slowave/core/brain/conversation_engine.dart';
+import 'package:slowave/core/brain/conversation_grounding_buffer.dart';
 import 'package:slowave/core/brain/conversation_phase.dart';
 import 'package:slowave/core/brain/conversation_policy.dart';
 import 'package:slowave/core/brain/conversation_utterance.dart';
@@ -18,6 +19,7 @@ import 'package:slowave/core/brain/need_detector.dart';
 import 'package:slowave/core/brain/night_session.dart';
 import 'package:slowave/core/brain/perception_engine.dart';
 import 'package:slowave/core/brain/preference_detector.dart';
+import 'package:slowave/core/brain/prior_admitted_expression.dart';
 import 'package:slowave/core/brain/release_decision.dart';
 import 'package:slowave/core/brain/release_engine.dart';
 import 'package:slowave/core/brain/session_summary.dart';
@@ -135,6 +137,45 @@ void main() {
       );
 
       expect(memory.updateCount, 0);
+    });
+
+    test('Neutral Entry greeting yields non-null short utterance', () async {
+      final conversation = _TrackingConversationEngine([]);
+      final orchestrator = _buildOrchestrator(
+        conversationEngine: conversation,
+        memoryEngine: _CountingMemoryEngine(),
+      );
+      final workingMind = WorkingMindView(model: _emptyModel());
+
+      final result = await orchestrator.processTurn(
+        message: 'hi',
+        session: NightSession(workingMind: workingMind, turns: const []),
+        workingMind: workingMind,
+      );
+
+      expect(result.conversationDecision.phase, ConversationPhase.neutralEntry);
+      expect(result.utterance, isNotNull);
+      expect(result.utterance!.text.toLowerCase(), contains('whenever'));
+      expect(result.utterance!.text.contains('?'), isFalse);
+      expect(conversation.invokeCount, 1);
+    });
+
+    test('emotional first turn still routes to Receipt/validation', () async {
+      final conversation = _CapturingConversationEngine();
+      final orchestrator = _buildOrchestrator(
+        conversationEngine: conversation,
+        memoryEngine: _CountingMemoryEngine(),
+      );
+      final workingMind = WorkingMindView(model: _emptyModel());
+
+      final result = await orchestrator.processTurn(
+        message: 'I keep replaying tomorrow and my mind will not settle.',
+        session: NightSession(workingMind: workingMind, turns: const []),
+        workingMind: workingMind,
+      );
+
+      expect(result.conversationDecision.phase, ConversationPhase.validation);
+      expect(result.utterance, isNotNull);
     });
 
     test('session-end memory write remains outside the turn path', () async {
@@ -259,9 +300,19 @@ class _TrackingConversationPolicy extends ConversationPolicy {
   _TrackingConversationPolicy(this.order);
 
   @override
-  ConversationDecision decide({required ReleaseDecision releaseDecision}) {
+  ConversationDecision decide({
+    required ReleaseDecision releaseDecision,
+    String? message,
+    NightSession? session,
+    ValidatedUnderstanding? understanding,
+  }) {
     order.add('policy');
-    return super.decide(releaseDecision: releaseDecision);
+    return super.decide(
+      releaseDecision: releaseDecision,
+      message: message,
+      session: session,
+      understanding: understanding,
+    );
   }
 }
 
@@ -302,6 +353,9 @@ class _TrackingConversationEngine extends ConversationEngine {
     required ExitDecision exitDecision,
     ValidatedUnderstanding? understanding,
     WorkingMindView? workingMind,
+    String? livedExpression,
+    ConversationGroundingBuffer? conversationGrounding,
+    PriorAdmittedExpression? priorAdmittedExpression,
   }) async {
     order.add('conversation');
     invokeCount++;
@@ -310,6 +364,9 @@ class _TrackingConversationEngine extends ConversationEngine {
       exitDecision: exitDecision,
       understanding: understanding,
       workingMind: workingMind,
+      livedExpression: livedExpression,
+      conversationGrounding: conversationGrounding,
+      priorAdmittedExpression: priorAdmittedExpression,
     );
   }
 }
@@ -319,6 +376,8 @@ class _CapturingConversationEngine extends ConversationEngine {
   ExitDecision? lastExitDecision;
   ValidatedUnderstanding? lastUnderstanding;
   WorkingMindView? lastWorkingMind;
+  String? lastLivedExpression;
+  ConversationGroundingBuffer? lastConversationGrounding;
   bool receivedReleaseDecision = false;
 
   _CapturingConversationEngine()
@@ -334,11 +393,16 @@ class _CapturingConversationEngine extends ConversationEngine {
     required ExitDecision exitDecision,
     ValidatedUnderstanding? understanding,
     WorkingMindView? workingMind,
+    String? livedExpression,
+    ConversationGroundingBuffer? conversationGrounding,
+    PriorAdmittedExpression? priorAdmittedExpression,
   }) async {
     lastConversationDecision = conversationDecision;
     lastExitDecision = exitDecision;
     lastUnderstanding = understanding;
     lastWorkingMind = workingMind;
+    lastLivedExpression = livedExpression;
+    lastConversationGrounding = conversationGrounding;
     // ReleaseDecision is not a ConversationEngine parameter; capture stays false.
     receivedReleaseDecision = false;
     return super.generate(
@@ -346,6 +410,9 @@ class _CapturingConversationEngine extends ConversationEngine {
       exitDecision: exitDecision,
       understanding: understanding,
       workingMind: workingMind,
+      livedExpression: livedExpression,
+      conversationGrounding: conversationGrounding,
+      priorAdmittedExpression: priorAdmittedExpression,
     );
   }
 }

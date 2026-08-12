@@ -14,6 +14,7 @@ import '../core/brain/night_session.dart';
 import '../features/player/player_screen.dart';
 import 'night_complete_screen.dart';
 import 'paywall_screen.dart';
+import 'session_ui_language.dart';
 
 class AISleepChatScreen extends StatefulWidget {
   const AISleepChatScreen({super.key});
@@ -30,6 +31,11 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
   final LivingMindStore _mindStore = const LivingMindStore();
   final NightAudioHandoff _audioHandoff = const NightAudioHandoff();
   final SleepBedCatalog _sleepBeds = const SleepBedCatalog();
+  final SessionUiLanguageResolver _uiLanguageResolver =
+      const SessionUiLanguageResolver();
+
+  /// Sticky night-chat UI language for chrome CTAs. Not recomputed from transcript.
+  SessionUiLanguage _sessionUiLanguage = SessionUiLanguage.unknown;
 
   /// Sole production cognitive entry (Sprint 6 Cutover).
   late final CognitiveOrchestrator _orchestrator;
@@ -89,22 +95,9 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
     _controller.clear();
   }
 
-  /// Same-language mirror for chrome CTAs (EN/TR). Not a localization system.
-  String get _continueAudioLabel {
-    final recentUser = _messages
-        .where((m) => m.isUser)
-        .map((m) => m.text)
-        .join(' ')
-        .toLowerCase();
-    if (RegExp(r'[ğüşıöç]').hasMatch(recentUser) ||
-        recentUser.contains('gece') ||
-        recentUser.contains('yalnız') ||
-        recentUser.contains('zorunda') ||
-        recentUser.contains('belki')) {
-      return 'Sese devam et';
-    }
-    return 'Continue to audio';
-  }
+  /// Sticky session UI language → CTA copy. Survives Player push/pop + rebuild.
+  String get _continueAudioLabel =>
+      _uiLanguageResolver.continueAudioLabel(_sessionUiLanguage);
 
   @override
   void initState() {
@@ -163,6 +156,11 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
     setState(() {
       _expressionQuiet = false;
       _messages.add(_ChatMessage(text: text, isUser: true));
+      // Lock CTA language on strong signals only; short exits never flip it.
+      _sessionUiLanguage = _uiLanguageResolver.resolveNext(
+        current: _sessionUiLanguage,
+        userMessage: text,
+      );
     });
 
     _scrollToBottom();

@@ -63,6 +63,15 @@ void main() {
       'yeter artık dinlemek istiyorum',
       'Yeter Bu Kadar Konuşmak!',
       'BU KADAR YETER',
+      // Affirmation + bare yeter (incl. tmm/ok/okey normalization).
+      'tmm yeter',
+      'tamam yeter',
+      'tamam artık yeter',
+      'ok yeter',
+      'okey yeter',
+      'peki yeter',
+      'TMM Yeter!',
+      'Ok Yeter',
     ]) {
       test('TR "$message" matches', () {
         expect(intent.matches(message), isTrue);
@@ -102,11 +111,45 @@ void main() {
       'Konuşmak ilişkide yeterli mi?',
       'Burada bitirelim demişti.',
       'O da yeter bu kadar konuşmak demişti.',
+      'tmm yeter mi',
+      'tamam yeter mi',
+      'ok ses yeterli',
+      'okey ses yeterince yüksek',
+      'peki bu kadar uyku yeter mi',
+      'tamam onunla konuşmak istemiyorum',
+      'tmm ama başka bir şey anlatacağım',
+      'tmm',
+      'tamam',
+      'ok',
+      'okey',
+      'peki',
     ]) {
       test('FP "$message" does not match', () {
         expect(intent.matches(message), isFalse);
       });
     }
+  });
+
+  test('TR session + tmm yeter → transitionToAudio', () {
+    final session = sessionAfterRelease();
+    const release = ReleaseDecision(
+      readiness: ReleaseReadiness.receptive,
+      confidence: 1,
+    );
+    const message = 'tmm yeter';
+    final decision = policy.decide(
+      releaseDecision: release,
+      message: message,
+      session: session,
+    );
+    final exitDecision = exit.decide(
+      releaseDecision: release,
+      conversationDecision: decision,
+      session: session,
+      message: message,
+    );
+    expect(intent.matches(message), isTrue);
+    expect(exitDecision, ExitDecision.transitionToAudio);
   });
 
   group('Exit overrides readiness', () {

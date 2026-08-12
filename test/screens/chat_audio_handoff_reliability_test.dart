@@ -56,10 +56,14 @@ void main() {
 
   test('null → Chat without error + Continue to audio / Sese devam et', () {
     expect(chat.contains('_audioContinueAvailable'), isTrue);
-    expect(chat.contains('Continue to audio'), isTrue);
-    expect(chat.contains('Sese devam et'), isTrue);
+    expect(chat.contains('_sessionUiLanguage'), isTrue);
+    expect(chat.contains('continueAudioLabel(_sessionUiLanguage)'), isTrue);
     expect(chat.contains('_AudioContinueCue'), isTrue);
     expect(chat.contains('_continueAudioHandoff'), isTrue);
+    final locale =
+        File('lib/screens/session_ui_language.dart').readAsStringSync();
+    expect(locale.contains('Continue to audio'), isTrue);
+    expect(locale.contains('Sese devam et'), isTrue);
 
     final flow = _audioFlow();
     final nullStart = flow.indexOf('if (playerOk == null)');

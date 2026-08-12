@@ -13,6 +13,7 @@ class ExplicitExitIntent {
     if (_isFalsePositive(normalized)) return false;
     if (_matchesAudioMove(normalized)) return true;
     if (_matchesBareEnough(normalized)) return true;
+    if (_matchesAffirmationEnough(normalized)) return true;
     if (_matchesNaturalTrClose(normalized)) return true;
     return false;
   }
@@ -21,6 +22,14 @@ class ExplicitExitIntent {
     var s = message.trim().toLowerCase();
     s = s.replaceAll('\u2019', "'");
     s = s.replaceAll(RegExp(r'\s+'), ' ');
+    return s;
+  }
+
+  /// Exit-only abbreviation fold. Does not rewrite general chat language.
+  static String _normalizeExitAffirmations(String n) {
+    var s = n;
+    s = s.replaceAll(RegExp(r'\btmm\b'), 'tamam');
+    s = s.replaceAll(RegExp(r'\bokey\b'), 'ok');
     return s;
   }
 
@@ -76,6 +85,31 @@ class ExplicitExitIntent {
     if (stripped == 'enough') return true;
     if (stripped == "that's enough") return true;
     if (stripped == 'thats enough') return true;
+    return false;
+  }
+
+  /// Affirmation + bare yeter (tmm/ok/okey/peki/tamam [artık] yeter).
+  /// Bare affirmation alone is never an exit.
+  static bool _matchesAffirmationEnough(String n) {
+    final folded = _normalizeExitAffirmations(n);
+    final stripped = _stripTrailingPunct(folded);
+    // Affirmation alone — not exit.
+    if (stripped == 'tamam' ||
+        stripped == 'ok' ||
+        stripped == 'peki' ||
+        stripped == 'tmm' ||
+        stripped == 'okey') {
+      return false;
+    }
+    if (stripped == 'tamam yeter') return true;
+    if (stripped == 'tamam artık yeter') return true;
+    if (stripped == 'tamam artik yeter') return true;
+    if (stripped == 'ok yeter') return true;
+    if (stripped == 'ok artık yeter') return true;
+    if (stripped == 'ok artik yeter') return true;
+    if (stripped == 'peki yeter') return true;
+    if (stripped == 'peki artık yeter') return true;
+    if (stripped == 'peki artik yeter') return true;
     return false;
   }
 

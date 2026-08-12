@@ -48,6 +48,21 @@ void main() {
       'Yeter, artık sese geçmek istiyorum.',
       'YETER',
       'yeter!',
+      // Natural Turkish night-close / audio-move phrasing.
+      'yeter bu kadar konuşmak',
+      'bu kadar konuşmak yeter',
+      'bu kadar yeter',
+      'konuşmak istemiyorum artık',
+      'artık konuşmak istemiyorum',
+      'daha fazla konuşmak istemiyorum',
+      'konuşmayı bitirelim',
+      'burada bitirelim',
+      'tamam artık sese geçelim',
+      'sese geçebiliriz',
+      'hazırım sese geçelim',
+      'yeter artık dinlemek istiyorum',
+      'Yeter Bu Kadar Konuşmak!',
+      'BU KADAR YETER',
     ]) {
       test('TR "$message" matches', () {
         expect(intent.matches(message), isTrue);
@@ -79,6 +94,14 @@ void main() {
       "I didn't get enough sleep.",
       'Is the audio loud enough?',
       'I have enough time.',
+      'Onunla artık konuşmak istemiyorum.',
+      'Sevgilim benimle konuşmak istemiyor.',
+      'Bu konu hakkında konuşmak istemiyorum ama başka bir şey anlatacağım.',
+      'Yeterince konuşamadık.',
+      'Ses yeterince yüksek değil.',
+      'Konuşmak ilişkide yeterli mi?',
+      'Burada bitirelim demişti.',
+      'O da yeter bu kadar konuşmak demişti.',
     ]) {
       test('FP "$message" does not match', () {
         expect(intent.matches(message), isFalse);
@@ -132,6 +155,29 @@ void main() {
       message: 'yeter',
     );
     expect(release.readiness, ReleaseReadiness.receptive);
+    expect(exitDecision, ExitDecision.transitionToAudio);
+  });
+
+  test('yeter bu kadar konuşmak → transitionToAudio on receptive', () {
+    final session = sessionAfterRelease();
+    const release = ReleaseDecision(
+      readiness: ReleaseReadiness.receptive,
+      confidence: 1,
+    );
+    const message = 'yeter bu kadar konuşmak';
+    final decision = policy.decide(
+      releaseDecision: release,
+      message: message,
+      session: session,
+    );
+    final exitDecision = exit.decide(
+      releaseDecision: release,
+      conversationDecision: decision,
+      session: session,
+      message: message,
+    );
+    expect(intent.matches(message), isTrue);
+    expect(decision.phase, ConversationPhase.continuity);
     expect(exitDecision, ExitDecision.transitionToAudio);
   });
 

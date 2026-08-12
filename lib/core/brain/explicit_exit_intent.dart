@@ -4,14 +4,16 @@
 class ExplicitExitIntent {
   const ExplicitExitIntent();
 
-  /// True when the user clearly asks to end talk and move to rest audio.
+  /// True when the user clearly asks to end talk with Nocta and/or move to audio.
   /// Bare “yeter/enough” inside unrelated sentences must not match.
   bool matches(String message) {
     final normalized = _normalize(message);
     if (normalized.isEmpty) return false;
+    if (_isReportedSpeech(normalized)) return false;
     if (_isFalsePositive(normalized)) return false;
     if (_matchesAudioMove(normalized)) return true;
     if (_matchesBareEnough(normalized)) return true;
+    if (_matchesNaturalTrClose(normalized)) return true;
     return false;
   }
 
@@ -20,6 +22,22 @@ class ExplicitExitIntent {
     s = s.replaceAll('\u2019', "'");
     s = s.replaceAll(RegExp(r'\s+'), ' ');
     return s;
+  }
+
+  /// Strip trailing sentence punctuation for whole-utterance checks.
+  static String _stripTrailingPunct(String n) {
+    return n.replaceAll(RegExp(r'[.!?…,;:]+$'), '').trim();
+  }
+
+  static bool _isReportedSpeech(String n) {
+    // Someone else said an exit line — not the user's present intent.
+    if (RegExp(r'\bdemişti\b').hasMatch(n)) return true;
+    if (RegExp(r'\bdemiş\b').hasMatch(n)) return true;
+    if (RegExp(r'\bdedi\b').hasMatch(n)) return true;
+    if (n.contains('diyor ki')) return true;
+    if (n.contains('demiş ki')) return true;
+    if (RegExp(r'\bsöylemiş\b').hasMatch(n)) return true;
+    return false;
   }
 
   static bool _isFalsePositive(String n) {
@@ -33,11 +51,13 @@ class ExplicitExitIntent {
     if (RegExp(r'\bget enough\b').hasMatch(n)) return true;
     if (RegExp(r'\bhave enough\b').hasMatch(n)) return true;
     if (RegExp(r'\bis .+ enough\b').hasMatch(n)) return true;
+    // "bu kadar uyku yeter…" is sleep talk, not night close.
+    if (n.contains('bu kadar uyku')) return true;
     return false;
   }
 
   static bool _matchesAudioMove(String n) {
-    // Turkish direct audio handoff.
+    // Turkish direct audio handoff (covers geçelim / geçebiliriz / geçmek…).
     if (n.contains('sese geç')) return true;
     if (n.contains('sese gec')) return true; // ASCII fallback
     // English direct audio handoff.
@@ -49,13 +69,64 @@ class ExplicitExitIntent {
 
   static bool _matchesBareEnough(String n) {
     // Whole-utterance close only (allow light trailing punctuation).
-    final stripped = n.replaceAll(RegExp(r'[.!?…,]+$'), '').trim();
+    final stripped = _stripTrailingPunct(n);
     if (stripped == 'yeter') return true;
     if (stripped == 'artık yeter') return true;
     if (stripped == 'artik yeter') return true;
     if (stripped == 'enough') return true;
     if (stripped == "that's enough") return true;
     if (stripped == 'thats enough') return true;
+    return false;
+  }
+
+  /// Natural Turkish closes that end *this* Nocta conversation (not third-party talk).
+  static bool _matchesNaturalTrClose(String n) {
+    final stripped = _stripTrailingPunct(n);
+
+    // "yeter bu kadar konuşmak" / "bu kadar konuşmak yeter"
+    if (n.contains('bu kadar konuşmak')) {
+      if (RegExp(r'\byeter\b').hasMatch(n)) return true;
+    }
+
+    // Whole close: "bu kadar yeter" (uyku case already excluded).
+    if (stripped == 'bu kadar yeter') return true;
+
+    // "yeter artık dinlemek istiyorum"
+    if (RegExp(r'\byeter\b').hasMatch(n) &&
+        n.contains('dinlemek istiyorum')) {
+      return true;
+    }
+
+    // End-the-talk together (this night).
+    if (n.contains('konuşmayı bitirelim')) return true;
+    if (stripped == 'burada bitirelim') return true;
+    if (RegExp(r'^burada bitirelim\b').hasMatch(stripped)) return true;
+
+    // First-person stop-talking to continue into rest — not relationship drama.
+    if (n.contains('konuşmak istemiyorum')) {
+      if (_isOtherPersonOrTopicDiversion(n)) return false;
+      if (n.contains('daha fazla')) return true;
+      if (n.contains('artık') || n.contains('artik')) return true;
+    }
+
+    return false;
+  }
+
+  /// Reject relationship / topic-switch uses of "konuşmak istemiyorum".
+  static bool _isOtherPersonOrTopicDiversion(String n) {
+    // Talking about someone else, not ending Nocta.
+    if (RegExp(r'\bonunla\b').hasMatch(n)) return true;
+    if (RegExp(r'\bonlarla\b').hasMatch(n)) return true;
+    if (n.contains('sevgilim')) return true;
+    if (n.contains('eşim')) return true;
+    if (n.contains('eşım')) return true;
+    if (n.contains('arkadaşım')) return true;
+    if (n.contains('annem')) return true;
+    if (n.contains('babam')) return true;
+    // Topic refusal while continuing the chat.
+    if (n.contains('hakkında')) return true;
+    if (n.contains('ama başka')) return true;
+    if (n.contains('ama baska')) return true;
     return false;
   }
 }

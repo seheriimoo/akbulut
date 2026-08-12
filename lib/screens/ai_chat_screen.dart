@@ -159,7 +159,7 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
       // Lock CTA language on strong signals only; short exits never flip it.
       _sessionUiLanguage = _uiLanguageResolver.resolveNext(
         current: _sessionUiLanguage,
-        userMessage: text,
+        message: text,
       );
     });
 
@@ -266,6 +266,11 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
 
     setState(() {
       _messages.add(_ChatMessage(text: text, isUser: false));
+      // Reinforce sticky UI language from reliable assistant language signal.
+      _sessionUiLanguage = _uiLanguageResolver.resolveNext(
+        current: _sessionUiLanguage,
+        message: text,
+      );
     });
 
     _scrollToBottom();

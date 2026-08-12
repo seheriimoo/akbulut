@@ -115,7 +115,11 @@ class ConversationEvaluator {
     );
   }
 
-  /// Heuristic language tag for evaluator traces.
+  /// Heuristic language tag for evaluator traces and sticky UI chrome.
+  ///
+  /// Includes common ASCII-only Turkish night stems (mobile keyboards without
+  /// diacritics), e.g. "uyuyamiyorum", without treating single English words
+  /// as Turkish.
   static String? detectLanguage(String? text) {
     if (text == null || text.trim().isEmpty) return null;
     final lower = text.toLowerCase();
@@ -126,13 +130,34 @@ class ConversationEvaluator {
         lower.contains('sanki') ||
         lower.contains('sessizlik') ||
         lower.contains('yalnız') ||
-        lower.contains('bırak');
+        lower.contains('bırak') ||
+        lower.contains('konuş') ||
+        lower.contains('hisset') ||
+        _hasAsciiTurkishNightStem(lower);
     final hasEn = RegExp(
-      r"\b(you|your|the|tonight|don't|need|perhaps|mind|leave|preparing)\b",
+      r"\b(you|your|the|tonight|don't|need|perhaps|mind|leave|preparing|"
+      r"thinking|can't|cannot|about|tomorrow|feel|feeling)\b",
     ).hasMatch(lower);
     if (hasTr && hasEn) return 'mixed';
     if (hasTr) return 'tr';
     if (hasEn) return 'en';
     return null;
+  }
+
+  /// Mobile ASCII Turkish stems that reliably signal TR without diacritics.
+  static bool _hasAsciiTurkishNightStem(String lower) {
+    if (lower.contains('uyuyamiyorum')) return true;
+    if (lower.contains('uyuyamıyorum')) return true;
+    if (lower.contains('uyuyamiyor')) return true;
+    if (lower.contains('yorgunum')) return true;
+    if (lower.contains('zihnim')) return true;
+    if (lower.contains('susmuyor')) return true;
+    if (lower.contains('dusunmekten')) return true;
+    if (lower.contains('düşünmekten')) return true;
+    if (lower.contains('dusunuyorum')) return true;
+    if (lower.contains('düşünüyorum')) return true;
+    if (lower.contains('konusamiyorum')) return true;
+    if (lower.contains('konusmak')) return true;
+    return false;
   }
 }

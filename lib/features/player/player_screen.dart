@@ -203,7 +203,7 @@ class _PlayerScreenState extends State<PlayerScreen>
   ///
   /// Pop contract for [AISleepChatScreen]:
   ///   true  → bed completed naturally → close night
-  ///   null  → user left early → close night
+  ///   null  → user left early → stay on chat + continue CTA
   ///   false → load/play failure (via [_leaveAfterLoadFailure]) → stay + retry
   Future<void> _finishAudioSession({required bool completedNaturally}) async {
     if (_finishing) return;
@@ -227,7 +227,7 @@ class _PlayerScreenState extends State<PlayerScreen>
     if (!mounted) return;
 
     setState(() => _playing = false);
-    // true = natural end; null = user left early (not a load failure).
+    // true = natural end; null = user left early (stay on chat + continue).
     Navigator.of(context).pop(completedNaturally ? true : null);
   }
 

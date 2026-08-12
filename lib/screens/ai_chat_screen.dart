@@ -53,6 +53,10 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
   /// Does not invent dialogue. Does not close the NightSession.
   bool _audioHandoffFailed = false;
 
+  /// True when user left Player early (pop null); stay on chat and offer continue.
+  /// Not an error. Does not invent dialogue. Does not close the NightSession.
+  bool _audioContinueAvailable = false;
+
   /// Visible idle cue when expression returned no utterance (null / Guard reject)
   /// while conversation may continue. Not assistant speech. Not invented dialogue.
   bool _expressionQuiet = false;
@@ -60,10 +64,28 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
   bool get _acceptsUserInput {
     if (isTyping || isLoadingAudio) return false;
     if (_audioHandoffFailed) return false;
+    if (_audioContinueAvailable) return false;
     if (_session == null) return false;
     final exit = _lastTurnResult?.exitDecision;
     if (exit == null) return true;
     return exit == ExitDecision.continueConversation;
+  }
+
+  /// Same-language mirror for chrome CTAs (EN/TR). Not a localization system.
+  String get _continueAudioLabel {
+    final recentUser = _messages
+        .where((m) => m.isUser)
+        .map((m) => m.text)
+        .join(' ')
+        .toLowerCase();
+    if (RegExp(r'[ğüşıöç]').hasMatch(recentUser) ||
+        recentUser.contains('gece') ||
+        recentUser.contains('yalnız') ||
+        recentUser.contains('zorunda') ||
+        recentUser.contains('belki')) {
+      return 'Sese devam et';
+    }
+    return 'Continue to audio';
   }
 
   @override
@@ -184,6 +206,7 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
             setState(() {
               isLoadingAudio = true;
               _audioHandoffFailed = false;
+              _audioContinueAvailable = false;
             });
           }
           if (hasExpression) {
@@ -222,6 +245,7 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
     setState(() {
       isLoadingAudio = true;
       _audioHandoffFailed = false;
+      _audioContinueAvailable = false;
     });
 
     if (!mounted) return;
@@ -254,7 +278,7 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
     // Player return contract:
     //   true  → bed completed naturally → close night
     //   false → bed load/play failed → stay on chat + retry
-    //   null  → user left player early → close night
+    //   null  → user left player early → stay on chat + continue CTA
     final playerOk = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
@@ -279,6 +303,18 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
       setState(() {
         isLoadingAudio = false;
         _audioHandoffFailed = true;
+        _audioContinueAvailable = false;
+        _expressionQuiet = false;
+      });
+      return;
+    }
+
+    if (playerOk == null) {
+      // Early leave is not failure and not night completion.
+      setState(() {
+        isLoadingAudio = false;
+        _audioHandoffFailed = false;
+        _audioContinueAvailable = true;
         _expressionQuiet = false;
       });
       return;
@@ -292,7 +328,24 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
     if (_lastTurnResult?.exitDecision != ExitDecision.transitionToAudio) {
       return;
     }
-    setState(() => _audioHandoffFailed = false);
+    setState(() {
+      _audioHandoffFailed = false;
+      _audioContinueAvailable = false;
+    });
+    await _startAudioFlow();
+  }
+
+  /// Re-opens the same handoff bed after an intentional early Player leave.
+  Future<void> _continueAudioHandoff() async {
+    if (!mounted || isLoadingAudio) return;
+    if (_lastTurnResult?.exitDecision != ExitDecision.transitionToAudio) {
+      return;
+    }
+    if (_session == null) return;
+    setState(() {
+      _audioContinueAvailable = false;
+      _audioHandoffFailed = false;
+    });
     await _startAudioFlow();
   }
 
@@ -407,6 +460,13 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
           if (isLoadingAudio) const _AudioPreparingCue(),
           if (_audioHandoffFailed && !isLoadingAudio)
             _AudioRetryCue(onRetry: _retryAudioHandoff),
+          if (_audioContinueAvailable &&
+              !_audioHandoffFailed &&
+              !isLoadingAudio)
+            _AudioContinueCue(
+              label: _continueAudioLabel,
+              onContinue: _continueAudioHandoff,
+            ),
           _buildInput(),
         ],
       ),
@@ -636,6 +696,52 @@ class _AudioRetryCue extends StatelessWidget {
               ),
             ),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+/// Shown after intentional early Player leave. Not an error. Not assistant speech.
+class _AudioContinueCue extends StatelessWidget {
+  const _AudioContinueCue({
+    required this.label,
+    required this.onContinue,
+  });
+
+  final String label;
+  final Future<void> Function() onContinue;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      top: false,
+      bottom: false,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(24, 4, 24, 10),
+        child: GestureDetector(
+          onTap: () => unawaited(onContinue()),
+          child: Container(
+            width: double.infinity,
+            height: 48,
+            alignment: Alignment.center,
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(18),
+              border: Border.all(
+                color: Colors.white.withValues(alpha: 0.18),
+              ),
+            ),
+            child: Text(
+              label,
+              style: TextStyle(
+                color: Colors.white.withValues(alpha: 0.92),
+                fontSize: 14,
+                letterSpacing: 0.6,
+                fontWeight: FontWeight.w400,
+              ),
+            ),
+          ),
         ),
       ),
     );

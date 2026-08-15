@@ -38,9 +38,9 @@ Must be done before any external TestFlight build is worth distributing.
 - **Status:** Code-ready / **not complete** until manual Apple + RevenueCat steps finish
 
 ### 1.2 Publish live Privacy Policy + Terms URLs
-- **Why it matters:** App Store Connect and App Review require working public legal URLs. Current `nocta.app/privacy` and `nocta.app/terms` are not shippable placeholders.
+- **Why it matters:** App Store Connect and App Review require working public legal URLs. Canonical V1 URLs are `https://seheriimoo.github.io/akbulut/privacy/` and `https://seheriimoo.github.io/akbulut/terms/` (GitHub Pages; no custom domain).
 - **Estimated effort:** 0.5–1 day (host pages matching in-app baseline text)
-- **Dependency:** Domain/hosting access; copy already exists in `compliance_texts.dart`
+- **Dependency:** GitHub Pages enabled on `seheriimoo/akbulut`; copy already exists in `compliance_texts.dart`
 
 ### 1.3 App Store Connect app record + TestFlight build pipeline
 - **Why it matters:** Cannot distribute TestFlight without ASC app, signing, and a reproducible `flutter build ipa` with `--dart-define-from-file`.

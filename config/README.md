@@ -5,10 +5,20 @@
 #
 # Required keys:
 #   OPENAI_API_KEY
-#   REVENUECAT_API_KEY   (Apple public SDK key: appl_…)
+#   REVENUECAT_API_KEY   (Apple public SDK key ONLY: appl_… — not goog_/secret keys)
 #
 # Optional keys:
 #   SENTRY_DSN   (production crash reporting; leave empty to disable upload)
+#   PRIVACY_POLICY_URL   (https only; defaults to https://seheriimoo.github.io/akbulut/privacy/)
+#   TERMS_OF_SERVICE_URL (https only; defaults to https://seheriimoo.github.io/akbulut/terms/)
+#
+# Legal publishing (P0-3):
+#   Publish tree: legal/site/  → GitHub Pages project site (see legal/HOSTING_AND_DNS.md)
+#   Owner checklist: config/LEGAL_PUBLISHING_CHECKLIST.md
+#   In-app baseline: lib/compliance/compliance_texts.dart
+#   Canonical URLs: https://seheriimoo.github.io/akbulut/privacy/ , https://seheriimoo.github.io/akbulut/terms/
+#   V1 uses the default github.io URL (no custom domain).
+#   Emails privacy@ / support@nocta.app remain intended; mailbox setup is OWNER ACTION and deferred.
 #
 # Placeholder values (REPLACE_WITH_…) are treated as missing by AppConfig.
 #

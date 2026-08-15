@@ -1,0 +1,47 @@
+# Deploy Nocta legal static site (GitHub Pages project site)
+#
+# Publishes legal/site/ to https://seheriimoo.github.io/akbulut/
+# No custom domain / no CNAME file — V1 uses the default github.io URL.
+# OWNER ACTION: Settings → Pages → Source: GitHub Actions, then run this workflow.
+# Do not enter a custom domain in Pages settings.
+
+name: Deploy legal site
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+      - master
+      - fix/night-path-reliability-a1
+    paths:
+      - 'legal/site/**'
+      - '.github/workflows/deploy-legal-site.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-legal
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Configure Pages
+        uses: actions/configure-pages@v5
+      - name: Upload legal/site artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: legal/site
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

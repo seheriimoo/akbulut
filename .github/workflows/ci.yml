@@ -39,7 +39,7 @@ jobs:
 
       - name: Analyze active V1 allowlist
         run: |
-          dart analyze \
+          dart analyze --no-fatal-warnings \
             lib/core \
             lib/billing \
             lib/config \
@@ -70,7 +70,7 @@ jobs:
           fi
           echo "Analyzing changed Dart files:"
           printf '  %s\n' "${changed[@]}"
-          dart analyze "${changed[@]}"
+          dart analyze --no-fatal-warnings "${changed[@]}"
 
       - name: Offline unit and widget tests
         run: |

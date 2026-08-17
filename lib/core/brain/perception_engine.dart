@@ -97,6 +97,8 @@ class PerceptionEngine {
     return _containsAny(text, const [
       'düşünüyorum',
       'dusunuyorum',
+      'düşünüyom',
+      'dusunuyom',
       'thinking',
       'replaying',
       'replay',
@@ -115,24 +117,41 @@ class PerceptionEngine {
       'mind will not stop',
       "won't stop",
       'wont stop',
+      'donup duruyorum',
+      'dönüp duruyorum',
+      'okuyup duruyorum',
+      'bir tur daha',
+      'yazsam mi',
+      'yazsam mı',
     ]);
   }
 
   bool _hasFutureUncertainty(String text) {
     return _containsAny(text, const [
-      'ya şöyle olursa',
-      'what if',
-      'what-if',
-      'tomorrow',
-      'worst case',
-      'worst versions',
-      'falls apart',
-    ]);
+          'ya şöyle olursa',
+          'what if',
+          'what-if',
+          'tomorrow',
+          'worst case',
+          'worst versions',
+          'falls apart',
+          'yetisemeyecegim',
+          'yetişemeyeceğim',
+          'kaciracagim',
+          'kaçıracağım',
+          'toplantida',
+          'toplantıda',
+          'mahvettim',
+        ]) ||
+        _containsWord(text, const ['yarın', 'yarin']);
   }
 
   bool _hasMentalOverload(String text) {
     return _containsAny(text, const [
       'kafam durmuyor',
+      'aklim durmuyor',
+      'aklım durmuyor',
+      'durmuyor',
       "mind won't stop",
       'mind will not stop',
       'mind will not settle',
@@ -159,6 +178,16 @@ class PerceptionEngine {
       'overwhelm',
       'swirl',
       'swirling',
+      'kafayi yicem',
+      'kafayı yiyeceğim',
+      'kafayi yiycem',
+      'duramiyom',
+      'duramıyorum',
+      'duramiyorum',
+      'uyuyamiyorum',
+      'uyuyamıyorum',
+      'kafamda donuyor',
+      'kafamda dönüyor',
     ]);
   }
 
@@ -194,6 +223,14 @@ class PerceptionEngine {
       'kaygi',
       'endişe',
       'endise',
+      'ozledim',
+      'özledim',
+      'kavga',
+      'fatura',
+      'faturalar',
+      'sinir oluyorum',
+      'cok kotu',
+      'çok kötü',
     ]);
   }
 
@@ -209,6 +246,9 @@ class PerceptionEngine {
       'by myself',
       'kendimi yalnız',
       'kendimi yalniz',
+      'kimse yok',
+      'ozledim',
+      'özledim',
     ]);
   }
 
@@ -237,6 +277,21 @@ class PerceptionEngine {
       'still cannot',
       "won't settle",
       'will not settle',
+      'durduramiyorum',
+      'durduramıyorum',
+      'birakamiyom',
+      'birakamiyorum',
+      'bırakamıyorum',
+      'hala ayni yerdeyim',
+      'hâlâ aynı yerdeyim',
+      'aklımdan',
+      'aklimdan',
+      'anlamıyosun',
+      'anlamiyosun',
+      'anlamıyorsun',
+      'anlamiyorsun',
+      'robot gibi',
+      'beni anlam',
     ]);
   }
 
@@ -268,6 +323,17 @@ class PerceptionEngine {
       'enough for tonight',
       "that's enough",
       'that is enough',
+      'biraz daha sessiz',
+      'daha sessiz',
+      'yumuşuyor',
+      'yumusuyor',
+      'yumuşadı',
+      'yumusadi',
+      'daha hafif',
+      'rahatladım',
+      'rahatladim',
+      'bırakabilirim',
+      'birakabilirim',
     ]);
   }
 
@@ -291,6 +357,17 @@ class PerceptionEngine {
   bool _containsAny(String text, List<String> markers) {
     for (final marker in markers) {
       if (text.contains(marker)) return true;
+    }
+    return false;
+  }
+
+  /// Whole-token match for short stems that would false-hit inside English
+  /// ("yarin" in "yearning", "para" in "preparation").
+  bool _containsWord(String text, List<String> words) {
+    for (final word in words) {
+      if (RegExp('\\b${RegExp.escape(word)}\\b').hasMatch(text)) {
+        return true;
+      }
     }
     return false;
   }

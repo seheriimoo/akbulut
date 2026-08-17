@@ -32,6 +32,7 @@ void main() {
       expect(forbidden, contains('Permission'));
       expect(forbidden, contains('Sleep commands'));
       expect(forbidden, contains('Advice'));
+      expect(forbidden, contains('Leave some of that here'));
       expect(slice.responseLength, contains('28 words'));
     });
 
@@ -142,6 +143,21 @@ void main() {
       );
       expect(slice.systemAppendix, contains('Lean TR:'));
       expect(slice.forbiddenMoves.join(' '), contains('Turkish stamp pair'));
+    });
+
+    test('ASCII TR night locks Turkish and forbids on-your-mind Naming stems', () {
+      final slice = intelligence.compile(
+        stage: releaseStage,
+        conversationGrounding: grounding([
+          'kafayi yicem ya bu gece.',
+          'yani o kadar dusunuyom ki duramiyom.',
+        ]),
+      );
+      final all =
+          '${slice.putDownDirective}\n${slice.forbiddenMoves.join(' ')}';
+      expect(slice.putDownDirective, contains('Turkish only'));
+      expect(all, contains('on your mind'));
+      expect(all, contains('English Release on a Turkish night'));
     });
   });
 }

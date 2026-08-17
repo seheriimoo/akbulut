@@ -49,6 +49,14 @@ class ConversationPolicy {
       );
     }
 
+    // Protocol protest stays on Receipt — do not climb to Permission/Release.
+    if (_isProtocolProtest(message)) {
+      return const ConversationDecision(
+        phase: ConversationPhase.validation,
+        shouldSpeak: true,
+      );
+    }
+
     if (_isNeutralEntry(
       releaseDecision: releaseDecision,
       message: message,
@@ -259,5 +267,33 @@ class ConversationPolicy {
     }
     final hyp = understanding.thinkingFunctionHypothesis;
     return hyp != null && hyp.confidence >= 0.55;
+  }
+
+  /// Tight protest detector: the person is objecting to Nocta's speech, not
+  /// naming night-load. Private helper — not a new engine.
+  bool _isProtocolProtest(String? message) {
+    if (message == null) return false;
+    var n = message.trim().toLowerCase();
+    if (n.isEmpty) return false;
+    n = n
+        .replaceAll('ş', 's')
+        .replaceAll('ğ', 'g')
+        .replaceAll('ü', 'u')
+        .replaceAll('ö', 'o')
+        .replaceAll('ı', 'i')
+        .replaceAll('ç', 'c');
+
+    if (n.contains('robot gibi')) return true;
+    if (n.contains('beni anlam')) return true;
+    if (n.contains('anlamiyosun')) return true;
+    if (n.contains('anlamiyorsun')) return true;
+    if (n.contains('surekli ayni')) return true;
+    if (n.contains('ayni seyi soyl')) return true;
+    if (n.contains('like a robot')) return true;
+    if (n.contains('talking like a robot')) return true;
+    if (RegExp(r"you don'?t understand( me)?").hasMatch(n)) return true;
+    if (n.contains('same thing over')) return true;
+    if (n.contains('keep saying the same')) return true;
+    return false;
   }
 }

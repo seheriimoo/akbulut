@@ -28,7 +28,7 @@ void main() {
       expect(forbidden, contains('Release'));
       expect(forbidden, contains('Advice'));
       expect(forbidden, contains('Questions'));
-      expect(slice.responseLength, contains('24 words'));
+      expect(slice.responseLength, contains('18 words'));
     });
 
     test('does not structurally require figure/sort/solve-tonight stamps', () {
@@ -67,6 +67,20 @@ void main() {
       expect(slice.userContent, contains('what if'));
       expect(slice.systemAppendix, contains('Grounding rule'));
       expect(slice.userContent, isNot(contains('First Stop Moment')));
+    });
+
+    test('self-permission grounding asks for neighboring ease, not echo', () {
+      final slice = intelligence.compile(
+        stage: permissionStage,
+        conversationGrounding: grounding(
+          "I don't have to figure it all out tonight.",
+        ),
+      );
+
+      expect(slice.userContent, contains('Self-permission note'));
+      expect(slice.userContent, contains('neighboring ease'));
+      expect(slice.forbiddenMoves.join(' '), contains('Echoing a self-permission'));
+      expect(slice.systemAppendix, contains('already granted themselves'));
     });
 
     test('compiler Permission overlay is deterministic and stage-scoped', () {

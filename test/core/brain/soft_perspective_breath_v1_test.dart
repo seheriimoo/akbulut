@@ -53,9 +53,7 @@ void main() {
 
     test('Guard allows Golden V2 short-line Receipt under word cap', () {
       const text =
-          'It sounds like tomorrow has already taken up space in tonight. '
-          'The mind often tries to visit the future in search of certainty. '
-          'Perhaps what feels heavy is not tomorrow. '
+          'Tomorrow has already taken up space in tonight. '
           'It may be carrying tomorrow before it exists.';
       expect(
         guard.allow(

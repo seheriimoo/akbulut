@@ -145,7 +145,7 @@ void main() {
           blocker: blocker,
           access: const PremiumProductAccess(isPremium: false),
         ),
-        SleepBedCatalog.globalSleepBed,
+        PremiumProductAccess.freeSleepBedAsset,
       );
     });
 

@@ -5,7 +5,13 @@ import 'package:flutter/material.dart';
 /// Static copy only — no Conversation / LLM turn.
 /// Memory writes happen before this screen via [HcosLiveEntry.completeNightSession].
 class NightCompleteScreen extends StatelessWidget {
-  const NightCompleteScreen({super.key});
+  const NightCompleteScreen({
+    super.key,
+    this.showPremiumTransition = false,
+  });
+
+  /// Very light post-third-night note. Not a paywall. Not a sales pitch.
+  final bool showPremiumTransition;
 
   void _leaveNight(BuildContext context) {
     Navigator.of(context).pushNamedAndRemoveUntil('/', (route) => false);
@@ -54,6 +60,19 @@ class NightCompleteScreen extends StatelessWidget {
                   fontWeight: FontWeight.w300,
                 ),
               ),
+              if (showPremiumTransition) ...[
+                const SizedBox(height: 20),
+                Text(
+                  'If tomorrow night your mind is still awake, Nocta can meet you there.',
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withValues(alpha: 0.48),
+                    fontSize: 14,
+                    height: 1.5,
+                    fontWeight: FontWeight.w300,
+                  ),
+                ),
+              ],
               const Spacer(flex: 3),
               SizedBox(
                 height: 56,

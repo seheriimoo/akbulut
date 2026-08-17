@@ -146,9 +146,11 @@ class V1ScenarioHarness {
         // Exit/audio authorization consistency with frozen ExitIntelligence.
         if (exit == ExitDecision.transitionToAudio) {
           sawAudioTransition = true;
-          if (phase != ConversationPhase.audio) {
+          // Enough may speak once with transition authorized, then audio.
+          if (phase != ConversationPhase.audio &&
+              phase != ConversationPhase.continuity) {
             fail(
-              'turn $turnIndex: transitionToAudio without audio phase '
+              'turn $turnIndex: transitionToAudio without audio/Enough phase '
               '(phase=${phase.name})',
             );
           }

@@ -43,6 +43,31 @@ void main() {
       );
     });
 
+    test('admits keep-going-over rumination as Naming, not bait', () {
+      expect(
+        guard.allow(
+          utterance: const ConversationUtterance(
+            text:
+                'You keep going over everything you have to do. That is still on your mind.',
+          ),
+          what: ConversationPhase.naming,
+        ),
+        isNotNull,
+      );
+    });
+
+    test('still rejects keep-going conversation bait', () {
+      expect(
+        guard.allow(
+          utterance: const ConversationUtterance(
+            text: 'Those loops keep repeating. Want to keep going?',
+          ),
+          what: ConversationPhase.naming,
+        ),
+        isNull,
+      );
+    });
+
     test('admits evident load + persistence pattern', () {
       expect(
         guard.allow(

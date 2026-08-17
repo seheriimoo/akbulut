@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:flutter_dotenv/flutter_dotenv.dart';
 import 'package:http/http.dart' as http;
 
+import '../../config/app_config.dart';
 import 'vendor_provider.dart';
 
 /// OpenAI chat-completions transport adapter.
@@ -59,9 +60,19 @@ class OpenAIVendorProvider implements VendorProvider {
     }
   }
 
+  /// Prefer the wired key; fall back to env / AppConfig at call time.
+  String _resolvedApiKey() {
+    final wired = apiKey.trim();
+    if (wired.isNotEmpty) return wired;
+    final env = _readApiKey().trim();
+    if (env.isNotEmpty) return env;
+    return AppConfig.openAiApiKey.trim();
+  }
+
   @override
   Future<VendorResponse> complete(VendorRequest request) async {
-    if (apiKey.trim().isEmpty) {
+    final resolvedKey = _resolvedApiKey();
+    if (resolvedKey.isEmpty) {
       throw const VendorError(
         kind: VendorErrorKind.auth,
         message: 'OpenAI API key is missing',
@@ -74,7 +85,7 @@ class OpenAIVendorProvider implements VendorProvider {
         endpoint,
         headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer $apiKey',
+          'Authorization': 'Bearer $resolvedKey',
         },
         body: jsonEncode(_serialize(request)),
       );

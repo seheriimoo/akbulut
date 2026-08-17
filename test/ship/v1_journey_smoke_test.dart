@@ -151,15 +151,15 @@ void main() {
       expect(manifest.contains('WAKE_LOCK'), isTrue);
     });
 
-    test('Live chat owns premium → audio → completeNightSession order', () {
+    test('Live chat owns audio → completeNightSession after Player', () {
       final source = File('lib/screens/ai_chat_screen.dart').readAsStringSync();
       final premiumIdx = source.indexOf('PaywallScreen');
       final playerIdx = source.indexOf('PlayerScreen(');
       final finishIdx = source.indexOf('_finishNightAndShowClosing');
       final completeIdx = source.indexOf('completeNightSession');
 
-      expect(premiumIdx, greaterThan(0));
-      expect(playerIdx, greaterThan(premiumIdx));
+      expect(premiumIdx, -1);
+      expect(playerIdx, greaterThan(0));
       expect(finishIdx, greaterThan(0));
       expect(completeIdx, greaterThan(0));
 
@@ -170,6 +170,7 @@ void main() {
       );
       expect(transitionBlock.contains('_startAudioFlow'), isTrue);
       expect(transitionBlock.contains('_closeNightSession'), isFalse);
+      expect(transitionBlock.contains('PaywallScreen'), isFalse);
     });
 
     test('Player finishes audio session and pops for night close', () {
@@ -218,6 +219,7 @@ void main() {
     test('Welcome Begin gates consent vs chat', () {
       final source = File('lib/main.dart').readAsStringSync();
       expect(source.contains('ConsentStore.hasAcceptedBaseline()'), isTrue);
+      expect(source.contains('ensureNightConversationAllowed'), isTrue);
       expect(
         source.contains('Navigator.pushNamed(context, AppRoutes.aiChat)') ||
             source.contains("Navigator.pushNamed(context, '/ai-chat')"),
@@ -245,7 +247,7 @@ void main() {
       );
     });
 
-    test('Handoff blocker → SleepBedCatalog → shipped GlobalSleep asset', () {
+    test('Handoff blocker → SleepBedCatalog → duration-matched entitlement bed', () {
       const handoff = NightAudioHandoff();
       const beds = SleepBedCatalog();
       const free = PremiumProductAccess(isPremium: false);
@@ -280,7 +282,7 @@ void main() {
       expect(lonelyBlocker, 'loneliness');
       final lonelyAsset =
           beds.assetFor(blocker: lonelyBlocker, access: free);
-      expect(lonelyAsset, SleepBedCatalog.globalSleepBed);
+      expect(lonelyAsset, PremiumProductAccess.freeSleepBedAsset);
       expect(File(lonelyAsset).existsSync(), isTrue);
 
       final mindSession = NightSession(

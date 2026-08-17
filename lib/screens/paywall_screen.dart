@@ -3,7 +3,8 @@ import 'package:purchases_flutter/purchases_flutter.dart';
 
 import '../billing/billing_catalog.dart';
 import '../billing/billing_service.dart';
-import '../billing/premium_product_access.dart';
+import '../billing/subscription_disclosure.dart';
+import 'compliance/legal_document_screen.dart';
 
 /// Production paywall backed by live RevenueCat offerings.
 ///
@@ -54,7 +55,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
       setState(() {
         _alreadyPremium = premium;
         _packages = packages;
-        _selected = packages.isEmpty ? null : packages.first;
+        _selected = BillingCatalog.preferredPackage(packages);
         _loading = false;
         if (packages.isEmpty && !premium) {
           _error =
@@ -147,7 +148,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
   String _ctaLabel(Package package) {
     final intro = package.storeProduct.introductoryPrice;
     if (intro != null) {
-      return 'Continue';
+      return 'Start free trial';
     }
     return 'Subscribe';
   }
@@ -159,6 +160,78 @@ class _PaywallScreenState extends State<PaywallScreen> {
     return '${intro.priceString} for ${intro.periodNumberOfUnits} $period intro';
   }
 
+  String _lengthLabel(Package package) {
+    switch (package.packageType) {
+      case PackageType.monthly:
+        return '1 month';
+      case PackageType.annual:
+        return '1 year';
+      case PackageType.weekly:
+        return '1 week';
+      default:
+        return 'auto-renewing subscription';
+    }
+  }
+
+  void _openLegal(LegalDocumentKind kind) {
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => LegalDocumentScreen(kind: kind),
+      ),
+    );
+  }
+
+  Widget _subscriptionLegalFooter() {
+    return Column(
+      children: [
+        Text(
+          SubscriptionDisclosure.autoRenewTerms,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            color: Colors.white.withValues(alpha: 0.55),
+            fontSize: 11,
+            height: 1.45,
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          alignment: WrapAlignment.center,
+          spacing: 16,
+          children: [
+            TextButton(
+              onPressed: _busy
+                  ? null
+                  : () => _openLegal(LegalDocumentKind.privacyPolicy),
+              child: Text(
+                SubscriptionDisclosure.privacyLinkLabel,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.7),
+                  fontSize: 12,
+                  decoration: TextDecoration.underline,
+                  decorationColor: Colors.white.withValues(alpha: 0.35),
+                ),
+              ),
+            ),
+            TextButton(
+              onPressed: _busy
+                  ? null
+                  : () => _openLegal(LegalDocumentKind.termsOfService),
+              child: Text(
+                SubscriptionDisclosure.termsLinkLabel,
+                style: TextStyle(
+                  color: Colors.white.withValues(alpha: 0.7),
+                  fontSize: 12,
+                  decoration: TextDecoration.underline,
+                  decorationColor: Colors.white.withValues(alpha: 0.35),
+                ),
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -166,7 +239,8 @@ class _PaywallScreenState extends State<PaywallScreen> {
       body: SafeArea(
         child: Padding(
           padding: const EdgeInsets.fromLTRB(24, 20, 24, 24),
-          child: Column(
+          child: SingleChildScrollView(
+            child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Align(
@@ -182,7 +256,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
               ),
               const SizedBox(height: 12),
               const Text(
-                'Sleep Deeper Tonight',
+                'Every night your mind is still awake',
                 style: TextStyle(
                   color: Colors.white,
                   fontSize: 34,
@@ -193,7 +267,7 @@ class _PaywallScreenState extends State<PaywallScreen> {
               ),
               const SizedBox(height: 14),
               Text(
-                'Unlock your personalized sleep experience and move into rest with more ease tonight.',
+                'A conversation that leads into sleep — whenever you need it.',
                 style: TextStyle(
                   color: Colors.white.withValues(alpha: 0.72),
                   fontSize: 16,
@@ -202,30 +276,26 @@ class _PaywallScreenState extends State<PaywallScreen> {
               ),
               const SizedBox(height: 28),
               const _FeatureCard(
-                icon: Icons.psychology_alt_rounded,
-                title: 'Personalized sleep guidance',
+                icon: Icons.nights_stay_rounded,
+                title: 'Return any night',
                 subtitle:
-                    'AI-supported transitions tailored to what is keeping you awake.',
+                    'Keep using Nocta on the nights your mind will not settle.',
               ),
               const SizedBox(height: 14),
-              _FeatureCard(
-                icon: Icons.nightlight_round,
-                title: 'Deeper sleep sessions',
+              const _FeatureCard(
+                icon: Icons.psychology_alt_rounded,
+                title: 'The same night conversation',
                 subtitle:
-                    'Extend beyond the free '
-                    '${PremiumProductAccess.freeSessionLength.inMinutes}-minute '
-                    'bed to a '
-                    '${PremiumProductAccess.premiumSessionLength.inMinutes}-minute '
-                    'premium session.',
+                    'Full conversation every night you use Nocta — not a lesser version.',
               ),
               const SizedBox(height: 14),
               const _FeatureCard(
                 icon: Icons.auto_awesome_rounded,
-                title: 'A softer way to fall asleep',
+                title: 'Conversation into sleep',
                 subtitle:
-                    'Move from mental noise into rest with less effort and more support.',
+                    'Talk, let go, and move into rest when you are ready.',
               ),
-              const Spacer(),
+              const SizedBox(height: 28),
               if (_loading)
                 const Center(
                   child: Padding(
@@ -290,6 +360,9 @@ class _PaywallScreenState extends State<PaywallScreen> {
                   final selected =
                       _selected?.identifier == package.identifier;
                   final intro = _introLabel(package);
+                  final recommended = BillingCatalog.isYearlyProduct(
+                    package.storeProduct.identifier,
+                  );
                   return Padding(
                     padding: const EdgeInsets.only(bottom: 12),
                     child: InkWell(
@@ -312,20 +385,46 @@ class _PaywallScreenState extends State<PaywallScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
-                              _titleLabel(package),
-                              style: TextStyle(
-                                color: Colors.white.withValues(alpha: 0.72),
-                                fontSize: 14,
-                                fontWeight: FontWeight.w500,
-                              ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    _titleLabel(package),
+                                    style: TextStyle(
+                                      color: Colors.white.withValues(alpha: 0.72),
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                                if (recommended)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 10,
+                                      vertical: 4,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: Colors.white.withValues(alpha: 0.12),
+                                      borderRadius: BorderRadius.circular(999),
+                                    ),
+                                    child: const Text(
+                                      'Recommended',
+                                      style: TextStyle(
+                                        color: Colors.white,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                        letterSpacing: 0.2,
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                             const SizedBox(height: 8),
                             Text(
-                              _priceLabel(package),
+                              '${_priceLabel(package)} · ${_lengthLabel(package)}',
                               style: const TextStyle(
                                 color: Colors.white,
-                                fontSize: 28,
+                                fontSize: 22,
                                 fontWeight: FontWeight.w600,
                                 letterSpacing: -0.4,
                               ),
@@ -390,21 +489,10 @@ class _PaywallScreenState extends State<PaywallScreen> {
                   ),
                 ),
               ],
-              const SizedBox(height: 4),
-              Center(
-                child: TextButton(
-                  onPressed: _busy ? null : () => Navigator.pop(context, false),
-                  child: Text(
-                    'Continue with limited version',
-                    style: TextStyle(
-                      color: Colors.white.withValues(alpha: 0.66),
-                      fontSize: 15,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ),
+              const SizedBox(height: 12),
+              _subscriptionLegalFooter(),
             ],
+          ),
           ),
         ),
       ),

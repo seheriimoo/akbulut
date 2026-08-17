@@ -81,8 +81,8 @@ class PermissionIntelligence {
       'Release put-down.';
 
   static const String _responseLength =
-      'One or two short sentences, maximum 24 words. '
-      'Enough breath to ease obligation—not a clipped stamp.';
+      'One short sentence, maximum 18 words. '
+      'Ease obligation once—then stop. No second “it’s okay” sentence.';
 
   static const String _sealedWhatSignature =
       'permission / Permission — ease pressure toward rest: non-resolution is '
@@ -126,6 +126,8 @@ class PermissionIntelligence {
         '“leave it here”, “the night can hold”',
     'Inventing a task, conflict, or puzzle they did not bring',
     'Unsupported verbatim parroting of the user’s wording as padding',
+    'Echoing a self-permission they already granted (“I don’t have to figure '
+        'it all out tonight” restated as “you don’t need to keep figuring…”)',
     'Emitting internal cognition labels or camelCase kind ids in speech',
     'Canned Gold dialogue lines or reply-bank copy',
   ];
@@ -150,6 +152,8 @@ class PermissionIntelligence {
       ..writeln(_speechActBarrier)
       ..writeln()
       ..writeln(_shapeDirective(currentTurn))
+      ..writeln()
+      ..writeln(_languageDirective(currentTurn))
       ..writeln()
       ..writeln(PermissionRealizationContract.intelligenceSteeringDirective());
 
@@ -206,10 +210,19 @@ class PermissionIntelligence {
             'words only; do not re-receive or name the load.'
         : '';
 
-    return 'One short sentence (max 20 words). Restward. No advice. '
-        'No solving. No question. Vary naturally only inside the Permission '
+    final selfPermission = currentTurn != null && _looksSelfPermission(currentTurn)
+        ? ' Self-permission note: they already eased themselves—do not echo '
+            'their clause. Grant a neighboring ease (pause / leave unresolved / '
+            'no more rehearsal) without repeating don’t-have-to / figure / '
+            'tonight.'
+        : '';
+
+    return 'One short sentence (max 18 words). Restward. No advice. '
+        'No solving. No question. One ease only—then stop. '
+        'Vary naturally only inside the Permission '
         'realization contract; do not stamp figure/sort/solve-tonight by '
-        'default.$lowLoad$active';
+        'default.$lowLoad$active$selfPermission '
+        '${_languageDirective(currentTurn)}';
   }
 
   String _systemAppendix({
@@ -221,7 +234,9 @@ class PermissionIntelligence {
     final stampRule =
         'Anti-stamp rule: do not default to “you don’t have to '
         'figure/sort/solve this out tonight.” Keep Permission meaning with '
-        'natural variation only inside the Permission realization contract.';
+        'natural variation only inside the Permission realization contract. '
+        'If they already granted themselves that ease, do not echo their '
+        'clause — grant a neighboring pause instead.';
 
     final lowLoadRule =
         'Low-load rule: if their words are sparse or already quiet, authorize '
@@ -266,8 +281,30 @@ $driftRule
 $antiRepeatRule
 $functionRule
 $contractRule
+${_languageDirective(currentTurn)}
 $grounding
 ''';
+  }
+
+  String _languageDirective(String? currentTurn) {
+    final text = (currentTurn ?? '').toLowerCase();
+    final turkish = RegExp(r'[ğüşıöç]').hasMatch(text) ||
+        text.contains('durmuyor') ||
+        text.contains('uyuyamiyor') ||
+        text.contains('kafam') ||
+        text.contains('düşün') ||
+        text.contains('dusun') ||
+        text.contains('bilmiyorum') ||
+        text.contains('konusmak') ||
+        text.contains('konuşmak') ||
+        text.contains('gece') ||
+        text.contains('yalniz') ||
+        text.contains('yalnız');
+    if (turkish) {
+      return 'Language lock: the person wrote Turkish. Reply in Turkish only. '
+          'Do not answer in English.';
+    }
+    return 'Language lock: stay in one language. Mirror theirs if it is clear.';
   }
 
   String? _currentTurnGrounding(ConversationGroundingBuffer? grounding) {
@@ -312,6 +349,20 @@ $grounding
         lower.contains('bill') ||
         lower.contains('argu') ||
         lower.contains('fight');
+  }
+
+  bool _looksSelfPermission(String text) {
+    final lower = text.toLowerCase();
+    return lower.contains("don't have to") ||
+        lower.contains('dont have to') ||
+        lower.contains("don't need to") ||
+        lower.contains('dont need to') ||
+        lower.contains('not tonight') ||
+        lower.contains('leave it for tonight') ||
+        lower.contains('zorunda değil') ||
+        lower.contains('zorunda degil') ||
+        lower.contains('çözmek zorunda') ||
+        lower.contains('cozmek zorunda');
   }
 }
 

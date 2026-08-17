@@ -39,7 +39,8 @@ class AppConfig {
 
   static bool get hasOpenAiApiKey => isUsableSecret(_openAiApiKey);
 
-  static bool get hasRevenueCatApiKey => isUsableSecret(_revenueCatApiKey);
+  static bool get hasRevenueCatApiKey =>
+      isUsableRevenueCatAppleSdkKey(_revenueCatApiKey);
 
   static bool get hasSentryDsn => isUsableSecret(_sentryDsn);
 
@@ -51,6 +52,12 @@ class AppConfig {
     if (upper.startsWith('REPLACE_WITH_')) return false;
     if (upper == 'YOUR_KEY_HERE' || upper == 'TODO') return false;
     return true;
+  }
+
+  /// Apple public SDK key only (`appl_…`). Rejects placeholders and non-Apple keys.
+  static bool isUsableRevenueCatAppleSdkKey(String value) {
+    if (!isUsableSecret(value)) return false;
+    return value.trim().startsWith('appl_');
   }
 
   /// Load production configuration from dart-defines and seed dotenv.

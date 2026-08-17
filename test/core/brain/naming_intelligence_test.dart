@@ -51,6 +51,9 @@ void main() {
       expect(slice.userContent, contains('name only what is evident'));
       expect(slice.userContent, contains('loops over and over'));
       expect(slice.systemAppendix, contains('Evidence rule'));
+      expect(slice.systemAppendix, contains('Night-object rule'));
+      expect(slice.userContent, contains('pasted clause'));
+      expect(slice.userContent, contains('Tomorrow is still on your mind'));
       expect(slice.userContent, isNot(contains('Lived expression already received')));
     });
 

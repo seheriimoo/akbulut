@@ -125,7 +125,7 @@ void main() {
         compiled.systemContent,
         contains("You don't have to solve this tonight."),
       );
-      expect(compiled.stage.responseLength, contains('24 words'));
+      expect(compiled.stage.responseLength, contains('18 words'));
     });
 
     test('Release compile includes prior admitted anti-repeat', () {

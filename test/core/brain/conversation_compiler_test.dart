@@ -370,6 +370,31 @@ void main() {
       }
     });
   });
+
+  test('TR current turn compiles a hard Turkish language lock', () {
+    final compiled = compiler.compile(
+      LlmInvocationPackage(
+        what: ConversationPhase.validation,
+        conversationGrounding: const ConversationGroundingBuffer.empty()
+            .appendUserUtterance('uyuyamiyorum.'),
+      ),
+    )!;
+    expect(compiled.systemContent, contains('LANGUAGE LOCK'));
+    expect(compiled.systemContent, contains('Turkish only'));
+    expect(compiled.userContent, contains('LANGUAGE LOCK'));
+  });
+
+  test('EN current turn compiles a hard English language lock', () {
+    final compiled = compiler.compile(
+      LlmInvocationPackage(
+        what: ConversationPhase.release,
+        conversationGrounding: const ConversationGroundingBuffer.empty()
+            .appendUserUtterance("I can't stop thinking about tomorrow."),
+      ),
+    )!;
+    expect(compiled.systemContent, contains('LANGUAGE LOCK'));
+    expect(compiled.systemContent, contains('English only'));
+  });
 }
 
 LivingMindModel _emptyModel() {

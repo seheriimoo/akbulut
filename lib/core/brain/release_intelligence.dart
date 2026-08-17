@@ -101,11 +101,14 @@ class ReleaseIntelligence {
             'FORBIDDEN stamp pair (never default to it): '
             '“Bunu burada bırak. Gece bunu taşıyabilir.” or near-identical '
             '“Bunu burada bırak. Gece tutabilir.” '
-            'Pick ONE lean family below; do not concatenate the same two-line stamp.'
+            'Pick ONE lean family below; do not concatenate the same two-line stamp. '
+            'Do not use English Naming stems (“on your mind”).'
         : 'Reply in English only. Guard-legal put-down stems include: '
             '“set this down” / “leave it here” / “leave some of that here” / '
             '“let go for now” / “let go of that tonight” / “the night can hold” / '
             '“loosen your grip.” '
+            'Never write Naming stems (“on your mind”, “weighing on you”, '
+            '“still holding on”, “lingering”). '
             'Prefer plain natural wording over “Let it rest for now.”';
 
     return 'Release only: invite a quiet putting-down. Keep the sealed WHAT. '
@@ -126,14 +129,20 @@ class ReleaseIntelligence {
   static const List<String> _releaseIntelligenceForbidden = [
     'Stock Release catchphrase as the only form: “Let it rest for now” or '
         'near-identical let-it-rest stamps across the night',
+    'English stamp pair “Leave some of that here. The night can hold…” as '
+        'the default Release',
     'Turkish stamp pair “Bunu burada bırak. Gece bunu taşıyabilir.” / '
         '“Bunu burada bırak. Gece tutabilir.” as the default Release',
     'Exact or near-exact same-night Release repetition when natural legal '
         'variation is available',
     'Receipt / First Stop Moment language',
-    'Permission / obligation-ease language (“you don’t have to”, '
-        '“solve this tonight”, “zorunda değilsin” as the whole Release)',
+    'Permission as any clause of Release: “gerek yok”, “düşünmene gerek yok”, '
+        '“don’t have to”, “don’t need to”, “zorunda değilsin”',
     'Naming the load as a holdable object',
+    'Naming stems inside Release: “on your mind” / “weighing” / '
+        '“holding on” / “lingering” / “still there” / “aklında” as the '
+        'put-down vehicle',
+    'English Release on a Turkish night, or Turkish Release on an English night',
     'Enough/closing language (“nothing more”, “that’s enough”)',
     'Advice, techniques, instructions, or reassurance pep',
     'Sleep commands (“go to sleep”, “fall asleep”, “uykuya”)',
@@ -219,6 +228,13 @@ class ReleaseIntelligence {
 
     return 'One or two short sentences (max 28 words). Quiet. Restward. '
         'No advice. No sleep command. No question. '
+        'ONE put-down family only — do not append a Permission second clause '
+        '(gerek yok / don’t have to / zorunda değilsin / düşünmene gerek yok). '
+        'Never write Naming stems (on your mind / aklında / weighing / lingering). '
+        'Never write sleep commands (uykuya / fall asleep / go to sleep). '
+        '${turkish ? "English is forbidden on this Turkish night. " : ""}'
+        'Keep their night-object in the put-down when they named tomorrow / '
+        'a list / tasks — do not default to a generic night-can-hold pair. '
         '$leanLine$quiet';
   }
 
@@ -369,7 +385,26 @@ $priorNote
         lower.contains('yumus') ||
         lower.contains('yumuş') ||
         lower.contains('sessiz') ||
-        lower.contains('biraz');
+        lower.contains('biraz') ||
+        lower.contains('durmuyor') ||
+        lower.contains('uyuyamiyor') ||
+        lower.contains('konusmak') ||
+        lower.contains('konuşmak') ||
+        lower.contains('ozledim') ||
+        lower.contains('özledim') ||
+        lower.contains('aklim') ||
+        lower.contains('aklım') ||
+        lower.contains('dusun') ||
+        lower.contains('düşün') ||
+        lower.contains('kafam') ||
+        lower.contains('kafayi') ||
+        lower.contains('kafayı') ||
+        lower.contains('bilmiyorum') ||
+        lower.contains('birak') ||
+        lower.contains('bırak') ||
+        lower.contains('yarin') ||
+        lower.contains('yarın') ||
+        lower.contains('gece');
   }
 
   String? _currentTurnGrounding(ConversationGroundingBuffer? grounding) {

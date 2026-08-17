@@ -64,6 +64,19 @@ void main() {
       }
     });
 
+    test('rejects English Release on a Turkish ASCII night', () {
+      expect(
+        guard.allow(
+          utterance: const ConversationUtterance(
+            text: "Leave some of that here tonight. The night can hold this.",
+          ),
+          what: ConversationPhase.release,
+          userUtterance: 'kafayi yicem ya bu gece.',
+        ),
+        isNull,
+      );
+    });
+
     test('rejects Receipt, Permission, Naming, advice, sleep, DNA under Release', () {
       expect(
         guard.allow(

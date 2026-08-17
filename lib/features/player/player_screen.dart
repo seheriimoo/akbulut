@@ -324,9 +324,15 @@ class _PlayerScreenState extends State<PlayerScreen>
         body: SafeArea(
           child: Padding(
             padding: const EdgeInsets.all(24),
-            child: Column(
-              children: [
-                const Spacer(),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                return SingleChildScrollView(
+                  child: ConstrainedBox(
+                    constraints: BoxConstraints(minHeight: constraints.maxHeight),
+                    child: Column(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const SizedBox.shrink(),
                 AnimatedBuilder(
                   animation: _breathAnimation,
                   builder: (context, child) {
@@ -391,7 +397,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                     letterSpacing: 0.2,
                   ),
                 ),
-                const Spacer(),
+                const SizedBox(height: 32),
                 if (_loadFailed) ...[
                   Text(
                     'This session could not start.',
@@ -406,7 +412,7 @@ class _PlayerScreenState extends State<PlayerScreen>
                   const SizedBox(height: 18),
                   GestureDetector(
                     behavior: HitTestBehavior.opaque,
-                    onTap: _leaveAfterLoadFailure,
+                    onTap: () => unawaited(_initAudio()),
                     child: Container(
                       width: double.infinity,
                       height: 58,
@@ -416,9 +422,34 @@ class _PlayerScreenState extends State<PlayerScreen>
                         borderRadius: BorderRadius.circular(29),
                       ),
                       child: const Text(
-                        'End Session',
+                        'Try again',
                         style: TextStyle(
                           color: Colors.black,
+                          fontSize: 17,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onTap: _leaveAfterLoadFailure,
+                    child: Container(
+                      width: double.infinity,
+                      height: 58,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        color: Colors.white.withValues(alpha: 0.08),
+                        borderRadius: BorderRadius.circular(29),
+                        border: Border.all(
+                          color: Colors.white.withValues(alpha: 0.18),
+                        ),
+                      ),
+                      child: const Text(
+                        'End Session',
+                        style: TextStyle(
+                          color: Colors.white,
                           fontSize: 17,
                           fontWeight: FontWeight.w600,
                         ),
@@ -477,6 +508,10 @@ class _PlayerScreenState extends State<PlayerScreen>
                 ],
                 const SizedBox(height: 40),
               ],
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ),

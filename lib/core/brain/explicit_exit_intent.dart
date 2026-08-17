@@ -22,6 +22,18 @@ class ExplicitExitIntent {
     var s = message.trim().toLowerCase();
     s = s.replaceAll('\u2019', "'");
     s = s.replaceAll(RegExp(r'\s+'), ' ');
+    // ASCII fold so mobile TR without diacritics still closes
+    // ("konusmak istemiyorum" == "konuşmak istemiyorum").
+    s = s
+        .replaceAll('ş', 's')
+        .replaceAll('ğ', 'g')
+        .replaceAll('ü', 'u')
+        .replaceAll('ö', 'o')
+        .replaceAll('ı', 'i')
+        .replaceAll('ç', 'c')
+        .replaceAll('â', 'a')
+        .replaceAll('î', 'i')
+        .replaceAll('û', 'u');
     return s;
   }
 
@@ -40,12 +52,13 @@ class ExplicitExitIntent {
 
   static bool _isReportedSpeech(String n) {
     // Someone else said an exit line — not the user's present intent.
-    if (RegExp(r'\bdemişti\b').hasMatch(n)) return true;
-    if (RegExp(r'\bdemiş\b').hasMatch(n)) return true;
+    // `n` is already ASCII-folded.
+    if (n.contains('demisti')) return true;
+    if (n.contains('demis')) return true;
     if (RegExp(r'\bdedi\b').hasMatch(n)) return true;
     if (n.contains('diyor ki')) return true;
-    if (n.contains('demiş ki')) return true;
-    if (RegExp(r'\bsöylemiş\b').hasMatch(n)) return true;
+    if (n.contains('demis ki')) return true;
+    if (RegExp(r'\bsoylemis\b').hasMatch(n)) return true;
     return false;
   }
 
@@ -117,8 +130,8 @@ class ExplicitExitIntent {
   static bool _matchesNaturalTrClose(String n) {
     final stripped = _stripTrailingPunct(n);
 
-    // "yeter bu kadar konuşmak" / "bu kadar konuşmak yeter"
-    if (n.contains('bu kadar konuşmak')) {
+    // "yeter bu kadar konuşmak" / "bu kadar konuşmak yeter" (ASCII-folded).
+    if (n.contains('bu kadar konusmak')) {
       if (RegExp(r'\byeter\b').hasMatch(n)) return true;
     }
 
@@ -132,15 +145,15 @@ class ExplicitExitIntent {
     }
 
     // End-the-talk together (this night).
-    if (n.contains('konuşmayı bitirelim')) return true;
+    if (n.contains('konusmayi bitirelim')) return true;
     if (stripped == 'burada bitirelim') return true;
     if (RegExp(r'^burada bitirelim\b').hasMatch(stripped)) return true;
 
     // First-person stop-talking to continue into rest — not relationship drama.
-    if (n.contains('konuşmak istemiyorum')) {
+    // Bare "konusmak istemiyorum" closes unless a third-person / topic diversion.
+    if (n.contains('konusmak istemiyorum')) {
       if (_isOtherPersonOrTopicDiversion(n)) return false;
-      if (n.contains('daha fazla')) return true;
-      if (n.contains('artık') || n.contains('artik')) return true;
+      return true;
     }
 
     return false;
@@ -152,13 +165,12 @@ class ExplicitExitIntent {
     if (RegExp(r'\bonunla\b').hasMatch(n)) return true;
     if (RegExp(r'\bonlarla\b').hasMatch(n)) return true;
     if (n.contains('sevgilim')) return true;
-    if (n.contains('eşim')) return true;
-    if (n.contains('eşım')) return true;
-    if (n.contains('arkadaşım')) return true;
+    if (n.contains('esim')) return true;
+    if (n.contains('arkadasim')) return true;
     if (n.contains('annem')) return true;
     if (n.contains('babam')) return true;
     // Topic refusal while continuing the chat.
-    if (n.contains('hakkında')) return true;
+    if (n.contains('hakkinda')) return true;
     if (n.contains('ama başka')) return true;
     if (n.contains('ama baska')) return true;
     return false;

@@ -72,6 +72,7 @@ class UtteranceGuard {
     required ConversationUtterance utterance,
     required ConversationPhase what,
     ConversationDNA dna = ConversationDNA.instance,
+    String? userUtterance,
   }) {
     final text = utterance.text.trim();
 
@@ -99,8 +100,21 @@ class UtteranceGuard {
       return null;
     }
 
+    // Mirror the person's language when it is clearly EN or TR.
+    // Mixed / unknown user language: do not invent a lock.
+    if (!_matchesUserLanguage(normalized, userUtterance)) {
+      return null;
+    }
+
     // Stay inside the decided WHAT (DNA principle 9 / anti-rule rewrite).
     if (!_faithfulToWhat(normalized, what)) {
+      return null;
+    }
+
+    // Receipt: do not admit invented tomorrow / racing when the person
+    // did not name those objects this turn.
+    if (what == ConversationPhase.validation &&
+        _receiptInventedAgenda(normalized, userUtterance)) {
       return null;
     }
 
@@ -125,11 +139,12 @@ class UtteranceGuard {
     final int maxEnds;
     if (what == ConversationPhase.validation ||
         what == ConversationPhase.naming) {
-      maxEnds = 5;
-    } else if (what == ConversationPhase.continuity ||
-        what == ConversationPhase.release ||
-        what == ConversationPhase.permission) {
       maxEnds = 3;
+    } else if (what == ConversationPhase.continuity ||
+        what == ConversationPhase.release) {
+      maxEnds = 3;
+    } else if (what == ConversationPhase.permission) {
+      maxEnds = 2;
     } else {
       maxEnds = 1;
     }
@@ -176,8 +191,8 @@ class UtteranceGuard {
         }
         continue;
       }
-      // Enough soft handoffs may echo “night can hold…”; only hard put-down
-      // stems count as Release drift under continuity.
+      // Enough must not reuse Release night-hold. Hard put-down AND
+      // night-can-hold / let-the-night-hold are Release drift under continuity.
       if (what == ConversationPhase.continuity &&
           other == ConversationPhase.release) {
         if (_containsAny(lower, const [
@@ -189,6 +204,12 @@ class UtteranceGuard {
           'leave it here',
           'leave this here',
           'leave some of',
+          'night can hold',
+          'the night can hold',
+          'let the night hold',
+          'gece tutabilir',
+          'geceye bırak',
+          'geceye birak',
         ])) {
           return false;
         }
@@ -469,6 +490,135 @@ class UtteranceGuard {
       r"\b(you|your|the|tonight|don't|dont|need|perhaps|mind|leave|preparing|enough|softening)\b",
     ).hasMatch(lower);
     return hasTurkish && hasEnglish;
+  }
+
+  /// Fail closed when the reply is clearly the other language than the user.
+  /// Mixed or unknown user language does not lock.
+  bool _matchesUserLanguage(String assistant, String? userUtterance) {
+    final userLang = _nightLanguage(userUtterance);
+    if (userLang == null || userLang == 'mixed') return true;
+    final replyLang = _nightLanguage(assistant);
+    if (replyLang == null || replyLang == 'mixed') {
+      // Mixed assistant already rejected. Unknown assistant (short mm/ok)
+      // is not a language switch.
+      return true;
+    }
+    return replyLang == userLang;
+  }
+
+  /// Receipt-only: invented tomorrow / racing / swirl when this turn
+  /// did not name those objects.
+  bool _receiptInventedAgenda(String assistant, String? userUtterance) {
+    if (userUtterance == null) return false;
+    final user = userUtterance.toLowerCase();
+    final asst = assistant.toLowerCase();
+    final userHasTomorrow = user.contains('tomorrow') ||
+        RegExp(r'\byarın\b').hasMatch(user) ||
+        RegExp(r'\byarin\b').hasMatch(user);
+    final asstHasTomorrow = asst.contains('tomorrow') ||
+        RegExp(r'\byarın\b').hasMatch(asst) ||
+        RegExp(r'\byarin\b').hasMatch(asst) ||
+        asst.contains("what's to come") ||
+        asst.contains('whats to come') ||
+        asst.contains('future moment') ||
+        asst.contains('future scene');
+    if (!userHasTomorrow && asstHasTomorrow) {
+      return true;
+    }
+    final userHasMeeting = user.contains('meeting') ||
+        user.contains('toplantı') ||
+        user.contains('toplantida');
+    final asstHasMeeting = asst.contains('meeting') ||
+        asst.contains('toplantı') ||
+        asst.contains('toplantida');
+    if (!userHasMeeting && asstHasMeeting) {
+      return true;
+    }
+    final userHasList = user.contains('list') ||
+        user.contains('to-do') ||
+        user.contains('todo') ||
+        user.contains('yapılacak') ||
+        user.contains('yapilacak');
+    final asstHasList = asst.contains('to-do') ||
+        asst.contains('todo list') ||
+        asst.contains('the list');
+    if (!userHasList && asstHasList) {
+      return true;
+    }
+    final userHasMotion = user.contains('racing') ||
+        user.contains('swirl') ||
+        user.contains('spiral') ||
+        user.contains('loop') ||
+        user.contains('thinking') ||
+        user.contains('düşün') ||
+        user.contains('dusun') ||
+        user.contains('kafa') ||
+        user.contains('zihn') ||
+        user.contains('durmuyor') ||
+        user.contains('overthink') ||
+        user.contains('mind');
+    final asstHasRacing = asst.contains('racing') ||
+        asst.contains('swirling') ||
+        asst.contains('spinning thoughts');
+    if (!userHasMotion && asstHasRacing) {
+      return true;
+    }
+    return false;
+  }
+
+  String? _nightLanguage(String? text) {
+    if (text == null || text.trim().isEmpty) return null;
+    final lower = _normalizeForMatch(text);
+    final hasTurkishScript = RegExp(r'[ğüşıöçâîû]').hasMatch(lower);
+    final hasTurkishLexeme = _containsAny(lower, const [
+      'zorunda',
+      'bırak',
+      'birak',
+      'gece',
+      'belki',
+      'sanki',
+      'zihin',
+      'zihn',
+      'şimdi',
+      'simdi',
+      'değil',
+      'degil',
+      'gibi',
+      'yarın',
+      'yarin',
+      'dinlenme',
+      'sessizlik',
+      'hazırlıyorum',
+      'hazirliyorum',
+      'uyuyamiyorum',
+      'uyuyamıyorum',
+      'konusmak',
+      'konuşmak',
+      'bilmiyorum',
+      'kafam',
+      'aklim',
+      'aklım',
+      'ozledim',
+      'özledim',
+      'durmuyor',
+      'kafayi',
+      'kafayı',
+      'dusun',
+      'düşün',
+      'yalniz',
+      'yalnız',
+    ]);
+    final hasTurkish = hasTurkishScript || hasTurkishLexeme;
+    final hasEnglish = RegExp(
+      r"\b(i|you|your|the|tonight|don't|dont|need|perhaps|mind|leave|"
+      r"preparing|thinking|can't|cannot|about|tomorrow|feel|feeling|"
+      r"enough|softening|hear|this|down|hold|thoughts|feels|already|"
+      r"swirling|racing|miss|him|idk)\b",
+    ).hasMatch(lower);
+    if (hasTurkish && hasEnglish) return 'mixed';
+    if (hasTurkish) return 'tr';
+    if (hasEnglish) return 'en';
+    return null;
   }
 
   /// Guard Receipt Contract V1.6.
@@ -759,6 +909,8 @@ class UtteranceGuard {
     'ruminating',
     'overthink',
     'overthinking',
+    'going over',
+    'going through',
     'yalnız',
     'yalnizlik',
     'yalnızlık',
@@ -941,7 +1093,11 @@ class UtteranceGuard {
           'what else',
           'let’s keep talking',
           "let's keep talking",
-          'keep going',
+          'want to keep going',
+          "let's keep going",
+          'lets keep going',
+          'keep going?',
+          'keep talking',
           'want to talk',
           'share more',
         ]);

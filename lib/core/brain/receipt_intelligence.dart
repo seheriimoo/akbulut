@@ -29,8 +29,8 @@ class ReceiptIntelligence {
   static const int maxCurrentGroundingChars = 480;
 
   static const String _responseLengthShort =
-      'Three to four short sentences, maximum 45 words. '
-      'Golden Conversations V2 cadence: short lines, soft observe, soft reframe. '
+      'Two short sentences, maximum 45 words. '
+      'Golden Conversations V2 cadence: one specific observe, one hinge. '
       'Not a telegram. Not one dense clinical paragraph.';
 
   static const String _responseLengthSupportedFunctional =
@@ -126,6 +126,9 @@ class ReceiptIntelligence {
       'CRITICAL — never write Naming stems inside Receipt: '
       '“on your mind”, “holding on”, “weighing”, “still there”, “lingering”. '
       'Say “swirling / racing / heavy / looping / overthinking” instead. '
+      'CRITICAL — never open with “It sounds like” / “It seems like”. '
+      'Start from their night-object (tomorrow / the list / the person). '
+      'Two sentences: one specific observe + one hinge. Then stop. '
       'Never invent stillness, presence, mindfulness, or inner peace. '
       'Never mention sleep commands or “uykuya / go to sleep / fall asleep”. '
       'Prefer racing / looping / heavy / exhausting / overthinking / yalnız '
@@ -154,6 +157,7 @@ class ReceiptIntelligence {
     'Therapist-cadence openers that diagnose feeling: '
         '“It sounds like you’re feeling…”, “You’re feeling… right now”, '
         '“That must be…”',
+    'Opening with “It sounds like” / “It seems like”',
     'Emitting “I’m preparing a session for you now” inside Receipt speech',
     'Pasting canned Golden Conversations V2 / Gold Standard library lines '
         'verbatim as the only form',
@@ -174,6 +178,16 @@ class ReceiptIntelligence {
         '(“your thoughts are just trying to protect you”)',
     'Sleep / insomnia coaching drift (“uykuya dal”, “go to sleep”, '
         '“fall asleep”, “hard to sleep”) inside Receipt',
+    'Inventing tomorrow / yarın / a future scene / “what’s to come” when '
+        'those objects are absent from current-turn grounding',
+    'Inventing racing / swirling / spinning thoughts when this turn does '
+        'not name thought-motion',
+    'Answering a Turkish night in English, or an English night in Turkish',
+    'Anti-stack: restating the same felt load three ways (overwhelming + '
+        'hard to rest + a lot to carry) after the observe already landed',
+    'Generic remap of their night-objects into stock load (“on your plate”, '
+        '“a lot to carry”, “overwhelming”) when they named tomorrow, a list, '
+        'tasks, a person, or a place',
   ];
 
   static const List<String> _supportedFunctionalForbidden = [
@@ -230,6 +244,13 @@ class ReceiptIntelligence {
           '“Part of your mind…” / identical soft-frame start.',
         );
     }
+
+    buffer
+      ..writeln()
+      ..writeln(_languageDirective(currentTurn))
+      ..writeln()
+      ..writeln(_antiInventionDirective(currentTurn));
+
     if (currentTurn != null) {
       buffer
         ..writeln()
@@ -265,17 +286,26 @@ class ReceiptIntelligence {
         : '';
 
     final sparse = currentTurn != null && _looksSparse(currentTurn)
-        ? ' Sparse-message restraint: their words are thin—receive only what '
-            'is plainly there. Do not invent stillness, presence, calm, or '
-            'inner peace.'
+        ? ' Sparse-message restraint: their words are thin or filler '
+            '(idk / bilmiyorum / hm / I don’t know). Receive only what is '
+            'plainly there. Do not invent stillness, presence, calm, or '
+            'inner peace. HARD: do not invent night-objects absent from THIS '
+            'turn — tomorrow, yarın, a list, a meeting, a relationship, '
+            'racing/swirling thoughts, or a future scene.'
+        : '';
+
+    final nightObject = currentTurn != null && _looksNightObject(currentTurn)
+        ? ' Night-object rule: keep their named object (tomorrow / the list / '
+            'the tasks / the person) in the observe. Do not replace it with '
+            'generic overwhelm, plate, or carry padding.'
         : '';
 
     final lengthLine = supportedFunctional
         ? 'Three to five short sentences (max 60 words). '
             'Golden Conversations V2 cadence: short lines + one soft functional '
             'hinge + one soft reframe. Not one dense paragraph.'
-        : 'Three to four short sentences (max 45 words). '
-            'Golden Conversations V2 cadence: soft observe, then soft reframe. '
+        : 'Two short sentences (max 45 words). '
+            'Golden Conversations V2 cadence: one specific observe, then one hinge. '
             'Not a telegram. Not a clinical essay.';
 
     final depthLine = supportedFunctional
@@ -287,7 +317,11 @@ class ReceiptIntelligence {
             '(busy/swirl/race/spin + topic alone).'
         : '';
 
-    return '$lengthLine$depthLine No advice. No solving. '
+    return '$lengthLine$depthLine Anti-stack rule: two sentences — one specific '
+        'observe + one hinge. Then stop. Never a third restatement '
+        '(hard to rest / overwhelming / a lot to carry). '
+        'Never open with “It sounds like” / “It seems like”. '
+        'No advice. No solving. '
         'No question. Prefer texture-first receipt over “It/That sounds…” '
         'templates. Do not remap into a generic feeling label they did not '
         'use. Avoid intensifiers (really / so / deeply). Do not parrot their '
@@ -295,7 +329,7 @@ class ReceiptIntelligence {
         '${ReceiptRealizationContract.intelligenceSteeringDirective(
           supportedFunctional: supportedFunctional,
         )}'
-        '$relational$sparse';
+        '$relational$sparse$nightObject';
   }
 
   String _systemAppendix({
@@ -320,7 +354,13 @@ class ReceiptIntelligence {
         'No-remap rule: never replace their lived texture with a stock emotion '
         'category. If they say spiraling, receive the spiral — not '
         '“overwhelmed”. If they say stressed, receive the stress — not a '
-        'different clinical-adjacent label.';
+        'different clinical-adjacent label. If they name tomorrow or a list, '
+        'keep that object — not “on your plate” / “a lot to carry”.';
+
+    final antiStackRule =
+        'Anti-stack rule: two sentences — one specific observe + one hinge. '
+        'After the hinge lands, stop. Do not add a third restatement. '
+        'Never open with “It sounds like” / “It seems like”.';
 
     final intensifierRule =
         'Intensifier rule: do not add really / so / deeply / incredibly / '
@@ -329,6 +369,9 @@ class ReceiptIntelligence {
     final restraintRule =
         'Restraint rule: on sparse or ambiguous lines, under-receive rather '
         'than invent psychology, stillness, or presence.';
+
+    final antiInventionRule = _antiInventionDirective(currentTurn);
+    final languageRule = _languageDirective(currentTurn);
 
     final functionRule = supportedFunctional && hypothesis != null
         ? ThinkingFunctionIntelligenceShaping.receiptHingeDirective(hypothesis)
@@ -381,8 +424,11 @@ $fillerRule
 $mirrorRule
 $templateRule
 $remapRule
+$antiStackRule
 $intensifierRule
 $restraintRule
+$antiInventionRule
+$languageRule
 $functionRule
 $antiShallowRule
 $softPerspectiveRule
@@ -414,16 +460,140 @@ $grounding
         lower.contains('alone') ||
         lower.contains('without them') ||
         lower.contains('without him') ||
-        lower.contains('without her');
+        lower.contains('without her') ||
+        lower.contains('ozledim') ||
+        lower.contains('özledim') ||
+        lower.contains('yalniz') ||
+        lower.contains('yalnız');
   }
 
   bool _looksSparse(String text) {
+    if (_looksFiller(text)) return true;
     final words = text
         .trim()
         .split(RegExp(r'\s+'))
         .where((w) => w.isNotEmpty)
         .length;
     return words <= 4;
+  }
+
+  /// Thin honesty: don't-know / filler turns must not compile a night-story.
+  bool _looksFiller(String text) {
+    final lower = text.toLowerCase().trim().replaceAll(RegExp(r'[.!?…,]+$'), '');
+    if (lower.isEmpty) return true;
+    if (RegExp(
+      r"^(idk|dunno|hm+|hmm+|bilmiyorum|bilmiyom|bilmem|ne bileyim|"
+      r"i don'?t know|i do not know|not sure|no idea|whatever)$",
+    ).hasMatch(lower)) {
+      return true;
+    }
+    if (RegExp(
+      r"^(idk|bilmiyorum|bilmiyom|hm+|i don'?t know)\b",
+    ).hasMatch(lower)) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _looksNightObject(String text) {
+    final lower = text.toLowerCase();
+    return lower.contains('tomorrow') ||
+        lower.contains('yarın') ||
+        lower.contains('yarin') ||
+        lower.contains('have to do') ||
+        lower.contains('to-do') ||
+        lower.contains('todo') ||
+        lower.contains('task') ||
+        lower.contains('list') ||
+        lower.contains('meeting') ||
+        lower.contains('deadline') ||
+        lower.contains('toplantı') ||
+        lower.contains('toplantida') ||
+        lower.contains('sunum') ||
+        lower.contains('yapılacak') ||
+        lower.contains('yapilacak');
+  }
+
+  String _antiInventionDirective(String? currentTurn) {
+    final lower = (currentTurn ?? '').toLowerCase();
+    final hasTomorrow = lower.contains('tomorrow') ||
+        RegExp(r'\byarın\b').hasMatch(lower) ||
+        RegExp(r'\byarin\b').hasMatch(lower);
+    final hasThoughtMotion = lower.contains('racing') ||
+        lower.contains('swirl') ||
+        lower.contains('spiral') ||
+        lower.contains('loop') ||
+        lower.contains('thinking') ||
+        lower.contains('düşün') ||
+        lower.contains('dusun') ||
+        lower.contains('kafa') ||
+        lower.contains('zihn') ||
+        lower.contains('durmuyor') ||
+        lower.contains('overthink');
+
+    final bans = <String>[];
+    if (!hasTomorrow) {
+      bans.add(
+        'tomorrow / yarın / a future scene / “what’s to come” / already '
+        'living tomorrow',
+      );
+    }
+    if (!hasThoughtMotion) {
+      bans.add('racing / swirling / spinning thoughts');
+    }
+    if (bans.isEmpty) {
+      return 'Anti-invention rule: keep objects that are already in this '
+          'turn; do not import a different night-story.';
+    }
+    return 'Anti-invention rule: this turn does not name ${bans.join('; ')}. '
+        'Do not introduce them. Stay inside their actual words. '
+        'If the line is only insomnia / don’t-know / don’t-want-to-talk, '
+        'receive that — do not import a tomorrow-carry scene they did not name.';
+  }
+
+  String _languageDirective(String? currentTurn) {
+    final lang = _nightLanguage(currentTurn);
+    if (lang == 'tr') {
+      return 'Language lock: the person wrote Turkish. Reply in Turkish only. '
+          'Do not answer in English.';
+    }
+    if (lang == 'en') {
+      return 'Language lock: the person wrote English. Reply in English only. '
+          'Do not answer in Turkish.';
+    }
+    return 'Language lock: stay in one language. Mirror theirs if it is clear.';
+  }
+
+  /// Compact night-language tag from current-turn grounding only.
+  String? _nightLanguage(String? text) {
+    if (text == null || text.trim().isEmpty) return null;
+    final lower = text.toLowerCase();
+    final hasTr = RegExp(r'[ğüşıöç]').hasMatch(lower) ||
+        lower.contains('gece') ||
+        lower.contains('yalniz') ||
+        lower.contains('yalnız') ||
+        lower.contains('uyuyamiyorum') ||
+        lower.contains('uyuyamıyorum') ||
+        lower.contains('dusun') ||
+        lower.contains('düşün') ||
+        lower.contains('konusmak') ||
+        lower.contains('konuşmak') ||
+        lower.contains('bilmiyorum') ||
+        lower.contains('kafam') ||
+        lower.contains('aklim') ||
+        lower.contains('aklım') ||
+        lower.contains('ozledim') ||
+        lower.contains('özledim') ||
+        lower.contains('durmuyor') ||
+        lower.contains('kafayi');
+    final hasEn = RegExp(
+      r"\b(you|your|the|tonight|don't|need|perhaps|mind|thinking|"
+      r"can't|cannot|about|tomorrow|feel|feeling|idk)\b",
+    ).hasMatch(lower);
+    if (hasTr && hasEn) return 'mixed';
+    if (hasTr) return 'tr';
+    if (hasEn) return 'en';
+    return null;
   }
 }
 

@@ -67,6 +67,7 @@
 		A103022F669B6B0F26C8F20A /* Pods-Runner.release.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.release.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.release.xcconfig"; sourceTree = "<group>"; };
 		A7C1D4E72F3A4B5C6D7E8F90 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		B8E4F1A02C9D4E6F8A1B2C3D /* Runner.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = Runner.entitlements; sourceTree = "<group>"; };
+		C4A91F0B2F3C1A0D8E7B6A55 /* NoctaProducts.storekit */ = {isa = PBXFileReference; lastKnownFileType = text; path = NoctaProducts.storekit; sourceTree = "<group>"; };
 		C1EB12C3E4297798BA935BB1 /* Pods-Runner.profile.xcconfig */ = {isa = PBXFileReference; includeInIndex = 1; lastKnownFileType = text.xcconfig; name = "Pods-Runner.profile.xcconfig"; path = "Target Support Files/Pods-Runner/Pods-Runner.profile.xcconfig"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
@@ -138,6 +139,7 @@
 				97C146FF1CF9000F007C117D /* LaunchScreen.storyboard */,
 				97C147021CF9000F007C117D /* Info.plist */,
 				B8E4F1A02C9D4E6F8A1B2C3D /* Runner.entitlements */,
+				C4A91F0B2F3C1A0D8E7B6A55 /* NoctaProducts.storekit */,
 				A7C1D4E72F3A4B5C6D7E8F90 /* PrivacyInfo.xcprivacy */,
 				1498D2321E8E86230040F4C2 /* GeneratedPluginRegistrant.h */,
 				1498D2331E8E89220040F4C2 /* GeneratedPluginRegistrant.m */,

@@ -13,10 +13,10 @@ void main() {
       expect(BillingCatalog.iosBundleId, 'com.seher.slowave');
       expect(
         BillingCatalog.premiumProductIds,
-        containsAll([
-          BillingCatalog.monthlyProductId,
+        [
           BillingCatalog.yearlyProductId,
-        ]),
+          BillingCatalog.monthlyProductId,
+        ],
       );
     });
 
@@ -36,6 +36,23 @@ void main() {
         isFalse,
       );
       expect(AppConfig.isUsableSecret('appl_live_example_key'), isTrue);
+    });
+
+    test('RevenueCat key requires Apple public SDK appl_ prefix', () {
+      expect(
+        AppConfig.isUsableRevenueCatAppleSdkKey('appl_live_example_key'),
+        isTrue,
+      );
+      expect(
+        AppConfig.isUsableRevenueCatAppleSdkKey(
+          'REPLACE_WITH_REVENUECAT_APPLE_API_KEY',
+        ),
+        isFalse,
+      );
+      expect(
+        AppConfig.isUsableRevenueCatAppleSdkKey('goog_something'),
+        isFalse,
+      );
     });
   });
 }

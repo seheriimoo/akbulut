@@ -158,6 +158,13 @@ class ConversationEvaluator {
     if (lower.contains('düşünüyorum')) return true;
     if (lower.contains('konusamiyorum')) return true;
     if (lower.contains('konusmak')) return true;
+    if (lower.contains('bilmiyorum')) return true;
+    if (lower.contains('kafam')) return true;
+    if (lower.contains('aklim')) return true;
+    if (lower.contains('durmuyor')) return true;
+    if (lower.contains('kafayi')) return true;
+    if (lower.contains('ozledim')) return true;
+    if (lower.contains('yarin')) return true;
     return false;
   }
 }

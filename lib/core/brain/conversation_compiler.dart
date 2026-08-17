@@ -370,8 +370,14 @@ class ConversationCompiler {
             'WHAT.';
 
     final languageBinding = languageStyle.compileBinding();
+    final languageLock = _languageLockDirective(package);
     final baseUserContent = overlay?.userContent ?? realizationDirective;
-    final userContent = _withLanguageStyle(baseUserContent, languageBinding);
+    final userContent = _withLanguageStyle(
+      languageLock == null
+          ? baseUserContent
+          : '$languageLock\n\n$baseUserContent',
+      languageBinding,
+    );
 
     final systemContent = _assembleSystemContent(
       stage: stage,
@@ -391,6 +397,7 @@ class ConversationCompiler {
       realizationDirective: realizationDirective,
       stageAppendix: overlay?.systemAppendix,
       languageBinding: languageBinding,
+      languageLock: languageLock,
     );
 
     if (systemContent.trim().isEmpty || userContent.trim().isEmpty) {
@@ -435,6 +442,60 @@ class ConversationCompiler {
     return '$content\n\n${languageBinding.trim()}';
   }
 
+  /// Hard same-language bind from the current user turn only.
+  /// Mixed / unknown turns do not invent a lock.
+  String? _languageLockDirective(LlmInvocationPackage package) {
+    final turn = package.conversationGrounding?.currentUserUtterance;
+    final lang = _nightLanguage(turn);
+    if (lang == 'tr') {
+      return 'LANGUAGE LOCK: the person wrote Turkish this turn. '
+          'Reply in Turkish only. Every word must be Turkish. '
+          'English is forbidden.';
+    }
+    if (lang == 'en') {
+      return 'LANGUAGE LOCK: the person wrote English this turn. '
+          'Reply in English only. Every word must be English. '
+          'Turkish is forbidden.';
+    }
+    return null;
+  }
+
+  String? _nightLanguage(String? text) {
+    if (text == null || text.trim().isEmpty) return null;
+    final lower = text.toLowerCase();
+    final hasTr = RegExp(r'[ğüşıöçâîû]').hasMatch(lower) ||
+        lower.contains('gece') ||
+        lower.contains('yalniz') ||
+        lower.contains('yalnız') ||
+        lower.contains('uyuyamiyorum') ||
+        lower.contains('uyuyamıyorum') ||
+        lower.contains('dusun') ||
+        lower.contains('düşün') ||
+        lower.contains('konusmak') ||
+        lower.contains('konuşmak') ||
+        lower.contains('bilmiyorum') ||
+        lower.contains('kafam') ||
+        lower.contains('aklim') ||
+        lower.contains('aklım') ||
+        lower.contains('ozledim') ||
+        lower.contains('özledim') ||
+        lower.contains('durmuyor') ||
+        lower.contains('kafayi') ||
+        lower.contains('kafayı') ||
+        lower.contains('yarin') ||
+        lower.contains('yarın') ||
+        lower.contains('birak') ||
+        lower.contains('bırak');
+    final hasEn = RegExp(
+      r"\b(i|you|your|the|tonight|don't|need|perhaps|mind|thinking|"
+      r"can't|cannot|about|tomorrow|feel|feeling|idk|miss|him)\b",
+    ).hasMatch(lower);
+    if (hasTr && hasEn) return 'mixed';
+    if (hasTr) return 'tr';
+    if (hasEn) return 'en';
+    return null;
+  }
+
   String _assembleSystemContent({
     required BlueprintStageBinding stage,
     required String aim,
@@ -453,6 +514,7 @@ class ConversationCompiler {
     required String realizationDirective,
     required String languageBinding,
     String? stageAppendix,
+    String? languageLock,
   }) {
     final forbidden = forbiddenMoves.map((m) => '- $m').join('\n');
     final laws = constitutional.map((l) => '- $l').join('\n');
@@ -471,14 +533,19 @@ class ConversationCompiler {
     final groundingBlock = groundingMaterialization == null
         ? ''
         : '\n${groundingMaterialization.trim()}\n';
+    final lockBlock =
+        languageLock == null ? '' : '${languageLock.trim()}\n\n';
 
     return '''
-You are a transport HOW adapter. Realize only the sealed speakable WHAT.
+${lockBlock}You are a transport HOW adapter. Realize only the sealed speakable WHAT.
 Do not choose release, protocol, exit, silence, or a different WHAT.
 Emit one natural conversational response.
-On Receipt and Naming, use Golden Conversations V2 cadence: three to five
-short lines with soft observe and soft reframe — not a telegram stamp and
-not one dense clinical paragraph.
+On Receipt and Naming, use Golden Conversations V2 cadence: two short
+lines — one specific observe, one hinge — not a telegram stamp and
+not one dense clinical paragraph. Never a third restatement.
+Never open Receipt with "It sounds like" / "It seems like".
+Keep their night-objects (tomorrow, the list, the person). Never paste
+their clause with I/you swapped.
 Other stages stay to one short sentence.
 Questions are forbidden unless the stage explicitly allows them.
 Never ask more than one question.
@@ -486,8 +553,11 @@ No multi-message bundles. Prefer short spoken lines that land the felt truth.
 Do not paste canned Gold library lines.
 On Enough / continuity close, a soft rest-audio handoff line is welcome
 (Golden Conversations V2 TYPE) — not a product pitch.
+If the handoff landed, stop. Do not reuse Release night-hold imagery
+(night can hold / let the night hold).
 Never use bare generic filler such as "I understand", "I hear you", or "That makes sense".
 Never pad with unsupported repetition of the user's words.
+Reply in the same language as the current-turn user line. Do not switch.
 
 $realizationDirective
 $appendixBlock

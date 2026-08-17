@@ -266,6 +266,43 @@ void main() {
       expect(result.releaseDecision.readiness, ReleaseReadiness.hold);
       expect(result.conversationDecision.phase, ConversationPhase.validation);
     });
+
+    test('rejects invented tomorrow on sparse insomnia Receipt', () {
+      expect(
+        guard.allow(
+          utterance: const ConversationUtterance(
+            text: 'Tomorrow feels heavy, with thoughts racing around.',
+          ),
+          what: ConversationPhase.validation,
+          userUtterance: 'uyuyamiyorum.',
+        ),
+        isNull,
+      );
+    });
+
+    test('rejects English Receipt on a Turkish night', () {
+      expect(
+        guard.allow(
+          utterance: const ConversationUtterance(
+            text: 'I hear that looping in your mind tonight.',
+          ),
+          what: ConversationPhase.validation,
+          userUtterance: 'kafam durmuyor ya.',
+        ),
+        isNull,
+      );
+    });
+
+    test('still admits EN Receipt when the user named tomorrow', () {
+      final admitted = guard.allow(
+        utterance: const ConversationUtterance(
+          text: "Your mind is racing with tomorrow's thoughts.",
+        ),
+        what: ConversationPhase.validation,
+        userUtterance: "I can't stop thinking about tomorrow.",
+      );
+      expect(admitted, isNotNull);
+    });
   });
 }
 

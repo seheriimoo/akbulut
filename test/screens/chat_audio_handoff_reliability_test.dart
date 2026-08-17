@@ -38,11 +38,15 @@ void main() {
     expect(nullIdx, greaterThan(falseIdx));
   });
 
-  test('false → Chat + load-fail message + Tekrar dene', () {
+  test('false → Chat + load-fail message + retry chrome', () {
     expect(chat.contains('_audioHandoffFailed'), isTrue);
-    expect(chat.contains('Tekrar dene'), isTrue);
+    expect(chat.contains('_audioRetryLabel'), isTrue);
     expect(chat.contains('This quiet session could not start.'), isTrue);
     expect(chat.contains('_retryAudioHandoff'), isTrue);
+    final locale =
+        File('lib/screens/session_ui_language.dart').readAsStringSync();
+    expect(locale.contains('Tekrar dene'), isTrue);
+    expect(locale.contains('Try again'), isTrue);
 
     final flow = _audioFlow();
     final failStart = flow.indexOf('if (playerOk == false)');
@@ -74,7 +78,7 @@ void main() {
     expect(nullBranch.contains('_finishNightAndShowClosing'), isFalse);
     // Must not present load-fail copy on early leave.
     expect(nullBranch.contains('This quiet session could not start.'), isFalse);
-    expect(nullBranch.contains('Tekrar dene'), isFalse);
+    expect(nullBranch.contains('_audioRetryLabel'), isFalse);
   });
 
   test('null preserves chat/session state (no night close)', () {
@@ -114,7 +118,8 @@ void main() {
     expect(flow.contains('isLoadingAudio = false'), isTrue);
 
     final finishIdx = chat.indexOf('Future<void> _finishNightAndShowClosing');
-    final finishBlock = chat.substring(finishIdx, finishIdx + 280);
+    final finishEnd = chat.indexOf('void _scrollToBottom', finishIdx);
+    final finishBlock = chat.substring(finishIdx, finishEnd);
     expect(finishBlock.contains('isLoadingAudio = false'), isTrue);
   });
 

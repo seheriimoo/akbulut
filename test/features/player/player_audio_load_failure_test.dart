@@ -24,6 +24,7 @@ void main() {
       await tester.pump(const Duration(milliseconds: 50));
 
       expect(find.text('This session could not start.'), findsOneWidget);
+      expect(find.text('Try again'), findsOneWidget);
       expect(find.text('End Session'), findsOneWidget);
       // Must not leave a tappable Start Session affordance when audio cannot play.
       expect(find.text('Start Session'), findsNothing);

@@ -66,6 +66,22 @@ void main() {
       );
       expect(mental.detect(evidence), isNotEmpty);
     });
+
+    test('ASCII TR load stems fire mental overload', () {
+      for (final line in const [
+        'aklim durmuyor',
+        'yani yarin toplantida bir sey kaciracagim gibi. durmuyor.',
+        'kafayi yicem ya bu gece',
+        'yani o kadar dusunuyom ki duramiyom',
+      ]) {
+        final evidence = perception.perceive(line);
+        expect(
+          mental.detect(evidence),
+          isNotEmpty,
+          reason: 'TR load "$line" must be perceived',
+        );
+      }
+    });
   });
 
   group('ReleaseEngine under active load', () {
@@ -153,6 +169,113 @@ void main() {
       }
 
       expect(readiness, ReleaseReadiness.transitionReady);
+    });
+  });
+
+  group('V1 P0: TR / slang / sparse load stays on hold', () {
+    test('TR overthinking keeps hold through continued looping', () {
+      final mind = HcosLiveEntry.emptyMindModel();
+      var session = NightSession(
+        workingMind: WorkingMindView(model: mind),
+        turns: const [],
+      );
+
+      const turns = [
+        'kafam durmuyor ya. ayni seyi donup duruyorum.',
+        'yani yarin toplantida bir sey kaciracagim gibi. durmuyor.',
+        'biliyorum ki dusunmek ise yaramıyor ama durduramiyorum.',
+        'hala ayni yerdeyim.',
+      ];
+
+      for (final message in turns) {
+        final priorPhase =
+            session.turns.isEmpty ? null : session.turns.last.phase;
+        final understanding = understand(message, priorPhase: priorPhase);
+        final decision = release.evaluate(
+          understanding: understanding,
+          workingMind: session.workingMind,
+          session: session,
+        );
+        final conversation = policy.decide(
+          releaseDecision: decision,
+          message: message,
+          session: session,
+          understanding: understanding,
+        );
+
+        expect(
+          decision.readiness,
+          ReleaseReadiness.hold,
+          reason: 'TR load "$message" must stay on hold',
+        );
+        expect(
+          conversation.phase,
+          anyOf(ConversationPhase.validation, ConversationPhase.naming),
+          reason: 'TR load must stay Receipt/Naming, not Permission/Release',
+        );
+
+        session = session.recordTurn(
+          SessionTurn(
+            releaseDecision: decision,
+            phase: conversation.phase,
+          ),
+        );
+      }
+    });
+
+    test('uyuyamiyorum / ozledim / kavga register as load', () {
+      expect(
+        perception.perceive('uyuyamiyorum').isNotEmpty,
+        isTrue,
+      );
+      expect(
+        perception.perceive('onu ozledim yine').isNotEmpty,
+        isTrue,
+      );
+      expect(
+        perception.perceive('onunla kavga ettik. o donuyor.').isNotEmpty,
+        isTrue,
+      );
+    });
+
+    test('topic change to kavga stays Receipt/Naming, not Permission', () {
+      final mind = HcosLiveEntry.emptyMindModel();
+      var session = NightSession(
+        workingMind: WorkingMindView(model: mind),
+        turns: const [],
+      );
+
+      for (final message in const [
+        'is kafamda. yarin yetisemeyecegim.',
+        'aslinda is degil. onunla kavga ettik. o donuyor.',
+      ]) {
+        final priorPhase =
+            session.turns.isEmpty ? null : session.turns.last.phase;
+        final understanding = understand(message, priorPhase: priorPhase);
+        final decision = release.evaluate(
+          understanding: understanding,
+          workingMind: session.workingMind,
+          session: session,
+        );
+        final conversation = policy.decide(
+          releaseDecision: decision,
+          message: message,
+          session: session,
+          understanding: understanding,
+        );
+        expect(decision.readiness, ReleaseReadiness.hold);
+        expect(
+          conversation.phase,
+          anyOf(ConversationPhase.validation, ConversationPhase.naming),
+        );
+        expect(conversation.phase, isNot(ConversationPhase.permission));
+        session = session.recordTurn(
+          SessionTurn(
+            releaseDecision: decision,
+            phase: conversation.phase,
+          ),
+        );
+      }
     });
   });
 }

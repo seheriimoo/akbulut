@@ -38,8 +38,8 @@ void main() {
     final playerIdx = chat.indexOf('PlayerScreen(');
     final finishIdx = chat.indexOf('_finishNightAndShowClosing');
     final completeIdx = chat.indexOf('completeNightSession');
-    expect(premiumIdx, greaterThan(0));
-    expect(playerIdx, greaterThan(premiumIdx));
+    expect(premiumIdx, -1);
+    expect(playerIdx, greaterThan(0));
     expect(finishIdx, greaterThan(0));
     expect(completeIdx, greaterThan(0));
 
@@ -50,5 +50,6 @@ void main() {
     expect(transitionBlock.contains('_startAudioFlow'), isTrue);
     // Night close runs after audio returns, not before Player starts.
     expect(transitionBlock.contains('_closeNightSession'), isFalse);
+    expect(transitionBlock.contains('PaywallScreen'), isFalse);
   });
 }

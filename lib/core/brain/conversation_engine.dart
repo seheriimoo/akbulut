@@ -1,3 +1,5 @@
+import 'package:flutter/foundation.dart';
+
 import 'conversation_decision.dart';
 import 'conversation_grounding_buffer.dart';
 import 'conversation_utterance.dart';
@@ -65,25 +67,35 @@ class ConversationEngine {
     );
 
     if (package == null) {
+      debugPrint('Nocta expression abstain: no LLM package');
       return null;
     }
 
     final ConversationUtterance utterance;
     try {
       utterance = await languageModelClient.realize(package);
-    } on VendorError {
-      // Expression-plane failure → no conversational language.
-      // Upstream ExitDecision / protocol remain authoritative.
+    } on VendorError catch (error) {
+      debugPrint(
+        'Nocta expression vendor fail: ${error.kind.name} ${error.message}',
+      );
       return null;
-    } on StateError {
-      // Package integrity / configuration failure before a candidate exists.
+    } on StateError catch (error) {
+      debugPrint('Nocta expression compile/config fail: $error');
       return null;
     }
 
-    // Guard reject → null. Not a retry trigger.
-    return utteranceGuard.allow(
+    final admitted = utteranceGuard.allow(
       utterance: utterance,
       what: package.what,
+      userUtterance: package.conversationGrounding?.currentUserUtterance ??
+          livedExpression,
     );
+    if (admitted == null) {
+      debugPrint(
+        'Nocta expression Guard reject WHAT=${package.what.name} '
+        'text="${utterance.text}"',
+      );
+    }
+    return admitted;
   }
 }

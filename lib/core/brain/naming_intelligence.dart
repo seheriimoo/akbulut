@@ -83,8 +83,11 @@ class NamingIntelligence {
       '“holding on” / “weighing” / “still there” / “lingering” / '
       '“on your mind” — or Turkish “aklında” / “zihninde” / “hâlâ orada” / '
       '“duruyor” / “tutunuyor.” '
-      'Prefer short forms like “Something is still holding on.” / '
-      '“That is still on your mind.” / “Something is weighing on your mind.” '
+      'Prefer their night-object inside the stem: '
+      '“Tomorrow is still on your mind.” / “That list is still on your mind.” / '
+      '“The going-over is still there.” '
+      'Do not default to “Something is still weighing on your mind” plus a '
+      'pasted clause. Do not add “a lot to carry” / “on your plate”. '
       'Do not invent new labels (do not add “worries/anxiety” they did not say). '
       'Do not open with Receipt “It sounds like…” if you can name directly. '
       'One short sentence preferred. No blank lines. No trailing empty lines. '
@@ -111,6 +114,12 @@ class NamingIntelligence {
     'Cheer-up or toxic-positivity reframes that erase the load',
     'Questions of any kind',
     'Unsupported verbatim parroting of the user’s wording as padding',
+    'Pasting their full clause after a Naming stem (I→you copies of '
+        '“keep going over everything I have to do”)',
+    'A second restatement after the name already landed (hard to find peace / '
+        'a lot to carry / on your plate)',
+    'Generic remap of their night-objects into stock load when they named '
+        'tomorrow, a list, or tasks',
   ];
 
   String _userContent(String? currentTurn) {
@@ -120,8 +129,9 @@ class NamingIntelligence {
       ..writeln(_recognitionDirective)
       ..writeln()
       ..writeln(
-        'Emit three to four short Naming lines (max 45 words). '
-        'Golden Conversations V2 cadence. Soft perspective welcome. '
+        'Emit two short Naming lines (max 45 words). '
+        'Quiet name with their night-object inside the stem, then at most one '
+        'soft perspective. Then stop. '
         'No interpretation. No Permission. No Release. No questions.',
       );
 
@@ -157,7 +167,13 @@ class NamingIntelligence {
     final singleRecognitionRule =
         'Single recognition rule: prefer one precise recognition (with optional '
         'soft perspective) over multiple observations. Extra agendas are a '
-        'Naming failure.';
+        'Naming failure. After the Naming stem, at most one hinge — never a '
+        'second “hard to find peace / a lot to carry / on your plate”.';
+
+    final keepObjectRule =
+        'Night-object rule: keep their named object (tomorrow / the list / '
+        'the tasks / the person) as light texture inside the stem. Never paste '
+        'their full clause or an I→you near-copy.';
 
     final continuityRule =
         'Continuity rule: continue naturally from a successful Receipt. '
@@ -186,6 +202,7 @@ Naming Intelligence v$version:
 $_recognitionDirective
 $evidenceRule
 $singleRecognitionRule
+$keepObjectRule
 $continuityRule
 $softPerspectiveRule
 $guardAnchor

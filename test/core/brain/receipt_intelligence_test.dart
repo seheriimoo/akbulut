@@ -69,10 +69,12 @@ void main() {
       expect(forbidden, contains('clinical paragraph'));
       expect(forbidden, contains('Category remapping'));
       expect(forbidden, contains('really'));
+      expect(forbidden, contains('It sounds like'));
       expect(all, contains('Anti-essay'));
       expect(all, contains('Golden Conversations V2'));
       expect(all, contains('No-remap rule'));
       expect(all, contains('Intensifier'));
+      expect(all, contains('Anti-stack rule'));
       expect(all.toLowerCase(), contains('texture-first'));
     });
 
@@ -101,9 +103,48 @@ void main() {
       expect(slice.userContent, contains('do not parrot'));
       expect(slice.userContent, contains('won’t settle'));
       expect(slice.userContent, contains('shaping only'));
+      expect(slice.userContent, contains('Night-object rule'));
+      expect(slice.userContent, contains('Anti-stack rule'));
       expect(slice.userContent, isNot(contains('Lived expression to receive')));
-      expect(slice.userContent, contains('Three to four short sentences'));
+      expect(slice.userContent, contains('Two short sentences'));
       expect(slice.userContent, contains('45 words'));
+    });
+
+    test('forbids inventing tomorrow on uyuyamiyorum / idk / bilmiyorum', () {
+      for (final line in const [
+        'uyuyamiyorum.',
+        'idk',
+        'bilmiyorum.',
+        'konusmak istemiyorum.',
+      ]) {
+        final slice = intelligence.compile(
+          stage: receiptStage,
+          conversationGrounding: grounding(line),
+        );
+        final all = '${slice.userContent}\n${slice.systemAppendix}\n'
+            '${slice.forbiddenMoves.join(' ')}';
+        expect(all, contains('Anti-invention'));
+        expect(all.toLowerCase(), contains('tomorrow'));
+        expect(all, contains('tomorrow-carry scene'));
+        expect(
+          all,
+          anyOf(contains('Turkish only'), contains('Language lock')),
+        );
+      }
+    });
+
+    test('keeps tomorrow object when the person named it', () {
+      final slice = intelligence.compile(
+        stage: receiptStage,
+        conversationGrounding: grounding(
+          "I can't stop thinking about tomorrow.",
+        ),
+      );
+      expect(slice.userContent, contains('Night-object rule'));
+      expect(
+        slice.userContent,
+        isNot(contains('do not import a tomorrow-carry scene they did not name')),
+      );
     });
 
     test('adds relational specificity note without inventing who/why', () {
@@ -127,6 +168,19 @@ void main() {
       expect(slice.userContent, contains('Sparse-message restraint'));
       expect(slice.userContent, contains('Do not invent stillness'));
       expect(slice.userContent, isNot(contains('Relational note')));
+    });
+
+    test('filler idk / bilmiyorum compile thin-turn honesty, not tomorrow', () {
+      for (final line in const ['idk', 'bilmiyorum', 'hm', "I don't know"]) {
+        final slice = intelligence.compile(
+          stage: receiptStage,
+          conversationGrounding: grounding(line),
+        );
+        expect(slice.userContent, contains('Sparse-message restraint'), reason: line);
+        expect(slice.userContent, contains('do not invent night-objects'), reason: line);
+        expect(slice.systemAppendix, contains('Anti-invention'), reason: line);
+        expect(slice.systemAppendix.toLowerCase(), contains('tomorrow'), reason: line);
+      }
     });
 
     test('ignores standalone livedExpression; uses conversationGrounding only', () {

@@ -3,15 +3,15 @@ import '../billing/premium_product_access.dart';
 /// Sleep-bed catalog: night blocker → shipped BG asset.
 ///
 /// Presentation/audio layer only. Does not belong to HCOS.
-/// Entitlement still gates free vs premium duration where applicable.
+/// Live beds must match the entitlement timer (free 30m / premium 45m).
+/// GlobalSleep (~5m) remains shipped but is not a live V1 bed.
 class SleepBedCatalog {
   const SleepBedCatalog();
 
   /// Resolve asset for [blocker] under current [access].
   ///
-  /// - mind / default → CoreDefaultAir entitlement bed
-  /// - loneliness / relationship → GlobalSleep bed (softer hold)
-  /// - stress → longer quiet bed when premium, else free bed
+  /// Every live blocker uses the duration-matched entitlement bed so the
+  /// player timer and file length stay aligned.
   String assetFor({
     required String blocker,
     required PremiumProductAccess access,
@@ -19,13 +19,7 @@ class SleepBedCatalog {
     switch (blocker) {
       case 'loneliness':
       case 'relationship':
-        return access.isPremium
-            ? SleepBedCatalog.globalSleepPremiumBed
-            : SleepBedCatalog.globalSleepBed;
       case 'stress':
-        return access.isPremium
-            ? PremiumProductAccess.premiumSleepBedAsset
-            : PremiumProductAccess.freeSleepBedAsset;
       case 'mind':
       default:
         return access.sleepBedAsset;
@@ -63,8 +57,7 @@ class SleepBedCatalog {
   static const String globalSleepBed =
       'assets/audio/bg/CoreDefaultAir/CoreDefaultAir_BG_GlobalSleep.m4a';
 
-  /// Premium loneliness/relationship uses the same GlobalSleep master until
-  /// dedicated premium stems ship; length still follows entitlement timer.
+  /// Shipped ~5m stem. Not used as a live V1 bed (timer is 30/45).
   static const String globalSleepPremiumBed =
       'assets/audio/bg/CoreDefaultAir/CoreDefaultAir_BG_GlobalSleep.m4a';
 }

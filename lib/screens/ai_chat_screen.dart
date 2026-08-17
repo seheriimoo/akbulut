@@ -1,7 +1,11 @@
 import 'dart:async';
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import '../billing/billing_service.dart';
+import '../billing/night_access.dart';
 import '../billing/premium_product_access.dart';
+import '../config/app_config.dart';
 import '../billing/sleep_bed_catalog.dart';
 import '../core/brain/cognitive_orchestrator.dart';
 import '../core/brain/cognitive_turn_result.dart';
@@ -13,7 +17,6 @@ import '../core/brain/night_audio_handoff.dart';
 import '../core/brain/night_session.dart';
 import '../features/player/player_screen.dart';
 import 'night_complete_screen.dart';
-import 'paywall_screen.dart';
 import 'session_ui_language.dart';
 
 class AISleepChatScreen extends StatefulWidget {
@@ -98,6 +101,15 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
   /// Sticky session UI language → CTA copy. Survives Player push/pop + rebuild.
   String get _continueAudioLabel =>
       _uiLanguageResolver.continueAudioLabel(_sessionUiLanguage);
+
+  String get _audioRetryLabel =>
+      _uiLanguageResolver.audioRetryLabel(_sessionUiLanguage);
+
+  String get _expressionFailedLabel =>
+      _uiLanguageResolver.expressionFailedLabel(
+        _sessionUiLanguage,
+        missingAiKey: kDebugMode && !AppConfig.hasOpenAiApiKey,
+      );
 
   @override
   void initState() {
@@ -230,6 +242,15 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
         }
       });
 
+      if (!hasExpression &&
+          result.exitDecision == ExitDecision.continueConversation) {
+        debugPrint(
+          'Nocta expression quiet: no utterance '
+          '(vendor/guard/abstain). hasOpenAiKey='
+          '${AppConfig.hasOpenAiApiKey}',
+        );
+      }
+
       if (hasExpression) {
         await _addAIMessage(reply);
       }
@@ -251,8 +272,10 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
           await _finishNightAndShowClosing();
           break;
       }
-    } catch (_) {
+    } catch (error, stack) {
       // Fail closed in UI: never crash, never invent assistant speech.
+      debugPrint('Nocta turn failed: $error');
+      debugPrint('$stack');
       if (!mounted) return;
       setState(() {
         isTyping = false;
@@ -289,17 +312,9 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
     });
     _dismissKeyboardAndClearDraft();
 
-    // Premium is offered at the live Conversation → Audio boundary.
-    // Entitlement ownership stays in BillingService; HCOS is unchanged.
-    var access = await PremiumProductAccess.resolve();
-    if (!access.isPremium && mounted) {
-      await Navigator.push<bool>(
-        context,
-        MaterialPageRoute(builder: (_) => const PaywallScreen()),
-      );
-      if (!mounted) return;
-      access = await PremiumProductAccess.resolve();
-    }
+    // Paywall is owned by the night gate before Conversation starts.
+    // Nights 1–3 must not see a paywall at audio handoff.
+    final access = await PremiumProductAccess.resolve();
 
     if (!mounted) return;
 
@@ -417,10 +432,21 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
 
     if (!mounted) return;
 
+    final completed = _mindModel.identity.totalSessions;
+    final premium = await BillingService.instance.hasPremiumEntitlement();
+    if (!mounted) return;
+
     setState(() => isLoadingAudio = false);
 
     await Navigator.of(context).pushReplacement(
-      MaterialPageRoute(builder: (_) => const NightCompleteScreen()),
+      MaterialPageRoute(
+        builder: (_) => NightCompleteScreen(
+          showPremiumTransition: NightAccess.shouldShowPostThirdNightNote(
+            isPremium: premium,
+            completedNights: completed,
+          ),
+        ),
+      ),
     );
   }
 
@@ -471,7 +497,7 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
                 if (_expressionQuiet &&
                     !isTyping &&
                     index == _messages.length) {
-                  return const _QuietHoldCue();
+                  return _QuietHoldCue(label: _expressionFailedLabel);
                 }
 
                 final message = _messages[index];
@@ -500,7 +526,10 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
           ),
           if (isLoadingAudio) const _AudioPreparingCue(),
           if (_audioHandoffFailed && !isLoadingAudio)
-            _AudioRetryCue(onRetry: _retryAudioHandoff),
+            _AudioRetryCue(
+              label: _audioRetryLabel,
+              onRetry: _retryAudioHandoff,
+            ),
           if (_audioContinueAvailable &&
               !_audioHandoffFailed &&
               !isLoadingAudio)
@@ -641,24 +670,25 @@ class _TypingBubble extends StatelessWidget {
   }
 }
 
-/// Minimal non-conversational chrome when expression is absent.
+/// Visible non-conversational chrome when expression is absent.
 /// Not an assistant reply. Not invented dialogue.
 class _QuietHoldCue extends StatelessWidget {
-  const _QuietHoldCue();
+  const _QuietHoldCue({required this.label});
+
+  final String label;
 
   @override
   Widget build(BuildContext context) {
-    return const Align(
-      alignment: Alignment.centerLeft,
-      child: Padding(
-        padding: EdgeInsets.symmetric(vertical: 8, horizontal: 4),
-        child: Text(
-          '·',
-          style: TextStyle(
-            color: Colors.white24,
-            fontSize: 14,
-            height: 1.2,
-          ),
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(8, 12, 8, 8),
+      child: Text(
+        label,
+        textAlign: TextAlign.left,
+        style: TextStyle(
+          color: Colors.white.withValues(alpha: 0.62),
+          fontSize: 15,
+          height: 1.45,
+          fontWeight: FontWeight.w300,
         ),
       ),
     );
@@ -694,8 +724,9 @@ class _AudioPreparingCue extends StatelessWidget {
 
 /// Shown only after Player load/play failure. Offers retry without closing night.
 class _AudioRetryCue extends StatelessWidget {
-  const _AudioRetryCue({required this.onRetry});
+  const _AudioRetryCue({required this.label, required this.onRetry});
 
+  final String label;
   final Future<void> Function() onRetry;
 
   @override
@@ -732,7 +763,7 @@ class _AudioRetryCue extends StatelessWidget {
                   ),
                 ),
                 child: Text(
-                  'Tekrar dene',
+                  label,
                   style: TextStyle(
                     color: Colors.white.withValues(alpha: 0.92),
                     fontSize: 14,

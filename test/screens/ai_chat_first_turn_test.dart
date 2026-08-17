@@ -24,6 +24,11 @@ void main() {
 
     // Quiet-hold cue is for null expression after a turn — not on open.
     expect(find.text('·'), findsNothing);
+    expect(
+      find.textContaining('Nocta couldn’t reply'),
+      findsNothing,
+    );
+    expect(find.textContaining('This build has no AI key'), findsNothing);
 
     // Input accepts the first message immediately.
     final field = tester.widget<TextField>(find.byType(TextField));

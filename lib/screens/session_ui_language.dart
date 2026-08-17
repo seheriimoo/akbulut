@@ -55,6 +55,41 @@ class SessionUiLanguageResolver {
     }
   }
 
+  /// Non-speech chrome after Player load/play failure.
+  String audioRetryLabel(SessionUiLanguage language) {
+    switch (language) {
+      case SessionUiLanguage.tr:
+        return 'Tekrar dene';
+      case SessionUiLanguage.en:
+      case SessionUiLanguage.unknown:
+        return 'Try again';
+    }
+  }
+
+  /// Non-speech chrome when a turn produced no assistant utterance.
+  /// Not HCOS dialogue. Not an invented reply.
+  String expressionFailedLabel(
+    SessionUiLanguage language, {
+    required bool missingAiKey,
+  }) {
+    if (missingAiKey) {
+      switch (language) {
+        case SessionUiLanguage.tr:
+          return 'Bu derlemede AI anahtarı yok. Uygulamayı secrets dosyasıyla yeniden çalıştır.';
+        case SessionUiLanguage.en:
+        case SessionUiLanguage.unknown:
+          return 'This build has no AI key. Rerun with config/secrets.local.json.';
+      }
+    }
+    switch (language) {
+      case SessionUiLanguage.tr:
+        return 'Nocta yanıt veremedi. Tekrar göndermeyi dene.';
+      case SessionUiLanguage.en:
+      case SessionUiLanguage.unknown:
+        return 'Nocta couldn’t reply. Try sending again.';
+    }
+  }
+
   static bool _isUnstableToken(String raw) {
     final n = raw
         .trim()

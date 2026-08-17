@@ -8,6 +8,7 @@ import 'infrastructure/crash_reporting.dart';
 import 'screens/ai_chat_screen.dart';
 import 'screens/compliance/consent_gate_screen.dart';
 import 'screens/compliance/legal_document_screen.dart';
+import 'screens/night_gate.dart';
 
 Future<void> main() async {
   await runZonedGuarded(() async {
@@ -120,11 +121,13 @@ class WelcomeScreen extends StatelessWidget {
   Future<void> _openNight(BuildContext context) async {
     final accepted = await ConsentStore.hasAcceptedBaseline();
     if (!context.mounted) return;
-    if (accepted) {
-      Navigator.pushNamed(context, AppRoutes.aiChat);
-    } else {
+    if (!accepted) {
       Navigator.pushNamed(context, AppRoutes.consent);
+      return;
     }
+    final allowed = await ensureNightConversationAllowed(context);
+    if (!context.mounted || !allowed) return;
+    Navigator.pushNamed(context, AppRoutes.aiChat);
   }
 
   @override

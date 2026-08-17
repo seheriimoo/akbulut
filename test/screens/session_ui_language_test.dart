@@ -331,4 +331,35 @@ void main() {
       expect(intent.matches(message), isFalse, reason: message);
     }
   });
+
+  test('expression-failed chrome is visible and not invented dialogue', () {
+    expect(
+      resolver.expressionFailedLabel(
+        SessionUiLanguage.en,
+        missingAiKey: false,
+      ),
+      'Nocta couldn’t reply. Try sending again.',
+    );
+    expect(
+      resolver.expressionFailedLabel(
+        SessionUiLanguage.tr,
+        missingAiKey: false,
+      ),
+      'Nocta yanıt veremedi. Tekrar göndermeyi dene.',
+    );
+    expect(
+      resolver.expressionFailedLabel(
+        SessionUiLanguage.en,
+        missingAiKey: true,
+      ),
+      contains('no AI key'),
+    );
+    expect(
+      resolver.expressionFailedLabel(
+        SessionUiLanguage.tr,
+        missingAiKey: true,
+      ),
+      contains('AI anahtarı'),
+    );
+  });
 }

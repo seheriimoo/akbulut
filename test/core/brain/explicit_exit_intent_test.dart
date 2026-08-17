@@ -55,6 +55,9 @@ void main() {
       'konuşmak istemiyorum artık',
       'artık konuşmak istemiyorum',
       'daha fazla konuşmak istemiyorum',
+      'konuşmak istemiyorum',
+      'konusmak istemiyorum.',
+      'sadece burdayim. konusmak istemiyorum.',
       'konuşmayı bitirelim',
       'burada bitirelim',
       'tamam artık sese geçelim',
@@ -123,6 +126,9 @@ void main() {
       'ok',
       'okey',
       'peki',
+      "I don't want to talk about him",
+      "I don't want to talk with her",
+      "I don't want to talk to them",
     ]) {
       test('FP "$message" does not match', () {
         expect(intent.matches(message), isFalse);

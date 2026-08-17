@@ -48,10 +48,12 @@ void main() {
     expect(chat.contains('if (_audioContinueAvailable) return false;'), isTrue);
     expect(chat.contains('_sessionUiLanguage'), isTrue);
     expect(chat.contains('continueAudioLabel(_sessionUiLanguage)'), isTrue);
-    expect(chat.contains('Tekrar dene'), isTrue);
+    expect(chat.contains('_audioRetryLabel'), isTrue);
     final locale = File('lib/screens/session_ui_language.dart').readAsStringSync();
     expect(locale.contains('Sese devam et'), isTrue);
     expect(locale.contains('Continue to audio'), isTrue);
+    expect(locale.contains('Tekrar dene'), isTrue);
+    expect(locale.contains('Try again'), isTrue);
   });
 
   test('true still finishes night via _finishNightAndShowClosing', () {

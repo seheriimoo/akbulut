@@ -116,6 +116,9 @@ void main() {
         ),
         isNotNull,
       );
+    });
+
+    test('Enough handoff rejects Release night-hold append', () {
       expect(
         guard.allow(
           utterance: const ConversationUtterance(
@@ -124,7 +127,17 @@ void main() {
           ),
           what: ConversationPhase.continuity,
         ),
-        isNotNull,
+        isNull,
+      );
+      expect(
+        guard.allow(
+          utterance: const ConversationUtterance(
+            text:
+                "I'm preparing a little quiet for you now. Let the night hold what you don't need.",
+          ),
+          what: ConversationPhase.continuity,
+        ),
+        isNull,
       );
     });
 

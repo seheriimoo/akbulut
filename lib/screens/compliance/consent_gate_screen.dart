@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 
 import '../../compliance/compliance_texts.dart';
 import '../../compliance/consent_store.dart';
+import '../night_gate.dart';
 import 'legal_document_screen.dart';
 
 /// First-run LLM disclosure + non-clinical disclaimer + legal acceptance.
@@ -24,6 +25,12 @@ class _ConsentGateScreenState extends State<ConsentGateScreen> {
     setState(() => _submitting = true);
     await ConsentStore.acceptBaseline();
     if (!mounted) return;
+    final allowed = await ensureNightConversationAllowed(context);
+    if (!mounted) return;
+    if (!allowed) {
+      Navigator.pushNamedAndRemoveUntil(context, '/', (route) => false);
+      return;
+    }
     Navigator.pushReplacementNamed(context, '/ai-chat');
   }
 

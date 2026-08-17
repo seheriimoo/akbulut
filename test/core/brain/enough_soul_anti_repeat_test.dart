@@ -119,7 +119,10 @@ void main() {
       expect(compiled.systemContent, contains('Anti-catchphrase'));
       expect(compiled.systemContent, contains('Do not reuse Release night-hold'));
       expect(compiled.userContent, contains('No catchphrase stamp'));
-      expect(compiled.userContent, contains('no second night-hold sentence'));
+      expect(
+        compiled.userContent,
+        contains('Do not add Release put-down after the handoff'),
+      );
     });
 
     test('Guard admits warmer Enough closes and classic stems', () {

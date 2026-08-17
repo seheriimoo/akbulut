@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -376,21 +377,10 @@ void main() {
     });
 
     test('shipped m4a runtimes match free 30m and premium 45m timers', () {
-      Duration durationOf(String path) {
-        final result = Process.runSync('afinfo', [path]);
-        expect(result.exitCode, 0, reason: '${result.stderr}');
-        final stdout = result.stdout.toString();
-        final match = RegExp(
-          r'estimated duration:\s+([0-9.]+)\s+sec',
-        ).firstMatch(stdout);
-        expect(match, isNotNull, reason: stdout);
-        return Duration(
-          milliseconds: (double.parse(match!.group(1)!) * 1000).round(),
-        );
-      }
-
-      final free = durationOf(PremiumProductAccess.freeSleepBedAsset);
-      final premium = durationOf(PremiumProductAccess.premiumSleepBedAsset);
+      final free = _m4aMovieDuration(PremiumProductAccess.freeSleepBedAsset);
+      final premium = _m4aMovieDuration(
+        PremiumProductAccess.premiumSleepBedAsset,
+      );
       expect(
         (free.inSeconds - 30 * 60).abs(),
         lessThan(2),
@@ -404,3 +394,65 @@ void main() {
     });
   });
 }
+
+/// Movie duration from the ISO-BMFF `mvhd` box. No macOS `afinfo` / ffmpeg.
+Duration _m4aMovieDuration(String path) {
+  final raf = File(path).openSync();
+  try {
+    final length = raf.lengthSync();
+    while (raf.positionSync() + 8 <= length) {
+      final start = raf.positionSync();
+      final header = raf.readSync(8);
+      if (header.length < 8) {
+        break;
+      }
+      final headerData = ByteData.sublistView(header);
+      var boxSize = headerData.getUint32(0);
+      final type = String.fromCharCodes(header.sublist(4));
+      var headerSize = 8;
+      if (boxSize == 1) {
+        final ext = raf.readSync(8);
+        boxSize = ByteData.sublistView(ext).getUint64(0);
+        headerSize = 16;
+      } else if (boxSize == 0) {
+        boxSize = length - start;
+      }
+      expect(boxSize, greaterThanOrEqualTo(headerSize), reason: path);
+      if (type == 'mvhd') {
+        final payload = raf.readSync(boxSize - headerSize);
+        return _parseMvhdPayload(payload, path);
+      }
+      const containers = {'moov', 'trak', 'mdia', 'minf'};
+      if (containers.contains(type)) {
+        continue;
+      }
+      raf.setPositionSync(start + boxSize);
+    }
+    fail('no mvhd box in $path');
+  } finally {
+    raf.closeSync();
+  }
+}
+
+Duration _parseMvhdPayload(Uint8List payload, String path) {
+  expect(payload.length, greaterThanOrEqualTo(20), reason: path);
+  final data = ByteData.sublistView(payload);
+  final version = payload[0];
+  late final int timescale;
+  late final int durationTicks;
+  if (version == 0) {
+    timescale = data.getUint32(12);
+    durationTicks = data.getUint32(16);
+  } else if (version == 1) {
+    expect(payload.length, greaterThanOrEqualTo(32), reason: path);
+    timescale = data.getUint32(20);
+    durationTicks = data.getUint64(24);
+  } else {
+    fail('unsupported mvhd version $version in $path');
+  }
+  expect(timescale, greaterThan(0), reason: path);
+  return Duration(
+    milliseconds: ((durationTicks * 1000) / timescale).round(),
+  );
+}
+

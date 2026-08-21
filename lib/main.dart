@@ -1,5 +1,4 @@
 import 'dart:async';
-import 'dart:ui';
 import 'package:flutter/material.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
 import 'config/app_config.dart';
@@ -25,7 +24,7 @@ Future<void> main() async {
             PurchasesConfiguration(AppConfig.revenueCatApiKey),
           );
         }
-        runApp(const SleepWaveApp());
+        runApp(const NoctaApp());
       },
     );
   }, CrashReporting.zoneErrorHandler);
@@ -39,8 +38,8 @@ class AppRoutes {
   static const String aiChat = '/ai-chat';
 }
 
-class SleepWaveApp extends StatelessWidget {
-  const SleepWaveApp({super.key});
+class NoctaApp extends StatelessWidget {
+  const NoctaApp({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -165,13 +164,13 @@ class WelcomeScreen extends StatelessWidget {
                       fontWeight: FontWeight.w300,
                     ),
                   ),
-                  const SizedBox(height: 10),
+                  const SizedBox(height: 5),
                   Container(
                     width: 150,
                     height: 1.8,
                     color: Colors.white.withOpacity(0.4),
                   ),
-                  const SizedBox(height: 6),
+                  const SizedBox(height: 11),
                   Text(
                    "AI-Powered Personalized Sleep Transition",
                     textAlign: TextAlign.center,
@@ -186,67 +185,71 @@ class WelcomeScreen extends StatelessWidget {
               const Spacer(flex: 2),
               GestureDetector(
                 onTap: () => _openNight(context),
-                child: ClipRRect(
-                  borderRadius: BorderRadius.circular(18),
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 25, sigmaY: 25),
-                    child: Container(
-                      height: 48,
-                      width: double.infinity,
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: Colors.white.withOpacity(0.08),
-                        borderRadius: BorderRadius.circular(18),
-                        border: Border.all(
-                          color: Colors.white.withOpacity(0.18),
-                        ),
-                      ),
-                      child: Text(
-                        "Begin",
-                        style: TextStyle(
-                          fontSize: 14,
-                          letterSpacing: 1.2,
-                          color: Colors.white.withOpacity(0.95),
-                        ),
-                      ),
+                child: Container(
+                  height: 48,
+                  width: double.infinity,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF02040D),
+                    borderRadius: BorderRadius.circular(8),
+                    border: Border.all(
+                      color: Colors.white.withOpacity(0.22),
+                    ),
+                  ),
+                  child: Text(
+                    "Begin",
+                    style: TextStyle(
+                      fontSize: 14,
+                      letterSpacing: 1.2,
+                      color: Colors.white.withOpacity(0.95),
                     ),
                   ),
                 ),
               ),
-              const SizedBox(height: 18),
-              Wrap(
-                alignment: WrapAlignment.center,
-                spacing: 18,
+              const SizedBox(height: 10),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  TextButton(
-                    onPressed: () =>
+                  GestureDetector(
+                    onTap: () =>
                         Navigator.pushNamed(context, AppRoutes.privacy),
-                    child: Text(
-                      'Privacy Policy',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
-                        fontSize: 12,
-                        decoration: TextDecoration.underline,
-                        decorationColor: Colors.white.withOpacity(0.35),
+                    child: Semantics(
+                      button: true,
+                      label: 'Privacy Policy',
+                      child: Text(
+                        'Privacy',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.7),
+                          fontSize: 12,
+                        ),
                       ),
                     ),
                   ),
-                  TextButton(
-                    onPressed: () =>
+                  Text(
+                    '  -  ',
+                    style: TextStyle(
+                      color: Colors.white.withOpacity(0.7),
+                      fontSize: 12,
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () =>
                         Navigator.pushNamed(context, AppRoutes.terms),
-                    child: Text(
-                      'Terms of Service',
-                      style: TextStyle(
-                        color: Colors.white.withOpacity(0.7),
-                        fontSize: 12,
-                        decoration: TextDecoration.underline,
-                        decorationColor: Colors.white.withOpacity(0.35),
+                    child: Semantics(
+                      button: true,
+                      label: 'Terms of Service',
+                      child: Text(
+                        'Terms',
+                        style: TextStyle(
+                          color: Colors.white.withOpacity(0.7),
+                          fontSize: 12,
+                        ),
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 8),
             ],
           ),
         ),

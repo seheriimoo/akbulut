@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import '../main.dart';
 import '../features/player/player_screen.dart';
+import 'paywall_screen.dart';
 
 class SleepResultScreen extends StatelessWidget {
   final String resultTitle;
@@ -121,7 +121,12 @@ class SleepResultScreen extends StatelessWidget {
               height: 54,
               child: OutlinedButton(
                 onPressed: () {
-                  Navigator.pushNamed(context, AppRoutes.premium);
+                  Navigator.push(
+                    context,
+                    MaterialPageRoute(
+                      builder: (_) => const PaywallScreen(),
+                    ),
+                  );
                 },
                 style: OutlinedButton.styleFrom(
                   foregroundColor: Colors.white,

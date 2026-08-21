@@ -21,7 +21,7 @@ void main() {
     await AppConfig.load();
     expect(AppConfig.hasOpenAiApiKey, isTrue);
 
-    await tester.pumpWidget(const SleepWaveApp());
+    await tester.pumpWidget(const NoctaApp());
     await tester.pumpAndSettle(const Duration(seconds: 2));
 
     expect(find.text('Nocta'), findsWidgets);

@@ -1,4 +1,5 @@
 import 'conversation_utterance.dart';
+import 'grounded_progression.dart';
 
 /// Deterministic Narrow fork fallback when Guard rejects LLM output (Slice 2).
 class NarrowFallbackBuilder {
@@ -14,8 +15,8 @@ class NarrowFallbackBuilder {
       return null;
     }
     if (refinementAfterPartial) {
-      final text = _turkishRefinement(
-        userUtterance,
+      final text = GroundedNarrowContract.refinementQuestion(
+        userUtterance: userUtterance,
         priorUserUtterance: priorUserUtterance,
         groundingBlob: groundingBlob,
       );
@@ -72,38 +73,6 @@ class NarrowFallbackBuilder {
       return 'Do you miss them, or how you felt when you were together?';
     }
     return 'Is it the situation itself, or what might happen next?';
-  }
-
-  static String? _turkishRefinement(
-    String user, {
-    String? priorUserUtterance,
-    String? groundingBlob,
-  }) {
-    final n = _normalize(user);
-    final ctx = _normalize('${groundingBlob ?? ''} ${priorUserUtterance ?? ''} $user');
-    if (_containsAny(n, ['belki']) && _containsAny(n, ['isten', 'işten'])) {
-      return 'İşin kendisi mi geliyor aklına, yoksa yarın tekrar o ortama dönecek olmak mı?';
-    }
-    if (_containsAny(ctx, ['icime oturdu', 'bilmiyorum', 'belirsiz']) &&
-        _containsAny(n, ['belki', 'galiba', 'sanirim'])) {
-      return 'İşin kendisi mi geliyor aklına, yoksa yarın tekrar o ortama dönecek olmak mı?';
-    }
-    if (_containsAny(n, ['belki']) && _containsAny(n, ['isten', 'işten'])) {
-      return 'İşin kendisi mi geliyor aklına, yoksa yarın tekrar o ortama dönecek olmak mı?';
-    }
-    if (_containsAny(n, ['baski', 'baskı']) && !_containsAny(n, ['belki', 'isten', 'işten'])) {
-      return 'Baskı kısmı doğru gibi. Peki eksik kalan taraf ne?';
-    }
-    if (_containsAny(n, ['biraz ama', 'tam degil', 'tam değil', 'sadece o'])) {
-      return 'Anladım. Peki eksik kalan taraf ne?';
-    }
-    if (_containsAny(n, ['evet ama', 'dogru ama', 'doğru ama', 'hala', 'hâlâ'])) {
-      return 'Tamam. Peki tam oturmayan taraf ne?';
-    }
-    if (_containsAny(n, ['anlamiyor', 'anlamıyor', 'kimse'])) {
-      return 'Anlaşılmadığını hissetmek mi daha ağır, yoksa yalnız kalmak mı?';
-    }
-    return 'Anladım. Peki eksik kalan taraf ne?';
   }
 
   static String _normalize(String s) {

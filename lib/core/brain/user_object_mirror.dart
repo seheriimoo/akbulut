@@ -1,6 +1,9 @@
 import 'conversation_expression_mode.dart';
+import 'conversation_grounding_buffer.dart';
 import 'conversation_phase.dart';
 import 'conversation_utterance.dart';
+import 'grounded_progression.dart';
+import 'night_session.dart';
 import 'surface_text_fuzzy.dart';
 import 'surface_utterance_kind.dart';
 import 'utterance_guard.dart';
@@ -27,8 +30,20 @@ class UserObjectMirror {
     String? groundingBlob,
     ConversationExpressionMode expressionMode =
         ConversationExpressionMode.standard,
+    NightSession? session,
+    ConversationGroundingBuffer? grounding,
   }) {
     if (!_supportsMirror(expressionMode)) return null;
+    final concernShiftFresh = userUtterance != null &&
+        ConcernShiftDetector.isShift(
+          currentMessage: userUtterance,
+          grounding: grounding,
+          session: session,
+        );
+    if (ProgressionStateReader.isMirrorSaturated(session) &&
+        !concernShiftFresh) {
+      return null;
+    }
 
     final sourceLine = _mirrorSourceLine(
       userUtterance: userUtterance,
@@ -46,6 +61,7 @@ class UserObjectMirror {
 
     for (final text in candidates) {
       if (text == null || text.trim().isEmpty) continue;
+      if (_isRepeatedMirror(text, session)) continue;
       if (_passesGuard(
         text: text,
         userUtterance: userUtterance,
@@ -65,6 +81,7 @@ class UserObjectMirror {
       );
       for (final text in ood) {
         if (text == null || text.trim().isEmpty) continue;
+        if (_isRepeatedMirror(text, session)) continue;
         if (_passesGuard(
           text: text,
           userUtterance: userUtterance,
@@ -151,6 +168,16 @@ class UserObjectMirror {
     return ['$base gibi.'];
   }
 
+  static bool _isRepeatedMirror(String text, NightSession? session) {
+    if (session == null) return false;
+    final normalized = text.trim().toLowerCase();
+    for (final turn in session.turns) {
+      final prior = turn.admittedExpression?.text.trim().toLowerCase();
+      if (prior != null && prior == normalized) return true;
+    }
+    return false;
+  }
+
   static bool _supportsMirror(ConversationExpressionMode mode) {
     switch (mode) {
       case ConversationExpressionMode.standard:
@@ -163,6 +190,7 @@ class UserObjectMirror {
       case ConversationExpressionMode.integrate:
       case ConversationExpressionMode.closure:
       case ConversationExpressionMode.repair:
+      case ConversationExpressionMode.groundedHold:
         return false;
     }
   }

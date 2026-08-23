@@ -5,6 +5,8 @@ import 'conversation_phase.dart';
 import 'conversation_utterance.dart';
 import 'closure_fallback_builder.dart';
 import 'conversational_landing.dart';
+import 'grounded_progression.dart';
+import 'hold_act_dedup.dart';
 import 'integrate_fallback_builder.dart';
 import 'narrow_fallback_builder.dart';
 import 'night_session.dart';
@@ -34,6 +36,7 @@ class GuardSafeFallback {
     bool narrowRefinementAfterPartial = false,
     NightSession? session,
     ConversationGroundingBuffer? grounding,
+    String sessionVentCorpus = '',
   }) {
     if (!_isSpeakable(what)) return null;
 
@@ -41,6 +44,29 @@ class GuardSafeFallback {
     final groundingBlob = arc.userEvidenceBlob;
     final prefersTurkish = arc.prefersTurkish ||
         SurfaceTextFuzzy.prefersTurkish(userUtterance, groundingBlob);
+
+    if (what == ConversationPhase.validation &&
+        expressionMode == ConversationExpressionMode.observePurity) {
+      final shiftAck = HoldActDedup.concernShiftAcknowledge(
+        userUtterance: userUtterance,
+        groundingBlob: groundingBlob,
+        session: session,
+        grounding: grounding,
+      );
+      if (shiftAck != null) return shiftAck;
+    }
+
+    if (what == ConversationPhase.validation &&
+        expressionMode == ConversationExpressionMode.groundedHold) {
+      final hold = _holdFallback(
+        userUtterance: userUtterance,
+        groundingBlob: groundingBlob,
+        prefersTurkish: prefersTurkish,
+        session: session,
+        grounding: grounding,
+      );
+      if (hold != null) return hold;
+    }
 
     if (what == ConversationPhase.validation &&
         expressionMode == ConversationExpressionMode.narrow) {
@@ -99,18 +125,108 @@ class GuardSafeFallback {
         userUtterance: userUtterance,
         groundingBlob: groundingBlob,
         expressionMode: expressionMode,
+        session: session,
       );
       if (landing != null) return landing;
     }
 
     // B2 — structural user-object mirror before generic empathy filler.
-    if (what == ConversationPhase.validation) {
+    final concernShiftFresh = userUtterance != null &&
+        ConcernShiftDetector.isShift(
+          currentMessage: userUtterance,
+          grounding: grounding,
+          session: session,
+        );
+    if (what == ConversationPhase.validation &&
+        (!ProgressionStateReader.isMirrorSaturated(session) ||
+            concernShiftFresh)) {
       final objectMirror = UserObjectMirror.forValidation(
         userUtterance: userUtterance,
         groundingBlob: groundingBlob,
         expressionMode: expressionMode,
+        session: session,
+        grounding: grounding,
       );
       if (objectMirror != null) return objectMirror;
+    }
+
+    if (what == ConversationPhase.validation &&
+        _isDismissMinimization(userUtterance) &&
+        groundingBlob != null &&
+        groundingBlob.trim().length >= 8) {
+      final hold = _holdFallback(
+        userUtterance: userUtterance,
+        groundingBlob: groundingBlob,
+        prefersTurkish: prefersTurkish,
+        session: session,
+        grounding: grounding,
+      );
+      if (hold != null) return hold;
+      final priorMirror = UserObjectMirror.forValidation(
+        userUtterance: groundingBlob,
+        groundingBlob: groundingBlob,
+        expressionMode: expressionMode,
+        session: session,
+        grounding: grounding,
+      );
+      if (priorMirror != null) return priorMirror;
+    }
+
+    if (what == ConversationPhase.validation &&
+        expressionMode == ConversationExpressionMode.groundedHold) {
+      final hold = _holdFallback(
+        userUtterance: userUtterance,
+        groundingBlob: groundingBlob,
+        prefersTurkish: prefersTurkish,
+        session: session,
+        grounding: grounding,
+      );
+      if (hold != null) return hold;
+    }
+
+    if (what == ConversationPhase.validation &&
+        ProgressionStateReader.isMirrorSaturated(session) &&
+        NarrowExhaustionGate.isExhausted(
+          session,
+          grounding: grounding,
+          currentMessage: userUtterance,
+        )) {
+      final hold = _holdFallback(
+        userUtterance: userUtterance,
+        groundingBlob: groundingBlob,
+        prefersTurkish: prefersTurkish,
+        session: session,
+        grounding: grounding,
+      );
+      if (hold != null) return hold;
+    }
+
+    if (what == ConversationPhase.validation &&
+        ProgressionStateReader.isMirrorSaturated(session)) {
+      final hold = _holdFallback(
+        userUtterance: userUtterance,
+        groundingBlob: groundingBlob,
+        prefersTurkish: prefersTurkish,
+        session: session,
+        grounding: grounding,
+      );
+      if (hold != null) return hold;
+    }
+
+    if (what == ConversationPhase.validation &&
+        NarrowExhaustionGate.isExhausted(
+          session,
+          grounding: grounding,
+          currentMessage: userUtterance,
+        )) {
+      final hold = _holdFallback(
+        userUtterance: userUtterance,
+        groundingBlob: groundingBlob,
+        prefersTurkish: prefersTurkish,
+        session: session,
+        grounding: grounding,
+      );
+      if (hold != null) return hold;
     }
 
     // Legacy keyword observe mirrors — only after B2 surface mirror abstains.
@@ -133,8 +249,48 @@ class GuardSafeFallback {
       }
     }
 
+    if (what == ConversationPhase.neutralEntry &&
+        expressionMode == ConversationExpressionMode.lightChat) {
+      if (SessionVentMemory.blocksPlayfulLight(
+        session: session,
+        grounding: grounding,
+        currentMessage: userUtterance,
+        sessionVentCorpus: sessionVentCorpus,
+      )) {
+        final hold = _holdFallback(
+          userUtterance: userUtterance,
+          groundingBlob: groundingBlob,
+          prefersTurkish: prefersTurkish,
+          session: session,
+          grounding: grounding,
+        );
+        if (hold != null) return hold;
+      }
+    }
+
+    if (what == ConversationPhase.neutralEntry &&
+        expressionMode == ConversationExpressionMode.lightChat) {
+      final vent = VentStackDetector.ventAcknowledgement(
+        userUtterance: userUtterance,
+        groundingBlob: groundingBlob,
+      );
+      if (vent != null &&
+          GroundedHoldContract.admits(
+            noctaText: vent,
+            userUtterance: userUtterance,
+            groundingBlob: groundingBlob,
+          )) {
+        return ConversationUtterance(text: vent);
+      }
+    }
+
     if (prefersTurkish) {
-      final tr = _turkishFor(what, expressionMode: expressionMode);
+      final tr = _turkishFor(
+        what,
+        expressionMode: expressionMode,
+        userUtterance: userUtterance,
+        groundingBlob: groundingBlob,
+      );
       if (tr.isNotEmpty) return ConversationUtterance(text: tr);
     }
 
@@ -142,11 +298,61 @@ class GuardSafeFallback {
     return ConversationUtterance(text: en);
   }
 
+  static ConversationUtterance? _holdFallback({
+    required String? userUtterance,
+    required String? groundingBlob,
+    required bool prefersTurkish,
+    NightSession? session,
+    ConversationGroundingBuffer? grounding,
+  }) {
+    if (session != null && HoldActDedup.sessionUsedGroundedHold(session)) {
+      return HoldActDedup.alternateGroundedHold(
+        userUtterance: userUtterance,
+        groundingBlob: groundingBlob,
+        session: session,
+        grounding: grounding,
+        prefersTurkish: prefersTurkish,
+      );
+    }
+    final hold = HonestSynthesisBuilder.forValidation(
+      userUtterance: userUtterance,
+      groundingBlob: groundingBlob,
+      prefersTurkish: prefersTurkish,
+    );
+    if (hold != null &&
+        session != null &&
+        HoldActDedup.wouldRepeatText(session, hold.text)) {
+      return HoldActDedup.alternateGroundedHold(
+        userUtterance: userUtterance,
+        groundingBlob: groundingBlob,
+        session: session,
+        grounding: grounding,
+        prefersTurkish: prefersTurkish,
+      );
+    }
+    return hold;
+  }
+
   static String? _priorUserLine(ConversationGroundingBuffer? grounding) {
     if (grounding == null || grounding.priorUserUtterances.isEmpty) {
       return null;
     }
     return grounding.priorUserUtterances.last;
+  }
+
+  static bool _isDismissMinimization(String? text) {
+    if (text == null || text.trim().isEmpty) return false;
+    final n = text
+        .toLowerCase()
+        .replaceAll('ö', 'o')
+        .replaceAll('ü', 'u')
+        .replaceAll('ı', 'i')
+        .replaceAll('ğ', 'g')
+        .replaceAll('ş', 's')
+        .replaceAll('ç', 'c');
+    return RegExp(
+      r'\b(onemli degil|sorun degil|hallederim|halledecegim|abartiyorum|abartıyorum)\b',
+    ).hasMatch(n);
   }
 
   static bool _isSpeakable(ConversationPhase what) {
@@ -198,6 +404,8 @@ class GuardSafeFallback {
     ConversationPhase what, {
     ConversationExpressionMode expressionMode =
         ConversationExpressionMode.standard,
+    String? userUtterance,
+    String? groundingBlob,
   }) {
     switch (what) {
       case ConversationPhase.validation:

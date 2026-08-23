@@ -5,6 +5,7 @@ import 'conversation_expression_mode.dart';
 import 'conversation_grounding_buffer.dart';
 import 'conversation_phase.dart';
 import 'explicit_exit_intent.dart';
+import 'grounded_progression.dart';
 import 'light_conversation_detector.dart';
 import 'neutral_entry_detector.dart';
 import 'night_session.dart';
@@ -61,6 +62,7 @@ class ConversationPolicy {
     NightSession? session,
     ValidatedUnderstanding? understanding,
     ConversationGroundingBuffer? conversationGrounding,
+    String sessionVentCorpus = '',
   }) {
     // Explicit exit intent → Enough close that may soft-handoff into audio.
     // Readiness ladder is not required when the person clearly asks to leave.
@@ -68,6 +70,22 @@ class ConversationPolicy {
       return const ConversationDecision(
         phase: ConversationPhase.continuity,
         shouldSpeak: true,
+      );
+    }
+
+    // B4.1 — unresolved vent blocks playful/light routing before arc work.
+    if (message != null &&
+        SessionVentMemory.blocksPlayfulLight(
+          session: session,
+          grounding: conversationGrounding,
+          currentMessage: message,
+          sessionVentCorpus: sessionVentCorpus,
+        )) {
+      return _arcValidationDecision(
+        session: session,
+        message: message,
+        understanding: understanding,
+        conversationGrounding: conversationGrounding,
       );
     }
 
@@ -92,7 +110,12 @@ class ConversationPolicy {
     }
 
     // Light-chat loop: stay warm after a light turn unless load appears.
-    if (_isLightChatContinuation(message: message, session: session)) {
+    if (_isLightChatContinuation(
+      message: message,
+      session: session,
+      conversationGrounding: conversationGrounding,
+      sessionVentCorpus: sessionVentCorpus,
+    )) {
       return const ConversationDecision(
         phase: ConversationPhase.neutralEntry,
         shouldSpeak: true,
@@ -104,6 +127,9 @@ class ConversationPolicy {
       releaseDecision: releaseDecision,
       message: message,
       understanding: understanding,
+      session: session,
+      conversationGrounding: conversationGrounding,
+      sessionVentCorpus: sessionVentCorpus,
     )) {
       return const ConversationDecision(
         phase: ConversationPhase.neutralEntry,
@@ -158,6 +184,7 @@ class ConversationPolicy {
         session: session,
         understanding: understanding,
         conversationGrounding: conversationGrounding,
+        sessionVentCorpus: sessionVentCorpus,
       );
     }
 
@@ -169,6 +196,7 @@ class ConversationPolicy {
       message: message,
       understanding: understanding,
       conversationGrounding: conversationGrounding,
+      sessionVentCorpus: sessionVentCorpus,
     );
   }
 
@@ -190,25 +218,41 @@ class ConversationPolicy {
         );
       }
       if (_isPartialReframeResponse(message)) {
-        return const ConversationDecision(
-          phase: ConversationPhase.validation,
-          shouldSpeak: true,
-          expressionMode: ConversationExpressionMode.narrow,
-          narrowRefinementAfterPartial: true,
+        final partialAdmission = reframeAdmissionGate.evaluate(
+          session: session,
+          message: message,
+          understanding: understanding,
+          conversationGrounding: conversationGrounding,
+          arc: arc,
+        );
+        return _narrowOrHold(
+          session: session,
+          message: message,
+          refinementAfterPartial: true,
+          admission: partialAdmission,
+          conversationGrounding: conversationGrounding,
         );
       }
     }
 
     if (arc.integrateAwaitingResponse && message != null) {
       if (_isArcResistance(message)) {
-        return ConversationDecision(
-          phase: ConversationPhase.validation,
-          shouldSpeak: true,
-          expressionMode: ConversationExpressionMode.narrow,
-          narrowRefinementAfterPartial: true,
+        return _narrowOrHold(
+          session: session,
+          message: message,
+          refinementAfterPartial: true,
+          admission: reframeAdmissionGate.evaluate(
+            session: session,
+            message: message,
+            understanding: understanding,
+            conversationGrounding: conversationGrounding,
+            arc: arc,
+          ),
+          conversationGrounding: conversationGrounding,
+          allowRepairRefinement: true,
         );
       }
-      if (_isIntegratePositiveAck(message)) {
+      if (_isIntegratePositiveAck(message) || _isAncillaryArcDetail(message)) {
         return const ConversationDecision(
           phase: ConversationPhase.validation,
           shouldSpeak: true,
@@ -219,15 +263,51 @@ class ConversationPolicy {
 
     if (arc.closureAwaitingResponse && message != null) {
       if (_isArcResistance(message)) {
-        return ConversationDecision(
-          phase: ConversationPhase.validation,
-          shouldSpeak: true,
-          expressionMode: ConversationExpressionMode.narrow,
+        return _narrowOrHold(
+          session: session,
+          message: message,
+          admission: reframeAdmissionGate.evaluate(
+            session: session,
+            message: message,
+            understanding: understanding,
+            conversationGrounding: conversationGrounding,
+            arc: arc,
+          ),
+          conversationGrounding: conversationGrounding,
+          allowRepairRefinement: true,
         );
       }
     }
 
     if (_isFirstReceiptTurn(session)) {
+      return const ConversationDecision(
+        phase: ConversationPhase.validation,
+        shouldSpeak: true,
+        expressionMode: ConversationExpressionMode.observePurity,
+      );
+    }
+
+    if (session != null &&
+        session.turns.isNotEmpty &&
+        session.turns.last.expressionMode ==
+            ConversationExpressionMode.groundedHold &&
+        (_isSettlingWithoutNewLoad(message) ||
+            _isBareAcknowledgment(message ?? ''))) {
+      return const ConversationDecision(
+        phase: ConversationPhase.validation,
+        shouldSpeak: true,
+        expressionMode: ConversationExpressionMode.groundedHold,
+      );
+    }
+
+    if (ConcernShiftDetector.isShift(
+      currentMessage: message,
+      grounding: conversationGrounding,
+      session: session,
+      blockDuringEarnedArc: arc.hadIntegrate && !arc.hadClosure,
+    ) &&
+        !_isAncillaryArcDetail(message ?? '') &&
+        !_isBareAcknowledgment(message ?? '')) {
       return const ConversationDecision(
         phase: ConversationPhase.validation,
         shouldSpeak: true,
@@ -261,11 +341,12 @@ class ConversationPolicy {
         arc.hadNarrow &&
         message != null &&
         !_isBareAcknowledgment(message)) {
-      return const ConversationDecision(
-        phase: ConversationPhase.validation,
-        shouldSpeak: true,
-        expressionMode: ConversationExpressionMode.narrow,
-        narrowRefinementAfterPartial: true,
+      return _narrowOrHold(
+        session: session,
+        message: message,
+        refinementAfterPartial: true,
+        admission: admission,
+        conversationGrounding: conversationGrounding,
       );
     }
 
@@ -275,23 +356,56 @@ class ConversationPolicy {
         message != null &&
         !reframeReady &&
         reframeReadinessGate.isThinEvidenceAfterNarrow(message)) {
-      return const ConversationDecision(
-        phase: ConversationPhase.validation,
-        shouldSpeak: true,
-        expressionMode: ConversationExpressionMode.narrow,
-        narrowRefinementAfterPartial: true,
+      return _narrowOrHold(
+        session: session,
+        message: message,
+        refinementAfterPartial: true,
+        admission: admission,
+        conversationGrounding: conversationGrounding,
       );
     }
 
     if (!arc.hadNarrow ||
         _shouldRenarrowAfterAck(message, arc) ||
         _isPartialReframeResponse(message ?? '')) {
-      return ConversationDecision(
+      return _narrowOrHold(
+        session: session,
+        message: message,
+        refinementAfterPartial:
+            message != null && _isPartialReframeResponse(message),
+        admission: admission,
+        conversationGrounding: conversationGrounding,
+      );
+    }
+
+    if (ProgressionStateReader.isMirrorSaturated(session)) {
+      if (!NarrowExhaustionGate.isExhausted(
+        session,
+        grounding: conversationGrounding,
+        currentMessage: message,
+      )) {
+        return const ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
+          expressionMode: ConversationExpressionMode.narrow,
+        );
+      }
+      return const ConversationDecision(
         phase: ConversationPhase.validation,
         shouldSpeak: true,
-        expressionMode: ConversationExpressionMode.narrow,
-        narrowRefinementAfterPartial:
-            message != null && _isPartialReframeResponse(message),
+        expressionMode: ConversationExpressionMode.groundedHold,
+      );
+    }
+
+    if (NarrowExhaustionGate.isExhausted(
+      session,
+      grounding: conversationGrounding,
+      currentMessage: message,
+    )) {
+      return const ConversationDecision(
+        phase: ConversationPhase.validation,
+        shouldSpeak: true,
+        expressionMode: ConversationExpressionMode.groundedHold,
       );
     }
 
@@ -461,6 +575,8 @@ class ConversationPolicy {
   bool _isLightChatContinuation({
     required String? message,
     required NightSession? session,
+    ConversationGroundingBuffer? conversationGrounding,
+    String sessionVentCorpus = '',
   }) {
     if (message == null || session == null || session.turns.isEmpty) {
       return false;
@@ -469,7 +585,12 @@ class ConversationPolicy {
     if (last.expressionMode != ConversationExpressionMode.lightChat) {
       return false;
     }
-    return lightConversationDetector.isLightConversation(message);
+    return _allowsLightChat(
+      message: message,
+      session: session,
+      conversationGrounding: conversationGrounding,
+      sessionVentCorpus: sessionVentCorpus,
+    );
   }
 
   bool _isFirstReceiptTurn(NightSession? session) {
@@ -492,10 +613,16 @@ class ConversationPolicy {
     NightSession? session,
     ValidatedUnderstanding? understanding,
     ConversationGroundingBuffer? conversationGrounding,
+    String sessionVentCorpus = '',
   }) {
     if (message != null &&
         !hasLoad &&
-        lightConversationDetector.isLightConversation(message)) {
+        _allowsLightChat(
+          message: message,
+          session: session,
+          conversationGrounding: conversationGrounding,
+          sessionVentCorpus: sessionVentCorpus,
+        )) {
       return const ConversationDecision(
         phase: ConversationPhase.neutralEntry,
         shouldSpeak: true,
@@ -575,15 +702,24 @@ class ConversationPolicy {
     String? message,
     ValidatedUnderstanding? understanding,
     ConversationGroundingBuffer? conversationGrounding,
+    String sessionVentCorpus = '',
   }) {
     if (message != null) {
       final arc = ConversationArcReader.fromSession(session);
       if (arc.reframeAwaitingResponse && _isPartialReframeResponse(message)) {
-        return const ConversationDecision(
-          phase: ConversationPhase.validation,
-          shouldSpeak: true,
-          expressionMode: ConversationExpressionMode.narrow,
-          narrowRefinementAfterPartial: true,
+        return _narrowOrHold(
+          session: session,
+          message: message,
+          refinementAfterPartial: true,
+          admission: reframeAdmissionGate.evaluate(
+            session: session,
+            message: message,
+            understanding: understanding,
+            conversationGrounding: conversationGrounding,
+            arc: arc,
+          ),
+          conversationGrounding: conversationGrounding,
+          allowRepairRefinement: true,
         );
       }
       final admission = reframeAdmissionGate.evaluate(
@@ -639,7 +775,12 @@ class ConversationPolicy {
       case ReleaseReadiness.regulated:
         if (!hasLoad &&
             message != null &&
-            lightConversationDetector.isLightConversation(message)) {
+            _allowsLightChat(
+              message: message,
+              session: session,
+              conversationGrounding: conversationGrounding,
+              sessionVentCorpus: sessionVentCorpus,
+            )) {
           return const ConversationDecision(
             phase: ConversationPhase.neutralEntry,
             shouldSpeak: true,
@@ -757,9 +898,19 @@ class ConversationPolicy {
     required ReleaseDecision releaseDecision,
     required String? message,
     required ValidatedUnderstanding? understanding,
+    NightSession? session,
+    ConversationGroundingBuffer? conversationGrounding,
+    String sessionVentCorpus = '',
   }) {
     if (message == null) return false;
-    if (!lightConversationDetector.isLightConversation(message)) return false;
+    if (!_allowsLightChat(
+      message: message,
+      session: session,
+      conversationGrounding: conversationGrounding,
+      sessionVentCorpus: sessionVentCorpus,
+    )) {
+      return false;
+    }
     if (_hasLoadEvidence(understanding)) return false;
     if (releaseDecision.readiness != ReleaseReadiness.hold &&
         releaseDecision.readiness != ReleaseReadiness.regulated &&
@@ -769,6 +920,114 @@ class ConversationPolicy {
       return false;
     }
     return true;
+  }
+
+  bool _allowsLightChat({
+    required String? message,
+    NightSession? session,
+    ConversationGroundingBuffer? conversationGrounding,
+    String sessionVentCorpus = '',
+  }) {
+    if (message == null) return false;
+    if (SessionVentMemory.blocksPlayfulLight(
+      session: session,
+      grounding: conversationGrounding,
+      currentMessage: message,
+      sessionVentCorpus: sessionVentCorpus,
+    )) {
+      return false;
+    }
+    if (VentStackDetector.hasFrustrationMarkers(message)) return false;
+    return lightConversationDetector.isLightConversation(message);
+  }
+
+  ConversationDecision _narrowOrHold({
+    required NightSession? session,
+    required String? message,
+    required ReframeAdmissionDecision admission,
+    bool refinementAfterPartial = false,
+    ConversationGroundingBuffer? conversationGrounding,
+    bool allowRepairRefinement = false,
+  }) {
+    final exhausted = NarrowExhaustionGate.isExhausted(
+      session,
+      grounding: conversationGrounding,
+      currentMessage: message,
+    );
+
+    if (exhausted) {
+      if (allowRepairRefinement &&
+          refinementAfterPartial &&
+          _isPartialReframeResponse(message ?? '')) {
+        return ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
+          expressionMode: ConversationExpressionMode.narrow,
+          narrowRefinementAfterPartial: true,
+        );
+      }
+      return const ConversationDecision(
+        phase: ConversationPhase.validation,
+        shouldSpeak: true,
+        expressionMode: ConversationExpressionMode.groundedHold,
+      );
+    }
+
+    return ConversationDecision(
+      phase: ConversationPhase.validation,
+      shouldSpeak: true,
+      expressionMode: ConversationExpressionMode.narrow,
+      narrowRefinementAfterPartial: refinementAfterPartial,
+    );
+  }
+
+  bool _isSettlingWithoutNewLoad(String? message) {
+    if (message == null) return false;
+    final n = _normalizeProtestText(message);
+    return _containsAnyNormalized(n, const [
+      'uyuyacagim',
+      'uyuyacağım',
+      'yatcam',
+      'yatacağım',
+      'yatacagim',
+      'iyi geceler',
+      'tamam uyuy',
+      'sakinles',
+      'rahatlad',
+      'hallederim',
+      'halledecegim',
+      'halledeceğim',
+    ]);
+  }
+
+  bool _isAncillaryArcDetail(String message) {
+    if (_isArcResistance(message)) return false;
+    if (_isPartialReframeResponse(message)) return false;
+    final n = _normalizeProtestText(message);
+    if (_containsAnyNormalized(n, const [
+      'baska konu',
+      'başka konu',
+      'aslinda degil',
+      'aslında değil',
+      'yanlis',
+      'yanlış',
+      'oyle degil',
+      'öyle değil',
+    ])) {
+      return false;
+    }
+    return _containsAnyNormalized(n, const [
+      'yarin',
+      'yarın',
+      'sabah',
+      'toplanti',
+      'toplantı',
+      'erken',
+      'icim',
+      'içim',
+      'uyumak',
+      'yatmak',
+    ]);
   }
 
   bool _isNeutralEntry({

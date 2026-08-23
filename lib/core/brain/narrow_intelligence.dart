@@ -82,8 +82,10 @@ class NarrowIntelligence {
 
   static const String _narrowRefinementDirective =
       'Narrow refinement (Slice 2.1): they partially confirmed a reframe. '
-      'Briefly name the part they affirmed (“Baskı kısmı doğru gibi.”), then '
-      'ask ONE question about the missing piece (“Peki eksik kalan taraf ne?”). '
+      'Briefly name ONLY a fragment they actually said (“Yalnızlık kısmı doğru gibi.”), '
+      'then ask ONE question about the missing piece (“Peki eksik kalan taraf ne?”). '
+      'Never inject semantic objects they did not say (no default “baskı”, “endişe”, etc.). '
+      'If you cannot ground the affirmed part, ask “Tam oturmayan taraf ne?” only. '
       'No new reframe. No Belki/Sanki. No advice. One question only.';
 
   static const String _realizationDirective =

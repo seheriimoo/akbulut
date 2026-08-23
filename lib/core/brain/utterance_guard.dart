@@ -4,6 +4,7 @@ import 'conversation_phase.dart';
 import 'conversation_utterance.dart';
 import 'evidence_bound_reframe_contract.dart';
 import 'evidence_ledger.dart';
+import 'grounded_progression.dart';
 import 'permission_realization_contract.dart';
 import 'receipt_realization_contract.dart';
 import 'surface_mirror_contract.dart';
@@ -143,6 +144,26 @@ class UtteranceGuard {
     if (what == ConversationPhase.validation &&
         expressionMode == ConversationExpressionMode.narrow &&
         (_tooManyQuestions(normalized) || !normalized.contains('?'))) {
+      return null;
+    }
+
+    if (what == ConversationPhase.validation &&
+        expressionMode == ConversationExpressionMode.narrow &&
+        !GroundedNarrowContract.admitsNarrowText(
+          noctaText: normalized,
+          userUtterance: userUtterance,
+          groundingBlob: mirrorGroundingUtterance,
+        )) {
+      return null;
+    }
+
+    if (what == ConversationPhase.validation &&
+        expressionMode == ConversationExpressionMode.groundedHold &&
+        !GroundedHoldContract.admits(
+          noctaText: normalized,
+          userUtterance: userUtterance,
+          groundingBlob: mirrorGroundingUtterance,
+        )) {
       return null;
     }
 
@@ -463,6 +484,13 @@ class UtteranceGuard {
         if (expressionMode == ConversationExpressionMode.postReframeListen) {
           return _matchesPostReframeListenContract(lower);
         }
+        if (expressionMode == ConversationExpressionMode.groundedHold) {
+          return GroundedHoldContract.admits(
+            noctaText: lower,
+            userUtterance: userUtterance,
+            groundingBlob: mirrorGroundingUtterance,
+          );
+        }
         return _matchesReceiptContract(
           lower,
           userUtterance: userUtterance,
@@ -522,7 +550,11 @@ class UtteranceGuard {
         ]);
       case ConversationPhase.neutralEntry:
         if (expressionMode == ConversationExpressionMode.lightChat) {
-          return _matchesLightChatContract(lower);
+          return _matchesLightChatContract(
+            lower,
+            userUtterance: userUtterance,
+            mirrorGroundingUtterance: mirrorGroundingUtterance,
+          );
         }
         return _matchesNeutralEntryContract(lower);
       case ConversationPhase.audio:
@@ -887,9 +919,70 @@ class UtteranceGuard {
   }
 
   /// Guard Light Chat Contract V1 (Slice 1).
-  bool _matchesLightChatContract(String lower) {
+  bool _matchesLightChatContract(
+    String lower, {
+    String? userUtterance,
+    String? mirrorGroundingUtterance,
+  }) {
     if (_lightChatUnsafe(lower)) return false;
+    if (_isPlayfulLightAck(lower) && userUtterance != null) {
+      final corpus =
+          '${mirrorGroundingUtterance ?? ''} $userUtterance'.trim();
+      if (VentStackDetector.hasFrustrationMarkers(corpus) ||
+          VentStackDetector.isMultiStressorStack(corpus)) {
+        return false;
+      }
+      if (SessionVentMemory.isPseudoPositiveContinuation(userUtterance) &&
+          (VentStackDetector.hasFrustrationMarkers(
+                mirrorGroundingUtterance ?? '',
+              ) ||
+              VentStackDetector.isMultiStressorStack(
+                mirrorGroundingUtterance ?? '',
+              ))) {
+        return false;
+      }
+    }
     return lower.trim().isNotEmpty;
+  }
+
+  bool _isPlayfulLightAck(String lower) {
+    return _containsAny(lower, const [
+      'guzel :)',
+      'güzel :)',
+      'guzel.',
+      'güzel.',
+      'oh, nice',
+      'oh nice',
+      'nice :)',
+    ]);
+  }
+
+  bool _isPartialConfirmUserLine(String userUtterance) {
+    final n = userUtterance.toLowerCase();
+    return RegExp(
+      r'\b(evet ama|dogru ama|doğru ama|biraz ama|kismi dogru|kısmı doğru|'
+      r'tam degil|tam değil|sadece o)\b',
+    ).hasMatch(n);
+  }
+
+  bool _matchesGroundedHoldContract(String lower) {
+    if (lower.contains('?')) return false;
+    if (_genericReframeFatigue(lower)) return false;
+    if (_receiptOverInference(lower)) return false;
+    return _containsAny(lower, const [
+      'henuz',
+      'henüz',
+      'tam adini',
+      'tam adını',
+      'kaybetmedim',
+      'uyanik tut',
+      'uyanık tut',
+      'burada kalabilir',
+      'cozmek zorunda degilsin',
+      'çözmek zorunda değilsin',
+      'still keeping you awake',
+      'do not have to name',
+    ]);
   }
 
   bool _lightChatUnsafe(String lower) {

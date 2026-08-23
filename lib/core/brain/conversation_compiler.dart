@@ -218,7 +218,8 @@ class ConversationCompiler {
         final observePurity = package.expressionMode ==
                 ConversationExpressionMode.observePurity ||
             package.expressionMode ==
-                ConversationExpressionMode.postReframeListen;
+                ConversationExpressionMode.postReframeListen ||
+            package.expressionMode == ConversationExpressionMode.groundedHold;
         final slice = receiptIntelligence.compile(
           stage: stage,
           conversationGrounding: package.conversationGrounding,
@@ -736,6 +737,8 @@ $groundingBlock''';
         return 'Integrate: no question. Connect confirmed reframe to tonight loop only.';
       case ConversationExpressionMode.closure:
         return 'Closure: no question. Tonight boundary + personalized put-down from their insight.';
+      case ConversationExpressionMode.groundedHold:
+        return 'Grounded hold: honest synthesis only. No question. No new psychology. Name uncertainty or repeat their surface anchor.';
       case ConversationExpressionMode.standard:
         return 'Questions are forbidden unless the stage explicitly allows them.';
     }

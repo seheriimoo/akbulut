@@ -1,7 +1,10 @@
 import 'conversation_expression_mode.dart';
 import 'conversation_phase.dart';
 import 'conversation_utterance.dart';
+import 'hold_act_dedup.dart';
+import 'night_session.dart';
 import 'surface_utterance_kind.dart';
+import 'user_object_mirror.dart';
 import 'utterance_guard.dart';
 
 /// B2.2 — Appropriate landing when surface mirror abstains.
@@ -17,6 +20,7 @@ class ConversationalLanding {
     String? groundingBlob,
     ConversationExpressionMode expressionMode =
         ConversationExpressionMode.standard,
+    NightSession? session,
   }) {
     if (!_supportsLanding(expressionMode)) return null;
     final user = userUtterance?.trim();
@@ -38,6 +42,27 @@ class ConversationalLanding {
 
     if (SurfaceUtteranceReader.isClosingAck(user) ||
         _groundingShowsSettling(groundingBlob)) {
+      if (HoldActDedup.lastWasMinimalLanding(session)) {
+        if (groundingBlob != null && groundingBlob.trim().length >= 8) {
+          final mirror = UserObjectMirror.forValidation(
+            userUtterance: groundingBlob,
+            groundingBlob: groundingBlob,
+            expressionMode: expressionMode,
+            session: session,
+          );
+          if (mirror != null) {
+            return _admit(mirror.text, user, expressionMode);
+          }
+        }
+        final alt = HoldActDedup.alternateMinimalLanding(
+          session: session,
+          userUtterance: user,
+          prefersTurkish: turkish,
+        );
+        if (alt != null) {
+          return _admit(alt.text, user, expressionMode);
+        }
+      }
       final text = turkish ? 'Tamam.' : 'Okay.';
       return _admit(text, user, expressionMode);
     }
@@ -57,6 +82,8 @@ class ConversationalLanding {
       case ConversationExpressionMode.integrate:
       case ConversationExpressionMode.closure:
       case ConversationExpressionMode.repair:
+        return false;
+      case ConversationExpressionMode.groundedHold:
         return false;
     }
   }

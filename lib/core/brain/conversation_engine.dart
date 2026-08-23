@@ -8,6 +8,7 @@ import 'conversation_phase.dart';
 import 'conversation_utterance.dart';
 import 'exit_decision.dart';
 import 'guard_safe_fallback.dart';
+import 'hold_act_dedup.dart';
 import 'language_model_client.dart';
 import 'llm_invocation_package.dart';
 import 'mode_safe_terminal_fallback.dart';
@@ -46,9 +47,14 @@ class ConversationEngine {
     ConversationGroundingBuffer? conversationGrounding,
     PriorAdmittedExpression? priorAdmittedExpression,
     NightSession? nightSession,
+    String sessionVentCorpus = '',
   }) async {
     final userUtterance =
         conversationGrounding?.currentUserUtterance ?? livedExpression;
+    final expressionGrounding = _expressionGroundingBlob(
+      conversationGrounding: conversationGrounding,
+      sessionVentCorpus: sessionVentCorpus,
+    );
 
     final package = promptArchitecture.package(
       conversationDecision: conversationDecision,
@@ -67,6 +73,9 @@ class ConversationEngine {
         exitDecision: exitDecision,
         userUtterance: userUtterance,
         reason: 'package abstain',
+        nightSession: nightSession,
+        conversationGrounding: conversationGrounding,
+        expressionGrounding: expressionGrounding,
       );
     }
 
@@ -83,6 +92,9 @@ class ConversationEngine {
         userUtterance: userUtterance,
         reason: 'vendor fail',
         package: package,
+        nightSession: nightSession,
+        conversationGrounding: conversationGrounding,
+        expressionGrounding: expressionGrounding,
       );
     } on StateError catch (error) {
       debugPrint('Nocta expression compile/config fail: $error');
@@ -92,6 +104,9 @@ class ConversationEngine {
         userUtterance: userUtterance,
         reason: 'compile fail',
         package: package,
+        nightSession: nightSession,
+        conversationGrounding: conversationGrounding,
+        expressionGrounding: expressionGrounding,
       );
     }
 
@@ -104,6 +119,7 @@ class ConversationEngine {
       utterance: utterance,
       what: package.what,
       userUtterance: userUtterance,
+      mirrorGroundingUtterance: expressionGrounding,
       expressionMode: package.expressionMode,
       reframeEvidenceLedger: reframeLedger,
     );
@@ -121,6 +137,7 @@ class ConversationEngine {
       narrowRefinementAfterPartial: package.narrowRefinementAfterPartial,
       session: nightSession,
       grounding: package.conversationGrounding,
+      sessionVentCorpus: sessionVentCorpus,
     );
     if (fallback == null) {
       if (package.expressionMode == ConversationExpressionMode.closure) {
@@ -144,6 +161,9 @@ class ConversationEngine {
         userUtterance: userUtterance,
         priorRejectedText: utterance.text,
         reason: 'primary fallback null',
+        nightSession: nightSession,
+        conversationGrounding: package.conversationGrounding,
+        groundingBlob: expressionGrounding,
       );
     }
 
@@ -151,12 +171,7 @@ class ConversationEngine {
       utterance: fallback,
       what: package.what,
       userUtterance: userUtterance,
-      mirrorGroundingUtterance: UserObjectMirror.mirrorEvidenceSource(
-        userUtterance: userUtterance,
-        groundingBlob: package.conversationGrounding?.userUtterances
-            .map((u) => u)
-            .join(' '),
-      ),
+      mirrorGroundingUtterance: expressionGrounding,
       expressionMode: package.expressionMode,
       reframeEvidenceLedger: reframeLedger,
     );
@@ -172,6 +187,9 @@ class ConversationEngine {
         userUtterance: userUtterance,
         priorRejectedText: fallback.text,
         reason: 'fallback double-reject',
+        nightSession: nightSession,
+        conversationGrounding: package.conversationGrounding,
+        groundingBlob: expressionGrounding,
       );
     }
     debugPrint(
@@ -186,6 +204,9 @@ class ConversationEngine {
     required String? userUtterance,
     required String reason,
     LlmInvocationPackage? package,
+    NightSession? nightSession,
+    ConversationGroundingBuffer? conversationGrounding,
+    String? expressionGrounding,
   }) {
     if (!_requiresZeroSilence(conversationDecision, exitDecision)) {
       return null;
@@ -199,6 +220,10 @@ class ConversationEngine {
       userUtterance: userUtterance,
       priorRejectedText: '',
       reason: reason,
+      nightSession: nightSession,
+      conversationGrounding:
+          package?.conversationGrounding ?? conversationGrounding,
+      groundingBlob: expressionGrounding,
     );
   }
 
@@ -229,12 +254,43 @@ class ConversationEngine {
     required String? userUtterance,
     required String priorRejectedText,
     required String reason,
+    NightSession? nightSession,
+    ConversationGroundingBuffer? conversationGrounding,
+    String? groundingBlob,
   }) {
+    if (what == ConversationPhase.validation &&
+        expressionMode == ConversationExpressionMode.observePurity) {
+      final shiftAck = HoldActDedup.concernShiftAcknowledge(
+        userUtterance: userUtterance,
+        groundingBlob: groundingBlob,
+        session: nightSession,
+        grounding: conversationGrounding,
+      );
+      if (shiftAck != null) {
+        final shiftAdmitted = utteranceGuard.allow(
+          utterance: shiftAck,
+          what: what,
+          userUtterance: userUtterance,
+          mirrorGroundingUtterance: groundingBlob,
+          expressionMode: expressionMode,
+        );
+        if (shiftAdmitted != null) {
+          debugPrint(
+            'Nocta expression concern-shift ack admitted WHAT=${what.name}',
+          );
+          return shiftAdmitted;
+        }
+      }
+    }
+
     final terminal = ModeSafeTerminalFallback.forExpression(
       what: what,
       expressionMode: expressionMode,
       userUtterance: userUtterance,
       narrowRefinementAfterPartial: narrowRefinementAfterPartial,
+      session: nightSession,
+      grounding: conversationGrounding,
+      groundingBlob: groundingBlob,
     );
     if (terminal == null) {
       debugPrint(
@@ -287,6 +343,9 @@ class ConversationEngine {
         what: what,
         userUtterance: userUtterance,
         expressionMode: expressionMode,
+        nightSession: nightSession,
+        conversationGrounding: conversationGrounding,
+        groundingBlob: groundingBlob,
       );
     }
     debugPrint(
@@ -301,12 +360,18 @@ class ConversationEngine {
     required ConversationPhase what,
     required String? userUtterance,
     required ConversationExpressionMode expressionMode,
+    NightSession? nightSession,
+    ConversationGroundingBuffer? conversationGrounding,
+    String? groundingBlob,
   }) {
     if (what != ConversationPhase.validation) return null;
 
     final mirror = UserObjectMirror.forValidation(
       userUtterance: userUtterance,
+      groundingBlob: groundingBlob,
       expressionMode: expressionMode,
+      session: nightSession,
+      grounding: conversationGrounding,
     );
     if (mirror != null) {
       final admitted = utteranceGuard.allow(
@@ -352,5 +417,18 @@ class ConversationEngine {
       }
     }
     return null;
+  }
+
+  static String? _expressionGroundingBlob({
+    ConversationGroundingBuffer? conversationGrounding,
+    String sessionVentCorpus = '',
+  }) {
+    return UserObjectMirror.mirrorEvidenceSource(
+      userUtterance: conversationGrounding?.currentUserUtterance,
+      groundingBlob: [
+        sessionVentCorpus,
+        conversationGrounding?.userUtterances.join(' '),
+      ].whereType<String>().where((s) => s.trim().isNotEmpty).join(' '),
+    );
   }
 }

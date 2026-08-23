@@ -9,6 +9,7 @@ import 'cognitive_turn_result.dart';
 import 'emotional_pattern_detector.dart';
 import 'exit_decision.dart';
 import 'exit_intelligence.dart';
+import 'grounded_progression.dart';
 import 'input_boundary_gate.dart';
 import 'living_mind_model.dart';
 import 'memory_engine.dart';
@@ -71,6 +72,9 @@ class CognitiveOrchestrator {
   ConversationGroundingBuffer _conversationGroundingBuffer =
       const ConversationGroundingBuffer.empty();
 
+  /// Session-level vent latch — survives the 3-turn grounding window.
+  String _sessionVentCorpus = '';
+
   CognitiveOrchestrator({
     required this.perceptionEngine,
     required this.mentalPatternDetector,
@@ -114,10 +118,19 @@ class CognitiveOrchestrator {
       _conversationGroundingBuffer = conversationGroundingBuffer;
     }
 
+    if (session.turns.isEmpty) {
+      _sessionVentCorpus = '';
+    }
+
     // Temporary Conversation Memory buffer: user utterances only.
     // Not decision authority. Not durable. Not expression-plane input yet.
     _conversationGroundingBuffer =
         _conversationGroundingBuffer.appendUserUtterance(message);
+
+    _sessionVentCorpus = SessionVentMemory.advanceVentCorpus(
+      currentCorpus: _sessionVentCorpus,
+      message: message,
+    );
 
     // P1 minimal input boundaries — before HCOS climb / sleep handoff.
     final boundary = inputBoundaryGate.evaluate(message);
@@ -174,6 +187,7 @@ class CognitiveOrchestrator {
       conversationGrounding: _conversationGroundingBuffer.isEmpty
           ? null
           : _conversationGroundingBuffer,
+      sessionVentCorpus: _sessionVentCorpus,
     );
     final exitDecision = exitIntelligence.decide(
       releaseDecision: releaseDecision,
@@ -252,6 +266,7 @@ class CognitiveOrchestrator {
       conversationGrounding: conversationGrounding,
       priorAdmittedExpression: priorAdmittedExpression,
       nightSession: nightSession,
+      sessionVentCorpus: _sessionVentCorpus,
     );
   }
 
@@ -290,6 +305,7 @@ class CognitiveOrchestrator {
   /// Called when the NightSession ends. Safe to call more than once.
   void discardConversationGrounding() {
     _conversationGroundingBuffer = _conversationGroundingBuffer.discard();
+    _sessionVentCorpus = '';
   }
 
   /// Fixed boundary reply — continues conversation, never sleep-handoff.

@@ -1,6 +1,9 @@
 import 'conversation_expression_mode.dart';
+import 'conversation_grounding_buffer.dart';
 import 'conversation_phase.dart';
 import 'conversation_utterance.dart';
+import 'hold_act_dedup.dart';
+import 'night_session.dart';
 
 /// B1 — Mode-safe terminal fallback after Guard rejects both LLM and
 /// [GuardSafeFallback].
@@ -20,10 +23,24 @@ class ModeSafeTerminalFallback {
     required ConversationExpressionMode expressionMode,
     String? userUtterance,
     bool narrowRefinementAfterPartial = false,
+    NightSession? session,
+    ConversationGroundingBuffer? grounding,
+    String? groundingBlob,
   }) {
     if (!_isSpeakable(what)) return null;
 
     final turkish = _prefersTurkish(userUtterance);
+
+    if (what == ConversationPhase.validation &&
+        expressionMode == ConversationExpressionMode.observePurity) {
+      final shiftAck = HoldActDedup.concernShiftAcknowledge(
+        userUtterance: userUtterance,
+        groundingBlob: groundingBlob,
+        session: session,
+        grounding: grounding,
+      );
+      if (shiftAck != null) return shiftAck;
+    }
 
     if (what == ConversationPhase.neutralEntry &&
         expressionMode == ConversationExpressionMode.lightChat) {
@@ -78,6 +95,8 @@ class ModeSafeTerminalFallback {
         return 'Bu gece bunu taşımak zorunda değilsin.';
       case ConversationExpressionMode.repair:
         return 'Tamam, orayı yanlış okudum. Seni uyanık tutan ne?';
+      case ConversationExpressionMode.groundedHold:
+        return 'Henüz tam oturmadı ama seni kaybetmedim. Bu gece burada kalabilir.';
     }
   }
 
@@ -106,6 +125,8 @@ class ModeSafeTerminalFallback {
         return "You don't have to carry this tonight.";
       case ConversationExpressionMode.repair:
         return 'Okay, I read that wrong. What is keeping you up tonight?';
+      case ConversationExpressionMode.groundedHold:
+        return "You don't have to name it perfectly tonight. I'm still here with you.";
     }
   }
 

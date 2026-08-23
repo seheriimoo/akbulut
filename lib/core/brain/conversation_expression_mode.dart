@@ -27,4 +27,7 @@ enum ConversationExpressionMode {
 
   /// Slice 3: tonight boundary + personalized put-down from confirmed insight.
   closure,
+
+  /// B4: honest synthesis / hold after narrow exhaustion — no new psychology.
+  groundedHold,
 }

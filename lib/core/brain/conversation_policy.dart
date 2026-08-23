@@ -9,6 +9,7 @@ import 'light_conversation_detector.dart';
 import 'neutral_entry_detector.dart';
 import 'night_session.dart';
 import 'post_audio_re_engagement.dart';
+import 'reframe_admission_gate.dart';
 import 'reframe_readiness_gate.dart';
 import 'release_decision.dart';
 import 'release_progression_gate.dart';
@@ -40,6 +41,7 @@ class ConversationPolicy {
     this.postAudioReEngagement = const PostAudioReEngagement(),
     this.lightConversationDetector = const LightConversationDetector(),
     this.reframeReadinessGate = const ReframeReadinessGate(),
+    this.reframeAdmissionGate = const ReframeAdmissionGate(),
     this.closureReadinessGate = const ClosureReadinessGate(),
     this.releaseProgressionGate = const ReleaseProgressionGate(),
   });
@@ -49,6 +51,7 @@ class ConversationPolicy {
   final PostAudioReEngagement postAudioReEngagement;
   final LightConversationDetector lightConversationDetector;
   final ReframeReadinessGate reframeReadinessGate;
+  final ReframeAdmissionGate reframeAdmissionGate;
   final ClosureReadinessGate closureReadinessGate;
   final ReleaseProgressionGate releaseProgressionGate;
 
@@ -232,7 +235,7 @@ class ConversationPolicy {
       );
     }
 
-    final reframeReady = reframeReadinessGate.isReady(
+    final admission = reframeAdmissionGate.evaluate(
       session: session,
       message: message,
       understanding: understanding,
@@ -240,7 +243,7 @@ class ConversationPolicy {
       arc: arc,
     );
 
-    if (reframeReady &&
+    if (admission.outcome == ReframeAdmissionOutcome.earned &&
         !arc.reframeAwaitingResponse &&
         !arc.integrateAwaitingResponse &&
         !arc.closureAwaitingResponse &&
@@ -253,6 +256,20 @@ class ConversationPolicy {
         expressionMode: ConversationExpressionMode.reframe,
       );
     }
+
+    if (admission.outcome == ReframeAdmissionOutcome.plausibleUnproven &&
+        arc.hadNarrow &&
+        message != null &&
+        !_isBareAcknowledgment(message)) {
+      return const ConversationDecision(
+        phase: ConversationPhase.validation,
+        shouldSpeak: true,
+        expressionMode: ConversationExpressionMode.narrow,
+        narrowRefinementAfterPartial: true,
+      );
+    }
+
+    final reframeReady = admission.outcome == ReframeAdmissionOutcome.earned;
 
     if (arc.hadNarrow &&
         message != null &&
@@ -569,14 +586,14 @@ class ConversationPolicy {
           narrowRefinementAfterPartial: true,
         );
       }
-      final reframeReady = reframeReadinessGate.isReady(
+      final admission = reframeAdmissionGate.evaluate(
         session: session,
         message: message,
         understanding: understanding,
         conversationGrounding: conversationGrounding,
         arc: arc,
       );
-      if (reframeReady &&
+      if (admission.outcome == ReframeAdmissionOutcome.earned &&
           !arc.reframeAwaitingResponse &&
           !arc.integrateAwaitingResponse &&
           !arc.closureAwaitingResponse &&

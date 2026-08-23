@@ -14,6 +14,7 @@ import 'mode_safe_terminal_fallback.dart';
 import 'night_session.dart';
 import 'prior_admitted_expression.dart';
 import 'prompt_architecture.dart';
+import 'reframe_evidence_reader.dart';
 import 'user_object_mirror.dart';
 import 'utterance_guard.dart';
 import 'validated_understanding.dart';
@@ -94,11 +95,17 @@ class ConversationEngine {
       );
     }
 
+    final reframeLedger =
+        package.expressionMode == ConversationExpressionMode.reframe
+            ? ReframeEvidenceReader.fromGrounding(package.conversationGrounding)
+            : null;
+
     final admitted = utteranceGuard.allow(
       utterance: utterance,
       what: package.what,
       userUtterance: userUtterance,
       expressionMode: package.expressionMode,
+      reframeEvidenceLedger: reframeLedger,
     );
     if (admitted != null) return admitted;
 
@@ -151,6 +158,7 @@ class ConversationEngine {
             .join(' '),
       ),
       expressionMode: package.expressionMode,
+      reframeEvidenceLedger: reframeLedger,
     );
     if (fallbackAdmitted == null) {
       debugPrint(
@@ -247,6 +255,34 @@ class ConversationEngine {
         'mode=${expressionMode.name} text="${terminal.text}" '
         'reason=$reason prior="$priorRejectedText"',
       );
+      if (expressionMode == ConversationExpressionMode.reframe) {
+        for (final retreatMode in const [
+          ConversationExpressionMode.narrow,
+          ConversationExpressionMode.observePurity,
+          ConversationExpressionMode.postReframeListen,
+        ]) {
+          final retreat = ModeSafeTerminalFallback.forExpression(
+            what: what,
+            expressionMode: retreatMode,
+            userUtterance: userUtterance,
+            narrowRefinementAfterPartial: narrowRefinementAfterPartial,
+          );
+          if (retreat == null) continue;
+          final retreatAdmitted = utteranceGuard.allow(
+            utterance: retreat,
+            what: what,
+            userUtterance: userUtterance,
+            expressionMode: retreatMode,
+          );
+          if (retreatAdmitted != null) {
+            debugPrint(
+              'Nocta expression reframe terminal mode retreat '
+              '${retreatMode.name}',
+            );
+            return retreatAdmitted;
+          }
+        }
+      }
       return _zeroSilenceSurfaceRetreat(
         what: what,
         userUtterance: userUtterance,

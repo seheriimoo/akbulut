@@ -71,7 +71,7 @@ class ModeSafeTerminalFallback {
         }
         return 'Hangisi daha ağır geliyor, yoksa henüz net değil mi?';
       case ConversationExpressionMode.reframe:
-        return 'Bu gece söylediğin şey hâlâ orada duruyor gibi görünüyor olabilir.';
+        return 'Söylediğin hâlâ açık duruyor olabilir.';
       case ConversationExpressionMode.integrate:
         return 'O zaman zihnin bu gece hâlâ orada çalışıyor.';
       case ConversationExpressionMode.closure:
@@ -99,7 +99,7 @@ class ModeSafeTerminalFallback {
         }
         return 'Which part feels heavier, or is it still unclear?';
       case ConversationExpressionMode.reframe:
-        return 'What you shared might still be open tonight.';
+        return 'What you said might still be open tonight.';
       case ConversationExpressionMode.integrate:
         return 'Then your mind is still trying to settle this tonight.';
       case ConversationExpressionMode.closure:

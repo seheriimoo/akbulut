@@ -234,11 +234,16 @@ void main() {
           ),
         ),
       ]);
+      final groundingT3 = const ConversationGroundingBuffer.empty()
+          .appendUserUtterance('Yarın müdürümle konuşacağım, uyuyamıyorum.')
+          .appendUserUtterance('Evet.')
+          .appendUserUtterance('Tepkisi. Beni yetersiz bulmasından korkuyorum.');
       final t3 = policy.decide(
         releaseDecision:
             const ReleaseDecision(readiness: ReleaseReadiness.hold, confidence: 0.8),
         message: 'Tepkisi. Beni yetersiz bulmasından korkuyorum.',
         session: s2,
+        conversationGrounding: groundingT3,
       );
       expect(t3.expressionMode, ConversationExpressionMode.reframe);
 

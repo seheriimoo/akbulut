@@ -2,6 +2,8 @@ import 'conversation_dna.dart';
 import 'conversation_expression_mode.dart';
 import 'conversation_phase.dart';
 import 'conversation_utterance.dart';
+import 'evidence_bound_reframe_contract.dart';
+import 'evidence_ledger.dart';
 import 'permission_realization_contract.dart';
 import 'receipt_realization_contract.dart';
 import 'surface_mirror_contract.dart';
@@ -78,6 +80,7 @@ class UtteranceGuard {
     String? mirrorGroundingUtterance,
     ConversationExpressionMode expressionMode =
         ConversationExpressionMode.standard,
+    EvidenceLedger? reframeEvidenceLedger,
   }) {
     final text = utterance.text.trim();
 
@@ -156,6 +159,17 @@ class UtteranceGuard {
         (normalized.contains('?') ||
             _genericReframeFatigue(normalized) ||
             _reframeBelkiSankiDrift(normalized))) {
+      return null;
+    }
+
+    // B3 — semantic evidence ceiling for reframe (not keyword-only safety).
+    if (what == ConversationPhase.validation &&
+        expressionMode == ConversationExpressionMode.reframe &&
+        reframeEvidenceLedger != null &&
+        !EvidenceBoundReframeContract.admits(
+          reframeText: normalized,
+          ledger: reframeEvidenceLedger,
+        )) {
       return null;
     }
 

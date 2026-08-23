@@ -9,7 +9,8 @@ import 'integrate_fallback_builder.dart';
 import 'narrow_fallback_builder.dart';
 import 'night_session.dart';
 import 'observe_fallback_builder.dart';
-import 'reframe_fallback_builder.dart';
+import 'deterministic_reframe_builder.dart';
+import 'reframe_evidence_reader.dart';
 import 'surface_text_fuzzy.dart';
 import 'surface_utterance_kind.dart';
 import 'user_object_mirror.dart';
@@ -59,10 +60,18 @@ class GuardSafeFallback {
 
     if (what == ConversationPhase.validation &&
         expressionMode == ConversationExpressionMode.reframe) {
-      final reframe = ReframeFallbackBuilder.forValidation(
-        userUtterance: userUtterance ?? groundingBlob,
+      final ledger = ReframeEvidenceReader.fromGrounding(grounding);
+      final deterministic = DeterministicReframeBuilder.forValidation(
+        ledger: ledger,
+        prefersTurkish: prefersTurkish,
       );
-      if (reframe != null) return reframe;
+      if (deterministic != null) return deterministic;
+      final narrow = NarrowFallbackBuilder.forValidation(
+        userUtterance: userUtterance,
+        priorUserUtterance: _priorUserLine(grounding),
+        groundingBlob: groundingBlob,
+      );
+      if (narrow != null) return narrow;
     }
 
     if (what == ConversationPhase.validation &&

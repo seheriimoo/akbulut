@@ -1,5 +1,6 @@
 import 'conversation_blueprint_binding.dart';
 import 'conversation_grounding_buffer.dart';
+import 'light_conversation_detector.dart';
 import 'prior_admitted_expression.dart';
 import 'receipt_realization_contract.dart';
 import 'thinking_function_hypothesis.dart';
@@ -21,7 +22,11 @@ import 'thinking_function_intelligence_shaping.dart';
 /// Current-turn grounding source: admitted [ConversationGroundingBuffer] only.
 /// Standalone livedExpression is not used.
 class ReceiptIntelligence {
-  const ReceiptIntelligence();
+  const ReceiptIntelligence({
+    this.lightConversation = const LightConversationDetector(),
+  });
+
+  final LightConversationDetector lightConversation;
 
   static const String version = '1.6';
 
@@ -51,7 +56,9 @@ class ReceiptIntelligence {
     assert(stage.stage == BlueprintStage.receipt);
 
     final currentTurn = _currentTurnGrounding(conversationGrounding);
-    final supportedFunctional =
+    final isLightTurn = currentTurn != null &&
+        lightConversation.isLightConversation(currentTurn);
+    final supportedFunctional = !isLightTurn &&
         ThinkingFunctionIntelligenceShaping.isSupportedOrStrong(
       thinkingFunctionHypothesis,
     );
@@ -59,34 +66,69 @@ class ReceiptIntelligence {
       ...stage.forbiddenMoves,
       ..._receiptIntelligenceForbidden,
       ...ReceiptRealizationContract.intelligenceForbiddenMoves(),
+      if (isLightTurn) ..._lightConversationForbidden,
       if (supportedFunctional) ..._supportedFunctionalForbidden,
     ];
 
     return ReceiptCompileSlice(
-      aim: supportedFunctional ? _aimSupportedFunctional : _aim,
-      sealedWhatSignature: supportedFunctional
-          ? _sealedWhatSignatureSupportedFunctional
-          : _sealedWhatSignature,
+      aim: isLightTurn
+          ? _aimLight
+          : (supportedFunctional ? _aimSupportedFunctional : _aim),
+      sealedWhatSignature: isLightTurn
+          ? _sealedWhatSignatureLight
+          : (supportedFunctional
+              ? _sealedWhatSignatureSupportedFunctional
+              : _sealedWhatSignature),
       forbiddenMoves: forbidden,
-      responseLength: supportedFunctional
-          ? _responseLengthSupportedFunctional
-          : _responseLengthShort,
-      fsmDirective: _fsmDirective,
+      responseLength: isLightTurn
+          ? _responseLengthLight
+          : (supportedFunctional
+              ? _responseLengthSupportedFunctional
+              : _responseLengthShort),
+      fsmDirective: isLightTurn ? _lightReceiptDirective : _fsmDirective,
       realizationDirective: _realizationDirective,
       userContent: _userContent(
         currentTurn: currentTurn,
         hypothesis: thinkingFunctionHypothesis,
         supportedFunctional: supportedFunctional,
         priorAdmittedExpression: priorAdmittedExpression,
+        isLightTurn: isLightTurn,
       ),
       systemAppendix: _systemAppendix(
         currentTurn: currentTurn,
         hypothesis: thinkingFunctionHypothesis,
         supportedFunctional: supportedFunctional,
         priorAdmittedExpression: priorAdmittedExpression,
+        isLightTurn: isLightTurn,
       ),
     );
   }
+
+  static const String _aimLight =
+      'Receive positive, mundane, playful, or chat-only warmth with one brief '
+      'natural line. Do not invert their tone into distress or night-load.';
+
+  static const String _sealedWhatSignatureLight =
+      'validation / Receipt — brief warm acknowledgment only. Do not receive '
+      'positive or everyday content as burden, worry, or something heavy.';
+
+  static const String _responseLengthLight =
+      'Exactly one short sentence, maximum 16 words. Warm, plain, unforced.';
+
+  static const String _lightReceiptDirective =
+      'Light-turn Receipt: mirror their warmth or everyday detail briefly. '
+      'Never use Belki/Sanki difficulty frames, “zor geliyor”, “ağır geliyor”, '
+      '“yük”, permission-ease, or put-down language on clearly positive or '
+      'mundane content.';
+
+  static const List<String> _lightConversationForbidden = [
+    'Inverting positive or mundane content into distress or night-load',
+    '“zor geliyor”, “ağır geliyor”, “yük”, “burden”, “heavy”, “hard”',
+    'Permission-ease: “gerekmiyor”, “düşünmene gerek yok”, “don’t have to think”',
+    'Release / put-down: “bırak”, “let go”, “leave it here”',
+    'Belki/Sanki difficulty reframes on clearly positive turns',
+    'Inventing worry about tomorrow when they named a mundane plan only',
+  ];
 
   static const String _aim =
       'Create a First Stop Moment: accurate felt receipt of the lived '
@@ -212,18 +254,23 @@ class ReceiptIntelligence {
     required ThinkingFunctionHypothesis? hypothesis,
     required bool supportedFunctional,
     PriorAdmittedExpression? priorAdmittedExpression,
+    required bool isLightTurn,
   }) {
     final buffer = StringBuffer()
       ..writeln(_realizationDirective)
       ..writeln()
-      ..writeln(_fsmDirective)
-      ..writeln()
-      ..writeln(
-        _shapeDirective(
-          currentTurn: currentTurn,
-          supportedFunctional: supportedFunctional,
-        ),
-      );
+      ..writeln(isLightTurn ? _lightReceiptDirective : _fsmDirective);
+
+    if (!isLightTurn) {
+      buffer
+        ..writeln()
+        ..writeln(
+          _shapeDirective(
+            currentTurn: currentTurn,
+            supportedFunctional: supportedFunctional,
+          ),
+        );
+    }
 
     if (supportedFunctional && hypothesis != null) {
       buffer
@@ -337,7 +384,18 @@ class ReceiptIntelligence {
     required ThinkingFunctionHypothesis? hypothesis,
     required bool supportedFunctional,
     PriorAdmittedExpression? priorAdmittedExpression,
+    required bool isLightTurn,
   }) {
+    if (isLightTurn) {
+      return '''
+Receipt Intelligence v$version (light turn):
+$_lightReceiptDirective
+No-invention rule: do not invent distress, burden, worry, or night-load on positive or mundane content.
+No-question rule: questions are forbidden.
+Drift rule: do not Name, grant Permission, invite Release, or close.
+''';
+    }
+
     final fillerRule =
         'Generic filler rule: never emit bare “I understand”, “I hear you”, '
         'or “That makes sense”. Those openers are allowed only when the same '

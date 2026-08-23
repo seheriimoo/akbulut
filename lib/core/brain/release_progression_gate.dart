@@ -1,3 +1,4 @@
+import 'light_conversation_detector.dart';
 import 'night_session.dart';
 import 'validated_understanding.dart';
 
@@ -5,7 +6,11 @@ import 'validated_understanding.dart';
 ///
 /// Expression/release input only. Does not choose WHAT, exit, or speech.
 class ReleaseProgressionGate {
-  const ReleaseProgressionGate();
+  const ReleaseProgressionGate({
+    this.lightConversation = const LightConversationDetector(),
+  });
+
+  final LightConversationDetector lightConversation;
 
   /// True when the night is still actively unfolding — readiness must not climb.
   bool conversationStillActive({
@@ -15,6 +20,10 @@ class ReleaseProgressionGate {
   }) {
     if (message != null && hasWindDownEvidence(message)) {
       return false;
+    }
+
+    if (message != null && lightConversation.isLightConversation(message)) {
+      return true;
     }
 
     if (understanding.mentalPatterns.isNotEmpty ||

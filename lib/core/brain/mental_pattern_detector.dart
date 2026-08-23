@@ -6,6 +6,18 @@ class MentalPatternDetector {
   const MentalPatternDetector();
 
   List<MentalPattern> detect(List<Evidence> evidence) {
+    final hasLightConversation = evidence.any(
+      (e) => e.value == 'light_conversation',
+    );
+    final hasHardLoad = evidence.any(
+      (e) =>
+          e.value == 'mental_overload' ||
+          e.value == 'holding_against_ease',
+    );
+    if (hasLightConversation && !hasHardLoad) {
+      return [];
+    }
+
     final hasThinking = evidence.any((e) => e.value == 'repetitive_thinking');
     final hasUncertainty = evidence.any((e) => e.value == 'future_uncertainty');
     final hasMentalOverload = evidence.any((e) => e.value == 'mental_overload');

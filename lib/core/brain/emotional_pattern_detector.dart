@@ -5,6 +5,18 @@ class EmotionalPatternDetector {
   const EmotionalPatternDetector();
 
   List<EmotionalPattern> detect(List<Evidence> evidence) {
+    final hasLightConversation = evidence.any(
+      (e) => e.value == 'light_conversation',
+    );
+    final hasHardEmotion = evidence.any(
+      (e) =>
+          e.value == 'loneliness_activation' ||
+          e.value == 'emotional_activation',
+    );
+    if (hasLightConversation && !hasHardEmotion) {
+      return [];
+    }
+
     final hasLoneliness = evidence.any(
       (e) => e.value == 'loneliness_activation',
     );

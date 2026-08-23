@@ -1,7 +1,14 @@
 import 'evidence.dart';
+import 'light_conversation_detector.dart';
 
 class PerceptionEngine {
-  const PerceptionEngine();
+  const PerceptionEngine({
+    this.lightConversation = const LightConversationDetector(),
+  });
+
+  final LightConversationDetector lightConversation;
+
+  LightConversationDetector get _lightConversation => lightConversation;
 
   List<Evidence> perceive(String message) {
     final text = _normalize(message);
@@ -24,6 +31,16 @@ class PerceptionEngine {
           type: 'uncertainty',
           value: 'future_uncertainty',
           confidence: 0.85,
+        ),
+      );
+    }
+
+    if (_lightConversation.isLightConversation(message)) {
+      evidence.add(
+        const Evidence(
+          type: 'tone',
+          value: 'light_conversation',
+          confidence: 0.88,
         ),
       );
     }
@@ -127,11 +144,10 @@ class PerceptionEngine {
   }
 
   bool _hasFutureUncertainty(String text) {
-    return _containsAny(text, const [
+    if (_containsAny(text, const [
           'ya şöyle olursa',
           'what if',
           'what-if',
-          'tomorrow',
           'worst case',
           'worst versions',
           'falls apart',
@@ -139,19 +155,54 @@ class PerceptionEngine {
           'yetişemeyeceğim',
           'kaciracagim',
           'kaçıracağım',
+          'mahvettim',
+        ])) {
+      return true;
+    }
+
+    if (_containsAny(text, const [
           'toplantida',
           'toplantıda',
-          'mahvettim',
-        ]) ||
-        _containsWord(text, const ['yarın', 'yarin']);
+          'toplantim var',
+          'toplantım var',
+          'meeting',
+          'presentation',
+        ]) &&
+        _containsWord(text, const ['yarın', 'yarin', 'tomorrow'])) {
+      return _lightConversation.hasRealLoadMarkers(text);
+    }
+
+    if (_containsWord(text, const ['yarın', 'yarin', 'tomorrow'])) {
+      if (_lightConversation.isLightConversation(text)) return false;
+      return _lightConversation.hasRealLoadMarkers(text);
+    }
+
+    return false;
   }
 
   bool _hasMentalOverload(String text) {
+    if (_containsAny(text, const ['kafam', 'aklim', 'aklım', 'kafamdan'])) {
+      if (_containsAny(text, const [
+        'calisiyor',
+        'çalışıyor',
+        'durmuyor',
+        'susmuyor',
+        'cikmiyor',
+        'çıkmıyor',
+        'donuyor',
+        'dönüyor',
+      ])) {
+        return true;
+      }
+    }
+
     return _containsAny(text, const [
       'kafam durmuyor',
       'aklim durmuyor',
       'aklım durmuyor',
-      'durmuyor',
+      'kafam susmuyor',
+      'aklim susmuyor',
+      'aklım susmuyor',
       "mind won't stop",
       'mind will not stop',
       'mind will not settle',
@@ -188,6 +239,10 @@ class PerceptionEngine {
       'uyuyamıyorum',
       'kafamda donuyor',
       'kafamda dönüyor',
+      'beynim kapanmiyor',
+      'beynim kapanmıyor',
+      'kafam cok calisiyor',
+      'kafam çok çalışıyor',
     ]);
   }
 
@@ -231,6 +286,13 @@ class PerceptionEngine {
       'sinir oluyorum',
       'cok kotu',
       'çok kötü',
+      'stresli',
+      'acitiyor',
+      'acıtıyor',
+      'icimi acit',
+      'içimi acıt',
+      'ozlemek',
+      'özlemek',
     ]);
   }
 

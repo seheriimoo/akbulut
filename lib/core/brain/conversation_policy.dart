@@ -1,6 +1,7 @@
 import 'conversation_decision.dart';
 import 'conversation_phase.dart';
 import 'explicit_exit_intent.dart';
+import 'light_conversation_detector.dart';
 import 'neutral_entry_detector.dart';
 import 'night_session.dart';
 import 'post_audio_re_engagement.dart';
@@ -31,11 +32,13 @@ class ConversationPolicy {
     this.neutralEntryDetector = const NeutralEntryDetector(),
     this.explicitExitIntent = const ExplicitExitIntent(),
     this.postAudioReEngagement = const PostAudioReEngagement(),
+    this.lightConversationDetector = const LightConversationDetector(),
   });
 
   final NeutralEntryDetector neutralEntryDetector;
   final ExplicitExitIntent explicitExitIntent;
   final PostAudioReEngagement postAudioReEngagement;
+  final LightConversationDetector lightConversationDetector;
 
   ConversationDecision decide({
     required ReleaseDecision releaseDecision,
@@ -70,6 +73,17 @@ class ConversationPolicy {
       );
     }
 
+    if (_isLightConversationTurn(
+      releaseDecision: releaseDecision,
+      message: message,
+      understanding: understanding,
+    )) {
+      return const ConversationDecision(
+        phase: ConversationPhase.neutralEntry,
+        shouldSpeak: true,
+      );
+    }
+
     if (_isNeutralEntry(
       releaseDecision: releaseDecision,
       message: message,
@@ -94,6 +108,7 @@ class ConversationPolicy {
         stance: stance,
         hasLoad: hasLoad,
         priorPhase: ConversationPhase.release,
+        message: message,
       );
     }
 
@@ -102,6 +117,7 @@ class ConversationPolicy {
       priorPhase: priorPhase,
       session: session,
       hasLoad: hasLoad,
+      message: message,
     );
   }
 
@@ -110,7 +126,17 @@ class ConversationPolicy {
     required TurnResponseStance stance,
     required bool hasLoad,
     required ConversationPhase priorPhase,
+    String? message,
   }) {
+    if (message != null &&
+        !hasLoad &&
+        lightConversationDetector.isLightConversation(message)) {
+      return const ConversationDecision(
+        phase: ConversationPhase.neutralEntry,
+        shouldSpeak: true,
+      );
+    }
+
     if (releaseDecision.readiness == ReleaseReadiness.transitionReady) {
       // Softening after Release: speak one Enough close before audio.
       // Do not skip the spoken night-close into immediate audio.
@@ -176,6 +202,7 @@ class ConversationPolicy {
     required ConversationPhase? priorPhase,
     required NightSession? session,
     required bool hasLoad,
+    String? message,
   }) {
     switch (releaseDecision.readiness) {
       case ReleaseReadiness.hold:
@@ -195,6 +222,20 @@ class ConversationPolicy {
         );
 
       case ReleaseReadiness.regulated:
+        if (!hasLoad &&
+            message != null &&
+            lightConversationDetector.isLightConversation(message)) {
+          return const ConversationDecision(
+            phase: ConversationPhase.neutralEntry,
+            shouldSpeak: true,
+          );
+        }
+        if (!hasLoad) {
+          return const ConversationDecision(
+            phase: ConversationPhase.validation,
+            shouldSpeak: true,
+          );
+        }
         return const ConversationDecision(
           phase: ConversationPhase.permission,
           shouldSpeak: true,
@@ -260,6 +301,24 @@ class ConversationPolicy {
     if (session.turns.last.phase != ConversationPhase.audio) return false;
     if (message == null) return false;
     return postAudioReEngagement.isMeaningful(message);
+  }
+
+  bool _isLightConversationTurn({
+    required ReleaseDecision releaseDecision,
+    required String? message,
+    required ValidatedUnderstanding? understanding,
+  }) {
+    if (message == null) return false;
+    if (!lightConversationDetector.isLightConversation(message)) return false;
+    if (_hasLoadEvidence(understanding)) return false;
+    if (releaseDecision.readiness != ReleaseReadiness.hold &&
+        releaseDecision.readiness != ReleaseReadiness.regulated &&
+        releaseDecision.readiness != ReleaseReadiness.settling &&
+        releaseDecision.readiness != ReleaseReadiness.receptive &&
+        releaseDecision.readiness != ReleaseReadiness.transitionReady) {
+      return false;
+    }
+    return true;
   }
 
   bool _isNeutralEntry({

@@ -12,4 +12,13 @@ enum ConversationExpressionMode {
 
   /// Light/no-load turn: warm chat, one natural follow-up question allowed.
   lightChat,
+
+  /// Slice 2: one fork question splitting two hypotheses from their words.
+  narrow,
+
+  /// Slice 2: evidence-gated soft reframe — confirmable, not advice.
+  reframe,
+
+  /// Slice 2: after reframe — brief listen only, no new interpretation.
+  postReframeListen,
 }

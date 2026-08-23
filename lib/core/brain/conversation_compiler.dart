@@ -10,11 +10,13 @@ import 'exit_decision.dart';
 import 'language_style.dart';
 import 'llm_invocation_package.dart';
 import 'naming_intelligence.dart';
+import 'narrow_intelligence.dart';
 import 'neutral_entry_intelligence.dart';
 import 'permission_intelligence.dart';
 import 'receipt_intelligence.dart';
 import 'release_intelligence.dart';
 import 'repair_intelligence.dart';
+import 'reframe_intelligence.dart';
 
 /// Conversation Compiler V1
 ///
@@ -48,6 +50,8 @@ class ConversationCompiler {
     this.enoughIntelligence = const EnoughIntelligence(),
     this.neutralEntryIntelligence = const NeutralEntryIntelligence(),
     this.repairIntelligence = const RepairIntelligence(),
+    this.narrowIntelligence = const NarrowIntelligence(),
+    this.reframeIntelligence = const ReframeIntelligence(),
     this.languageStyle = LanguageStyle.instance,
   });
 
@@ -58,6 +62,8 @@ class ConversationCompiler {
   final EnoughIntelligence enoughIntelligence;
   final NeutralEntryIntelligence neutralEntryIntelligence;
   final RepairIntelligence repairIntelligence;
+  final NarrowIntelligence narrowIntelligence;
+  final ReframeIntelligence reframeIntelligence;
   final LanguageStyle languageStyle;
 
   static const String expectedConstitutionVersion =
@@ -140,14 +146,51 @@ class ConversationCompiler {
             systemAppendix: slice.systemAppendix,
           );
         }
+        if (package.expressionMode == ConversationExpressionMode.narrow) {
+          final slice = narrowIntelligence.compile(
+            stage: stage,
+            conversationGrounding: package.conversationGrounding,
+            refinementAfterPartial: package.narrowRefinementAfterPartial,
+          );
+          return _StageOverlay(
+            aim: slice.aim,
+            sealedWhatSignature: slice.sealedWhatSignature,
+            forbiddenMoves: slice.forbiddenMoves,
+            responseLength: slice.responseLength,
+            realizationDirective: slice.realizationDirective,
+            userContent: slice.userContent,
+            systemAppendix: slice.systemAppendix,
+          );
+        }
+        if (package.expressionMode == ConversationExpressionMode.reframe) {
+          final slice = reframeIntelligence.compile(
+            stage: stage,
+            conversationGrounding: package.conversationGrounding,
+          );
+          return _StageOverlay(
+            aim: slice.aim,
+            sealedWhatSignature: slice.sealedWhatSignature,
+            forbiddenMoves: slice.forbiddenMoves,
+            responseLength: slice.responseLength,
+            realizationDirective: slice.realizationDirective,
+            userContent: slice.userContent,
+            systemAppendix: slice.systemAppendix,
+          );
+        }
+        final observePurity = package.expressionMode ==
+                ConversationExpressionMode.observePurity ||
+            package.expressionMode ==
+                ConversationExpressionMode.postReframeListen;
         final slice = receiptIntelligence.compile(
           stage: stage,
           conversationGrounding: package.conversationGrounding,
-          thinkingFunctionHypothesis:
-              package.understanding?.thinkingFunctionHypothesis,
+          thinkingFunctionHypothesis: observePurity
+              ? null
+              : package.understanding?.thinkingFunctionHypothesis,
           priorAdmittedExpression: package.priorAdmittedExpression,
-          observePurity: package.expressionMode ==
-              ConversationExpressionMode.observePurity,
+          observePurity: observePurity,
+          postReframeListen: package.expressionMode ==
+              ConversationExpressionMode.postReframeListen,
         );
         return _StageOverlay(
           aim: slice.aim,
@@ -643,8 +686,14 @@ $groundingBlock''';
         return 'Light chat: exactly one natural follow-up question is allowed.';
       case ConversationExpressionMode.repair:
         return 'Repair: one short clarifying question is allowed after conceding the misread.';
+      case ConversationExpressionMode.narrow:
+        return 'Narrow: exactly one fork question is required. No other sentences.';
+      case ConversationExpressionMode.reframe:
+        return 'Reframe: no question on this turn — wait for their confirm/correct next turn.';
       case ConversationExpressionMode.observePurity:
         return 'Observe purity: questions are forbidden. No reframe on this turn.';
+      case ConversationExpressionMode.postReframeListen:
+        return 'Post-reframe listen: one brief acknowledgment only. No new reframe. No question.';
       case ConversationExpressionMode.standard:
         return 'Questions are forbidden unless the stage explicitly allows them.';
     }

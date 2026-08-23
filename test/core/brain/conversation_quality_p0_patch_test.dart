@@ -296,7 +296,9 @@ void main() {
         understanding: u2,
       );
       expect(r2.readiness, ReleaseReadiness.hold);
-      expect(p2.phase, ConversationPhase.naming);
+      // Slice 2: load nights use Observe→Narrow arc instead of Naming.
+      expect(p2.phase, ConversationPhase.validation);
+      expect(p2.expressionMode, ConversationExpressionMode.narrow);
     });
 
     test('uyuyamiyorum is mental load, not an empty greeting', () {

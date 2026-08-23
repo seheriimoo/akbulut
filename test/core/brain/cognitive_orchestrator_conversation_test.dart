@@ -308,6 +308,7 @@ class _TrackingConversationPolicy extends ConversationPolicy {
     String? message,
     NightSession? session,
     ValidatedUnderstanding? understanding,
+    ConversationGroundingBuffer? conversationGrounding,
   }) {
     order.add('policy');
     return super.decide(
@@ -315,6 +316,7 @@ class _TrackingConversationPolicy extends ConversationPolicy {
       message: message,
       session: session,
       understanding: understanding,
+      conversationGrounding: conversationGrounding,
     );
   }
 }

@@ -48,7 +48,7 @@ void main() {
       expect(decision.expressionMode, ConversationExpressionMode.observePurity);
     });
 
-    test('second Receipt turn uses standard expression mode', () {
+    test('second Receipt turn after observe uses narrow not standard', () {
       final session = NightSession(
         workingMind: WorkingMindView(model: _emptyModel()),
         turns: const [
@@ -56,6 +56,7 @@ void main() {
             releaseDecision:
                 ReleaseDecision(readiness: ReleaseReadiness.hold, confidence: 0.8),
             phase: ConversationPhase.validation,
+            expressionMode: ConversationExpressionMode.observePurity,
             admittedExpression: PriorAdmittedExpression(
               phase: ConversationPhase.validation,
               text: 'Yarınki toplantı kafanda dönüyor gibi.',
@@ -66,11 +67,11 @@ void main() {
       final decision = policy.decide(
         releaseDecision:
             const ReleaseDecision(readiness: ReleaseReadiness.hold, confidence: 0.8),
-        message: 'Hâlâ düşünüyorum.',
+        message: 'Evet.',
         session: session,
       );
       expect(decision.phase, ConversationPhase.validation);
-      expect(decision.expressionMode, ConversationExpressionMode.standard);
+      expect(decision.expressionMode, ConversationExpressionMode.narrow);
     });
 
     test('correction routes to repair not permission', () {

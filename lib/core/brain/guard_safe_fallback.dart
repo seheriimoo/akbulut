@@ -1,6 +1,9 @@
 import 'conversation_expression_mode.dart';
 import 'conversation_phase.dart';
 import 'conversation_utterance.dart';
+import 'narrow_fallback_builder.dart';
+import 'observe_fallback_builder.dart';
+import 'reframe_fallback_builder.dart';
 
 /// Deterministic Guard-legal lines after [UtteranceGuard] rejects a model
 /// candidate.
@@ -19,8 +22,42 @@ class GuardSafeFallback {
     String? userUtterance,
     ConversationExpressionMode expressionMode =
         ConversationExpressionMode.standard,
+    bool narrowRefinementAfterPartial = false,
   }) {
     if (!_isSpeakable(what)) return null;
+
+    if (what == ConversationPhase.validation &&
+        expressionMode == ConversationExpressionMode.observePurity) {
+      final mirror = ObserveFallbackBuilder.forValidation(
+        userUtterance: userUtterance,
+      );
+      if (mirror != null) return mirror;
+    }
+
+    if (what == ConversationPhase.validation &&
+        expressionMode == ConversationExpressionMode.narrow) {
+      final fork = NarrowFallbackBuilder.forValidation(
+        userUtterance: userUtterance,
+        refinementAfterPartial: narrowRefinementAfterPartial,
+      );
+      if (fork != null) return fork;
+    }
+
+    if (what == ConversationPhase.validation &&
+        expressionMode == ConversationExpressionMode.postReframeListen) {
+      final turkish = _looksTurkish(userUtterance);
+      return ConversationUtterance(
+        text: turkish ? 'Tamam.' : 'Okay.',
+      );
+    }
+
+    if (what == ConversationPhase.validation &&
+        expressionMode == ConversationExpressionMode.reframe) {
+      final reframe = ReframeFallbackBuilder.forValidation(
+        userUtterance: userUtterance,
+      );
+      if (reframe != null) return reframe;
+    }
 
     final turkish = _looksTurkish(userUtterance);
     final text = turkish

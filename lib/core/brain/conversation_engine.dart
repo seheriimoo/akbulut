@@ -108,6 +108,7 @@ class ConversationEngine {
       what: package.what,
       userUtterance: userUtterance,
       expressionMode: package.expressionMode,
+      narrowRefinementAfterPartial: package.narrowRefinementAfterPartial,
     );
     if (fallback == null) return null;
 

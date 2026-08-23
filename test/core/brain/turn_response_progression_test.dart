@@ -472,6 +472,7 @@ class _OrderConversationPolicy extends ConversationPolicy {
     message,
     session,
     understanding,
+    conversationGrounding,
   }) {
     order.add('policy');
     return super.decide(
@@ -479,6 +480,7 @@ class _OrderConversationPolicy extends ConversationPolicy {
       message: message,
       session: session,
       understanding: understanding,
+      conversationGrounding: conversationGrounding,
     );
   }
 }

@@ -128,6 +128,13 @@ class UtteranceGuard {
       return null;
     }
 
+    // Narrow: exactly one fork question.
+    if (what == ConversationPhase.validation &&
+        expressionMode == ConversationExpressionMode.narrow &&
+        (_tooManyQuestions(normalized) || !normalized.contains('?'))) {
+      return null;
+    }
+
     // Light chat: one question max.
     if (what == ConversationPhase.neutralEntry &&
         expressionMode == ConversationExpressionMode.lightChat &&
@@ -135,9 +142,17 @@ class UtteranceGuard {
       return null;
     }
 
+    // Reframe: no question; no Belki/Sanki fatigue stems.
+    if (what == ConversationPhase.validation &&
+        expressionMode == ConversationExpressionMode.reframe &&
+        (normalized.contains('?') ||
+            _genericReframeFatigue(normalized) ||
+            _reframeBelkiSankiDrift(normalized))) {
+      return null;
+    }
+
     // Receipt: do not admit invented tomorrow / racing when the person
     // did not name those objects this turn.
-    // Receipt invented-agenda check does not apply to repair turns.
     if (what == ConversationPhase.validation &&
         expressionMode != ConversationExpressionMode.repair &&
         _receiptInventedAgenda(normalized, userUtterance)) {
@@ -171,9 +186,16 @@ class UtteranceGuard {
     final int maxEnds;
     if (what == ConversationPhase.validation ||
         what == ConversationPhase.naming) {
-      maxEnds = expressionMode == ConversationExpressionMode.observePurity
-          ? 1
-          : 3;
+      if (expressionMode == ConversationExpressionMode.observePurity ||
+          expressionMode == ConversationExpressionMode.postReframeListen) {
+        maxEnds = 1;
+      } else if (expressionMode == ConversationExpressionMode.narrow) {
+        maxEnds = 2;
+      } else if (expressionMode == ConversationExpressionMode.reframe) {
+        maxEnds = 2;
+      } else {
+        maxEnds = 3;
+      }
     } else if (what == ConversationPhase.continuity ||
         what == ConversationPhase.release) {
       maxEnds = 3;
@@ -354,6 +376,18 @@ class UtteranceGuard {
         if (expressionMode == ConversationExpressionMode.repair) {
           return _matchesRepairContract(lower);
         }
+        if (expressionMode == ConversationExpressionMode.observePurity) {
+          return _matchesObservePurityContract(lower);
+        }
+        if (expressionMode == ConversationExpressionMode.narrow) {
+          return _matchesNarrowContract(lower);
+        }
+        if (expressionMode == ConversationExpressionMode.reframe) {
+          return _matchesReframeContract(lower);
+        }
+        if (expressionMode == ConversationExpressionMode.postReframeListen) {
+          return _matchesPostReframeListenContract(lower);
+        }
         return _matchesReceiptContract(lower);
       case ConversationPhase.naming:
         return _matchesNamingContract(lower);
@@ -512,6 +546,127 @@ class UtteranceGuard {
       'almost as if',
       'almost like',
       'part of your mind',
+    ]);
+  }
+
+  bool _genericReframeFatigue(String lower) {
+    return _containsAny(lower, const [
+      'belki bunu birakmakta',
+      'belki bunu bırakmakta',
+      'sanki bu sana agir',
+      'sanki bu sana ağır',
+      'belki zihnin',
+      'sanki zihnin',
+      'maybe you are struggling',
+      'maybe your mind',
+      'almost like this is heavy',
+      'belki bunu birak',
+      'belki bunu bırak',
+    ]);
+  }
+
+  bool _reframeBelkiSankiDrift(String lower) {
+    return _containsAny(lower, const ['belki', 'sanki', 'perhaps', 'maybe']);
+  }
+
+  bool _matchesObservePurityContract(String lower) {
+    if (_observePurityReframeDrift(lower)) return false;
+    if (lower.contains('?')) return false;
+    if (_receiptOverInference(lower)) return false;
+    if (_matchesReceiptContract(lower)) return true;
+    return _containsAny(lower, const [
+          'kafanda',
+          'aklinda',
+          'aklında',
+          'gece',
+          'yarin',
+          'yarın',
+          'hâlâ',
+          'hala',
+          'donup',
+          'dönüp',
+          'duruyor',
+          'orada',
+          'yakinda',
+          'yakında',
+          'still',
+          'head',
+          'tonight',
+          'tomorrow',
+          'there',
+          'close',
+        ]) &&
+        lower.trim().length >= 8;
+  }
+
+  bool _matchesNarrowContract(String lower) {
+    if (_narrowGenericTherapy(lower)) return false;
+    if (!lower.contains('?')) return false;
+    if (_narrowRefinementQuestion(lower)) return true;
+    return lower.contains('yoksa') ||
+        RegExp(r'\bor\b').hasMatch(lower) ||
+        lower.contains(' mi ') ||
+        lower.contains(' mı ') ||
+        lower.contains(' mu ') ||
+        lower.contains(' mü ');
+  }
+
+  bool _narrowRefinementQuestion(String lower) {
+    return _containsAny(lower, const [
+      'eksik kalan',
+      'tam oturmayan',
+      'peki eksik',
+      'dogru gibi. peki',
+      'doğru gibi. peki',
+      'dogru gibi, peki',
+      'doğru gibi, peki',
+    ]);
+  }
+
+  bool _narrowGenericTherapy(String lower) {
+    return _containsAny(lower, const [
+      'nasil hissettiriyor',
+      'nasıl hissettiriyor',
+      'biraz daha anlat',
+      'ne dusunuyorsun',
+      'ne düşünüyorsun',
+      'how does that make you feel',
+      'tell me more',
+      'want to share',
+      'what do you think',
+    ]);
+  }
+
+  bool _matchesReframeContract(String lower) {
+    if (lower.contains('?')) return false;
+    if (_genericReframeFatigue(lower)) return false;
+    if (_receiptOverInference(lower)) return false;
+    return _containsAny(lower, const [
+      'olabilir',
+      'gibi',
+      'sanirim',
+      'sanırım',
+      'galiba',
+      'might',
+      'could',
+      'seems',
+    ]);
+  }
+
+  bool _matchesPostReframeListenContract(String lower) {
+    if (lower.contains('?')) return false;
+    return _containsAny(lower, const [
+      'tamam',
+      'anladim',
+      'anladım',
+      'anliyorum',
+      'anlıyorum',
+      'evet',
+      'orada',
+      'okay',
+      'got it',
+      'i hear',
+      'understood',
     ]);
   }
 
@@ -1275,7 +1430,8 @@ class UtteranceGuard {
         ]);
       case 'Engagement hooks or follow-up bait':
         if (expressionMode == ConversationExpressionMode.lightChat ||
-            expressionMode == ConversationExpressionMode.repair) {
+            expressionMode == ConversationExpressionMode.repair ||
+            expressionMode == ConversationExpressionMode.narrow) {
           if (_tooManyQuestions(lower)) return false;
           return !_containsAny(lower, const [
             'tell me more',
@@ -1394,7 +1550,8 @@ class UtteranceGuard {
         ]);
       case 6: // Relief over engagement
         if (expressionMode == ConversationExpressionMode.lightChat ||
-            expressionMode == ConversationExpressionMode.repair) {
+            expressionMode == ConversationExpressionMode.repair ||
+            expressionMode == ConversationExpressionMode.narrow) {
           if (_tooManyQuestions(text)) return false;
           return !_containsAny(lower, const [
             'tell me more',

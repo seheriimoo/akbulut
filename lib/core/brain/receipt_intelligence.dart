@@ -53,14 +53,17 @@ class ReceiptIntelligence {
     ThinkingFunctionHypothesis? thinkingFunctionHypothesis,
     PriorAdmittedExpression? priorAdmittedExpression,
     bool observePurity = false,
+    bool postReframeListen = false,
   }) {
     assert(stage.stage == BlueprintStage.receipt);
 
     final currentTurn = _currentTurnGrounding(conversationGrounding);
     final isLightTurn = !observePurity &&
+        !postReframeListen &&
         currentTurn != null &&
         lightConversation.isLightConversation(currentTurn);
     final supportedFunctional = !observePurity &&
+        !postReframeListen &&
         !isLightTurn &&
         ThinkingFunctionIntelligenceShaping.isSupportedOrStrong(
       thinkingFunctionHypothesis,
@@ -76,7 +79,7 @@ class ReceiptIntelligence {
 
     return ReceiptCompileSlice(
       aim: observePurity
-          ? _aimObservePurity
+          ? (postReframeListen ? _aimPostReframeListen : _aimObservePurity)
           : (isLightTurn
               ? _aimLight
               : (supportedFunctional ? _aimSupportedFunctional : _aim)),
@@ -96,7 +99,9 @@ class ReceiptIntelligence {
                   ? _responseLengthSupportedFunctional
                   : _responseLengthShort)),
       fsmDirective: observePurity
-          ? _observePurityDirective
+          ? (postReframeListen
+              ? _postReframeListenDirective
+              : _observePurityDirective)
           : (isLightTurn ? _lightReceiptDirective : _fsmDirective),
       realizationDirective: _realizationDirective,
       userContent: _userContent(
@@ -106,6 +111,7 @@ class ReceiptIntelligence {
         priorAdmittedExpression: priorAdmittedExpression,
         isLightTurn: isLightTurn,
         observePurity: observePurity,
+        postReframeListen: postReframeListen,
       ),
       systemAppendix: _systemAppendix(
         currentTurn: currentTurn,
@@ -114,6 +120,7 @@ class ReceiptIntelligence {
         priorAdmittedExpression: priorAdmittedExpression,
         isLightTurn: isLightTurn,
         observePurity: observePurity,
+        postReframeListen: postReframeListen,
       ),
     );
   }
@@ -128,6 +135,13 @@ class ReceiptIntelligence {
 
   static const String _responseLengthObservePurity =
       'Exactly one short sentence, maximum 22 words. Plain, natural, direct.';
+
+  static const String _aimPostReframeListen =
+      'Briefly acknowledge their confirmation of the reframe. Do not add a new angle.';
+
+  static const String _postReframeListenDirective =
+      'Post-reframe listen: one brief warm acknowledgment only (“Tamam.” / “Anladım.” / '
+      '“Evet, orada.”). No new reframe. No question. No Permission/Release.';
 
   static const String _observePurityDirective =
       'Observe Purity (first Receipt only): receive what they said in fresh '
@@ -297,13 +311,16 @@ class ReceiptIntelligence {
     PriorAdmittedExpression? priorAdmittedExpression,
     required bool isLightTurn,
     required bool observePurity,
+    required bool postReframeListen,
   }) {
     final buffer = StringBuffer()
       ..writeln(_realizationDirective)
       ..writeln()
       ..writeln(
         observePurity
-            ? _observePurityDirective
+            ? (postReframeListen
+                ? _postReframeListenDirective
+                : _observePurityDirective)
             : (isLightTurn ? _lightReceiptDirective : _fsmDirective),
       );
 
@@ -432,7 +449,14 @@ class ReceiptIntelligence {
     PriorAdmittedExpression? priorAdmittedExpression,
     required bool isLightTurn,
     required bool observePurity,
+    required bool postReframeListen,
   }) {
+    if (postReframeListen) {
+      return '''
+Receipt Intelligence v$version (post-reframe listen):
+$_postReframeListenDirective
+''';
+    }
     if (observePurity) {
       return '''
 Receipt Intelligence v$version (Observe Purity — first Receipt):

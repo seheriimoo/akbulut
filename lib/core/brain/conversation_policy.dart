@@ -1,11 +1,14 @@
+import 'conversation_arc_reader.dart';
 import 'conversation_decision.dart';
 import 'conversation_expression_mode.dart';
+import 'conversation_grounding_buffer.dart';
 import 'conversation_phase.dart';
 import 'explicit_exit_intent.dart';
 import 'light_conversation_detector.dart';
 import 'neutral_entry_detector.dart';
 import 'night_session.dart';
 import 'post_audio_re_engagement.dart';
+import 'reframe_readiness_gate.dart';
 import 'release_decision.dart';
 import 'turn_response_stance.dart';
 import 'validated_understanding.dart';
@@ -34,18 +37,21 @@ class ConversationPolicy {
     this.explicitExitIntent = const ExplicitExitIntent(),
     this.postAudioReEngagement = const PostAudioReEngagement(),
     this.lightConversationDetector = const LightConversationDetector(),
+    this.reframeReadinessGate = const ReframeReadinessGate(),
   });
 
   final NeutralEntryDetector neutralEntryDetector;
   final ExplicitExitIntent explicitExitIntent;
   final PostAudioReEngagement postAudioReEngagement;
   final LightConversationDetector lightConversationDetector;
+  final ReframeReadinessGate reframeReadinessGate;
 
   ConversationDecision decide({
     required ReleaseDecision releaseDecision,
     String? message,
     NightSession? session,
     ValidatedUnderstanding? understanding,
+    ConversationGroundingBuffer? conversationGrounding,
   }) {
     // Explicit exit intent → Enough close that may soft-handoff into audio.
     // Readiness ladder is not required when the person clearly asks to leave.
@@ -68,7 +74,21 @@ class ConversationPolicy {
 
     // Post-audio re-engagement: meaningful new turn reopens Receipt path.
     if (_isPostAudioReEngagement(message: message, session: session)) {
-      return _validationDecision(session: session);
+      return _arcValidationDecision(
+        session: session,
+        message: message,
+        understanding: understanding,
+        conversationGrounding: conversationGrounding,
+      );
+    }
+
+    // Light-chat loop: stay warm after a light turn unless load appears.
+    if (_isLightChatContinuation(message: message, session: session)) {
+      return const ConversationDecision(
+        phase: ConversationPhase.neutralEntry,
+        shouldSpeak: true,
+        expressionMode: ConversationExpressionMode.lightChat,
+      );
     }
 
     if (_isLightConversationTurn(
@@ -109,6 +129,8 @@ class ConversationPolicy {
         priorPhase: ConversationPhase.release,
         message: message,
         session: session,
+        understanding: understanding,
+        conversationGrounding: conversationGrounding,
       );
     }
 
@@ -118,20 +140,204 @@ class ConversationPolicy {
       session: session,
       hasLoad: hasLoad,
       message: message,
+      understanding: understanding,
+      conversationGrounding: conversationGrounding,
     );
   }
 
-  ConversationDecision _validationDecision({
+  /// Slice 2 arc: Observe → Narrow → Reframe → listen/confirm.
+  ConversationDecision _arcValidationDecision({
     required NightSession? session,
+    required String? message,
+    required ValidatedUnderstanding? understanding,
+    ConversationGroundingBuffer? conversationGrounding,
   }) {
-    final observePurity = _isFirstReceiptTurn(session);
-    return ConversationDecision(
+    final arc = ConversationArcReader.fromSession(session);
+
+    if (arc.reframeAwaitingResponse && message != null) {
+      if (_isReframeFullConfirmation(message)) {
+        return const ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
+          expressionMode: ConversationExpressionMode.postReframeListen,
+        );
+      }
+      if (_isPartialReframeResponse(message)) {
+        return const ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
+          expressionMode: ConversationExpressionMode.narrow,
+          narrowRefinementAfterPartial: true,
+        );
+      }
+    }
+
+    if (_isFirstReceiptTurn(session)) {
+      return const ConversationDecision(
+        phase: ConversationPhase.validation,
+        shouldSpeak: true,
+        expressionMode: ConversationExpressionMode.observePurity,
+      );
+    }
+
+    final reframeReady = reframeReadinessGate.isReady(
+      session: session,
+      message: message,
+      understanding: understanding,
+      conversationGrounding: conversationGrounding,
+      arc: arc,
+    );
+
+    if (reframeReady &&
+        !arc.reframeAwaitingResponse &&
+        !_isBareAcknowledgment(message ?? '') &&
+        _shouldOfferReframe(session: session, arc: arc)) {
+      return const ConversationDecision(
+        phase: ConversationPhase.validation,
+        shouldSpeak: true,
+        expressionMode: ConversationExpressionMode.reframe,
+      );
+    }
+
+    if (!arc.hadNarrow ||
+        _shouldRenarrowAfterAck(message, arc) ||
+        _isPartialReframeResponse(message ?? '')) {
+      return ConversationDecision(
+        phase: ConversationPhase.validation,
+        shouldSpeak: true,
+        expressionMode: ConversationExpressionMode.narrow,
+        narrowRefinementAfterPartial:
+            message != null && _isPartialReframeResponse(message),
+      );
+    }
+
+    // Not reframe-ready: listen/observe — never default Belki reframe (standard).
+    return const ConversationDecision(
       phase: ConversationPhase.validation,
       shouldSpeak: true,
-      expressionMode: observePurity
-          ? ConversationExpressionMode.observePurity
-          : ConversationExpressionMode.standard,
+      expressionMode: ConversationExpressionMode.observePurity,
     );
+  }
+
+  bool _shouldRenarrowAfterAck(String? message, ConversationArcReader arc) {
+    if (message == null) return false;
+    if (!arc.hadObservePurity || arc.hadNarrow) return false;
+    return _isBareAcknowledgment(message);
+  }
+
+  bool _shouldOfferReframe({
+    required NightSession? session,
+    required ConversationArcReader arc,
+  }) {
+    if (!arc.hadReframe) return true;
+    if (_recentReframeCompleted(session)) return false;
+    return _narrowedAfterLastReframe(session);
+  }
+
+  bool _recentReframeCompleted(NightSession? session) {
+    if (session == null) return false;
+    for (var i = session.turns.length - 1; i >= 0; i--) {
+      final mode = session.turns[i].expressionMode;
+      if (mode == ConversationExpressionMode.postReframeListen) return true;
+      if (mode == ConversationExpressionMode.reframe) return false;
+    }
+    return false;
+  }
+
+  bool _narrowedAfterLastReframe(NightSession? session) {
+    if (session == null) return false;
+    var sawReframe = false;
+    for (var i = session.turns.length - 1; i >= 0; i--) {
+      final mode = session.turns[i].expressionMode;
+      if (mode == ConversationExpressionMode.narrow) return sawReframe;
+      if (mode == ConversationExpressionMode.reframe) sawReframe = true;
+    }
+    return false;
+  }
+
+  bool _isBareAcknowledgment(String message) {
+    final n = _normalizeProtestText(message).replaceAll(RegExp(r'[.!?…]+$'), '');
+    return RegExp(
+      r'^(evet|aynen|tamam|ok|okay|hm+|hmm+|mm+|he+|ha+|yes|yeah|yep)$',
+    ).hasMatch(n);
+  }
+
+  bool _isReframeFullConfirmation(String message) {
+    final n = _normalizeProtestText(message);
+    return _containsAnyNormalized(n, const [
+      'evet tam',
+      'tam olarak',
+      'aynen oyle',
+      'aynen öyle',
+      'kesinlikle',
+      'exactly',
+      'yes exactly',
+      'that is it',
+      "that's it",
+    ]) ||
+        RegExp(r'^evet\.?$').hasMatch(n.trim());
+  }
+
+  bool _isPartialReframeResponse(String message) {
+    if (_isReframeFullConfirmation(message)) return false;
+    final n = _normalizeProtestText(message);
+    if (_containsAnyNormalized(n, const [
+      'biraz ama',
+      'kismen',
+      'kısmen',
+      'tam degil',
+      'tam değil',
+      'not exactly',
+      'partly',
+      'sort of',
+      'evet ama',
+      'sadece o degil',
+      'sadece o değil',
+      'baska bir sey',
+      'başka bir şey',
+      'kismi dogru',
+      'kısmı doğru',
+      'baski kismi',
+      'baskı kısmı',
+      'ama sadece',
+      'dogru ama',
+      'doğru ama',
+    ])) {
+      return true;
+    }
+    if (n.contains('evet') &&
+        _containsAnyNormalized(n, const [
+          'ama',
+          'kismi',
+          'kısmı',
+          'sadece',
+          'degil',
+          'değil',
+        ])) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _containsAnyNormalized(String n, List<String> markers) {
+    for (final marker in markers) {
+      if (n.contains(marker)) return true;
+    }
+    return false;
+  }
+
+  bool _isLightChatContinuation({
+    required String? message,
+    required NightSession? session,
+  }) {
+    if (message == null || session == null || session.turns.isEmpty) {
+      return false;
+    }
+    final last = session.turns.last;
+    if (last.expressionMode != ConversationExpressionMode.lightChat) {
+      return false;
+    }
+    return lightConversationDetector.isLightConversation(message);
   }
 
   bool _isFirstReceiptTurn(NightSession? session) {
@@ -152,6 +358,8 @@ class ConversationPolicy {
     required ConversationPhase priorPhase,
     String? message,
     NightSession? session,
+    ValidatedUnderstanding? understanding,
+    ConversationGroundingBuffer? conversationGrounding,
   }) {
     if (message != null &&
         !hasLoad &&
@@ -185,7 +393,12 @@ class ConversationPolicy {
     if (resisting) {
       // Resistance after Release → Receipt/Permission, never Release.
       if (releaseDecision.readiness == ReleaseReadiness.hold) {
-        return _validationDecision(session: session);
+        return _arcValidationDecision(
+          session: session,
+          message: message,
+          understanding: understanding,
+          conversationGrounding: conversationGrounding,
+        );
       }
       return const ConversationDecision(
         phase: ConversationPhase.permission,
@@ -203,7 +416,12 @@ class ConversationPolicy {
     // Unclear after Release: fail closed on acceptance/audio, but never
     // re-issue Release merely because load was absent.
     if (releaseDecision.readiness == ReleaseReadiness.hold) {
-      return _validationDecision(session: session);
+      return _arcValidationDecision(
+        session: session,
+        message: message,
+        understanding: understanding,
+        conversationGrounding: conversationGrounding,
+      );
     }
     if (releaseDecision.readiness == ReleaseReadiness.regulated) {
       return const ConversationDecision(
@@ -223,9 +441,49 @@ class ConversationPolicy {
     required NightSession? session,
     required bool hasLoad,
     String? message,
+    ValidatedUnderstanding? understanding,
+    ConversationGroundingBuffer? conversationGrounding,
   }) {
+    if (message != null) {
+      final arc = ConversationArcReader.fromSession(session);
+      if (arc.reframeAwaitingResponse && _isPartialReframeResponse(message)) {
+        return const ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
+          expressionMode: ConversationExpressionMode.narrow,
+          narrowRefinementAfterPartial: true,
+        );
+      }
+      final reframeReady = reframeReadinessGate.isReady(
+        session: session,
+        message: message,
+        understanding: understanding,
+        conversationGrounding: conversationGrounding,
+        arc: arc,
+      );
+      if (reframeReady &&
+          !arc.reframeAwaitingResponse &&
+          !_isPartialReframeResponse(message) &&
+          !_isBareAcknowledgment(message) &&
+          _shouldOfferReframe(session: session, arc: arc)) {
+        return const ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
+          expressionMode: ConversationExpressionMode.reframe,
+        );
+      }
+    }
+
     switch (releaseDecision.readiness) {
       case ReleaseReadiness.hold:
+        if (hasLoad) {
+          return _arcValidationDecision(
+            session: session,
+            message: message,
+            understanding: understanding,
+            conversationGrounding: conversationGrounding,
+          );
+        }
         if (_shouldSpeakNamingOnce(
           session: session,
           priorPhase: priorPhase,
@@ -236,7 +494,12 @@ class ConversationPolicy {
             shouldSpeak: true,
           );
         }
-        return _validationDecision(session: session);
+        return _arcValidationDecision(
+          session: session,
+          message: message,
+          understanding: understanding,
+          conversationGrounding: conversationGrounding,
+        );
 
       case ReleaseReadiness.regulated:
         if (!hasLoad &&
@@ -249,7 +512,12 @@ class ConversationPolicy {
           );
         }
         if (!hasLoad) {
-          return _validationDecision(session: session);
+          return _arcValidationDecision(
+          session: session,
+          message: message,
+          understanding: understanding,
+          conversationGrounding: conversationGrounding,
+        );
         }
         return const ConversationDecision(
           phase: ConversationPhase.permission,

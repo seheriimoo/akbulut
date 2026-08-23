@@ -171,6 +171,9 @@ class CognitiveOrchestrator {
       message: message,
       session: session,
       understanding: understanding,
+      conversationGrounding: _conversationGroundingBuffer.isEmpty
+          ? null
+          : _conversationGroundingBuffer,
     );
     final exitDecision = exitIntelligence.decide(
       releaseDecision: releaseDecision,
@@ -198,6 +201,7 @@ class CognitiveOrchestrator {
       SessionTurn(
         releaseDecision: releaseDecision,
         phase: conversationDecision.phase,
+        expressionMode: conversationDecision.expressionMode,
         admittedExpression: utterance == null
             ? null
             : PriorAdmittedExpression(

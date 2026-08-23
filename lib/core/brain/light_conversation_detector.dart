@@ -11,6 +11,7 @@ class LightConversationDetector {
     final n = _normalize(message);
     if (n.isEmpty) return false;
     if (hasRealLoadMarkers(n)) return false;
+    if (_isPositiveContinuation(n)) return true;
     return _isPositiveTone(n) ||
         _isNeutralMundane(n) ||
         _isHopefulFuture(n) ||
@@ -257,6 +258,33 @@ class LightConversationDetector {
       'uyumadan once konus',
       'uyumadan önce konuş',
     ]);
+  }
+
+  bool _isPositiveContinuation(String n) {
+    if (_containsAny(n, const [
+      'hala guluyorum',
+      'hâlâ gülüyorum',
+      'hala guluyoruz',
+      'hâlâ gülüyoruz',
+      'still laughing',
+      'still smiling',
+      'still giggling',
+    ])) {
+      return true;
+    }
+    if (_containsAny(n, const ['eve geldim', 'just got home', 'got home'])) {
+      return _containsAny(n, const [
+        'gul',
+        'gül',
+        'laugh',
+        'smil',
+        'mutlu',
+        'keyif',
+        'guzel',
+        'güzel',
+      ]);
+    }
+    return false;
   }
 
   static String _normalize(String message) {

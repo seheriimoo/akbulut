@@ -58,6 +58,9 @@ class LlmInvocationPackage {
   /// Repair-only: repetition protest vs correction misread.
   final bool repairRepetitionProtest;
 
+  /// Narrow-only: one refinement question after partial reframe confirm.
+  final bool narrowRefinementAfterPartial;
+
   /// Bound Conversation DNA constraints (not enforced by this package).
   final ConversationDNA dna;
 
@@ -86,6 +89,7 @@ class LlmInvocationPackage {
     this.exitDecision,
     this.expressionMode = ConversationExpressionMode.standard,
     this.repairRepetitionProtest = false,
+    this.narrowRefinementAfterPartial = false,
     this.dna = ConversationDNA.instance,
   }) {
     if (!_isSpeakableWhat(what)) {

@@ -1,3 +1,4 @@
+import 'conversation_expression_mode.dart';
 import 'conversation_phase.dart';
 import 'emotional_pattern.dart';
 import 'mental_pattern.dart';
@@ -29,10 +30,14 @@ class SessionTurn {
   /// Turn-scoped emotional pattern candidates (durable extract at session end).
   final List<EmotionalPattern> emotionalPatterns;
 
+  /// Expression HOW mode sealed for this turn (Slice 2 arc tracking).
+  final ConversationExpressionMode expressionMode;
+
   const SessionTurn({
     required this.releaseDecision,
     required this.phase,
     this.admittedExpression,
+    this.expressionMode = ConversationExpressionMode.standard,
     this.mentalPatterns = const [],
     this.emotionalPatterns = const [],
   });

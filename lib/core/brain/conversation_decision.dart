@@ -13,10 +13,14 @@ class ConversationDecision {
   /// user protested repetition rather than a factual misread.
   final bool repairRepetitionProtest;
 
+  /// Narrow-only: refine hypothesis after partial reframe confirm (Slice 2.1).
+  final bool narrowRefinementAfterPartial;
+
   const ConversationDecision({
     required this.phase,
     required this.shouldSpeak,
     this.expressionMode = ConversationExpressionMode.standard,
     this.repairRepetitionProtest = false,
+    this.narrowRefinementAfterPartial = false,
   });
 }

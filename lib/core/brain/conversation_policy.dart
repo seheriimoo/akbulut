@@ -1,3 +1,4 @@
+import 'closure_readiness_gate.dart';
 import 'conversation_arc_reader.dart';
 import 'conversation_decision.dart';
 import 'conversation_expression_mode.dart';
@@ -10,6 +11,7 @@ import 'night_session.dart';
 import 'post_audio_re_engagement.dart';
 import 'reframe_readiness_gate.dart';
 import 'release_decision.dart';
+import 'release_progression_gate.dart';
 import 'turn_response_stance.dart';
 import 'validated_understanding.dart';
 
@@ -38,6 +40,8 @@ class ConversationPolicy {
     this.postAudioReEngagement = const PostAudioReEngagement(),
     this.lightConversationDetector = const LightConversationDetector(),
     this.reframeReadinessGate = const ReframeReadinessGate(),
+    this.closureReadinessGate = const ClosureReadinessGate(),
+    this.releaseProgressionGate = const ReleaseProgressionGate(),
   });
 
   final NeutralEntryDetector neutralEntryDetector;
@@ -45,6 +49,8 @@ class ConversationPolicy {
   final PostAudioReEngagement postAudioReEngagement;
   final LightConversationDetector lightConversationDetector;
   final ReframeReadinessGate reframeReadinessGate;
+  final ClosureReadinessGate closureReadinessGate;
+  final ReleaseProgressionGate releaseProgressionGate;
 
   ConversationDecision decide({
     required ReleaseDecision releaseDecision,
@@ -120,6 +126,24 @@ class ConversationPolicy {
     final stance =
         understanding?.turnResponseStance ?? TurnResponseStance.unclear;
     final hasLoad = _hasLoadEvidence(understanding);
+    final arc = ConversationArcReader.fromSession(session);
+
+    // After personalized closure, wind-down → Enough — not another Receipt arc.
+    if (message != null &&
+        arc.hadClosure &&
+        releaseProgressionGate.hasWindDownEvidence(message) &&
+        releaseDecision.readiness != ReleaseReadiness.hold) {
+      if (priorPhase == ConversationPhase.continuity) {
+        return const ConversationDecision(
+          phase: ConversationPhase.continuity,
+          shouldSpeak: false,
+        );
+      }
+      return const ConversationDecision(
+        phase: ConversationPhase.continuity,
+        shouldSpeak: true,
+      );
+    }
 
     if (priorPhase == ConversationPhase.release) {
       return _decideAfterRelease(
@@ -145,7 +169,7 @@ class ConversationPolicy {
     );
   }
 
-  /// Slice 2 arc: Observe → Narrow → Reframe → listen/confirm.
+  /// Slice 2–3 arc: Observe → Narrow → Reframe → Integrate → Closure.
   ConversationDecision _arcValidationDecision({
     required NightSession? session,
     required String? message,
@@ -159,7 +183,7 @@ class ConversationPolicy {
         return const ConversationDecision(
           phase: ConversationPhase.validation,
           shouldSpeak: true,
-          expressionMode: ConversationExpressionMode.postReframeListen,
+          expressionMode: ConversationExpressionMode.integrate,
         );
       }
       if (_isPartialReframeResponse(message)) {
@@ -168,6 +192,34 @@ class ConversationPolicy {
           shouldSpeak: true,
           expressionMode: ConversationExpressionMode.narrow,
           narrowRefinementAfterPartial: true,
+        );
+      }
+    }
+
+    if (arc.integrateAwaitingResponse && message != null) {
+      if (_isArcResistance(message)) {
+        return ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
+          expressionMode: ConversationExpressionMode.narrow,
+          narrowRefinementAfterPartial: true,
+        );
+      }
+      if (_isIntegratePositiveAck(message)) {
+        return const ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
+          expressionMode: ConversationExpressionMode.closure,
+        );
+      }
+    }
+
+    if (arc.closureAwaitingResponse && message != null) {
+      if (_isArcResistance(message)) {
+        return ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
+          expressionMode: ConversationExpressionMode.narrow,
         );
       }
     }
@@ -190,12 +242,27 @@ class ConversationPolicy {
 
     if (reframeReady &&
         !arc.reframeAwaitingResponse &&
+        !arc.integrateAwaitingResponse &&
+        !arc.closureAwaitingResponse &&
+        !(arc.hadIntegrate && !arc.hadClosure) &&
         !_isBareAcknowledgment(message ?? '') &&
         _shouldOfferReframe(session: session, arc: arc)) {
       return const ConversationDecision(
         phase: ConversationPhase.validation,
         shouldSpeak: true,
         expressionMode: ConversationExpressionMode.reframe,
+      );
+    }
+
+    if (arc.hadNarrow &&
+        message != null &&
+        !reframeReady &&
+        reframeReadinessGate.isThinEvidenceAfterNarrow(message)) {
+      return const ConversationDecision(
+        phase: ConversationPhase.validation,
+        shouldSpeak: true,
+        expressionMode: ConversationExpressionMode.narrow,
+        narrowRefinementAfterPartial: true,
       );
     }
 
@@ -238,7 +305,11 @@ class ConversationPolicy {
     if (session == null) return false;
     for (var i = session.turns.length - 1; i >= 0; i--) {
       final mode = session.turns[i].expressionMode;
-      if (mode == ConversationExpressionMode.postReframeListen) return true;
+      if (mode == ConversationExpressionMode.integrate ||
+          mode == ConversationExpressionMode.closure ||
+          mode == ConversationExpressionMode.postReframeListen) {
+        return true;
+      }
       if (mode == ConversationExpressionMode.reframe) return false;
     }
     return false;
@@ -253,6 +324,50 @@ class ConversationPolicy {
       if (mode == ConversationExpressionMode.reframe) sawReframe = true;
     }
     return false;
+  }
+
+  bool _isIntegratePositiveAck(String message) {
+    final n = _normalizeProtestText(message).replaceAll(RegExp(r'[.!?…]+$'), '');
+    if (_isBareAcknowledgment(message)) return true;
+    return _containsAnyNormalized(n, const [
+      'dogru',
+      'doğru',
+      'aynen',
+      'kesinlikle',
+      'evet',
+      'tamam',
+      'exactly',
+      'that is right',
+      "that's right",
+    ]);
+  }
+
+  bool _isArcResistance(String message) {
+    final n = _normalizeProtestText(message);
+    if (_isPartialReframeResponse(message)) return true;
+    return _containsAnyNormalized(n, const [
+      'ama yine',
+      'ama hala',
+      'ama hâlâ',
+      'hala cok',
+      'hâlâ çok',
+      'hala kork',
+      'hâlâ kork',
+      'duramiyorum',
+      'duramıyorum',
+      'dusunmeden duram',
+      'düşünmeden duram',
+      'yine de dusun',
+      'yine de düşün',
+      'olmuyor',
+      'durmuyor',
+      'still scared',
+      'still afraid',
+      "can't stop",
+      'cannot stop',
+      'wont stop',
+      "won't stop",
+    ]);
   }
 
   bool _isBareAcknowledgment(String message) {
@@ -463,6 +578,9 @@ class ConversationPolicy {
       );
       if (reframeReady &&
           !arc.reframeAwaitingResponse &&
+          !arc.integrateAwaitingResponse &&
+          !arc.closureAwaitingResponse &&
+          !(arc.hadIntegrate && !arc.hadClosure) &&
           !_isPartialReframeResponse(message) &&
           !_isBareAcknowledgment(message) &&
           _shouldOfferReframe(session: session, arc: arc)) {
@@ -525,6 +643,38 @@ class ConversationPolicy {
         );
 
       case ReleaseReadiness.settling:
+        // Slice 3: resistance after closure reopens arc, not Release.
+        if (message != null) {
+          final arcForResistance = ConversationArcReader.fromSession(session);
+          if (_isArcResistance(message) &&
+              (arcForResistance.closureAwaitingResponse ||
+                  arcForResistance.hadClosure)) {
+            return _arcValidationDecision(
+              session: session,
+              message: message,
+              understanding: understanding,
+              conversationGrounding: conversationGrounding,
+            );
+          }
+        }
+        // Slice 3: block premature Release while problem arc is incomplete.
+        {
+          final arc = ConversationArcReader.fromSession(session);
+          final light = message != null &&
+              lightConversationDetector.isLightConversation(message);
+          if (!closureReadinessGate.allowsRelease(
+            arc: arc,
+            message: message,
+            isLightConversation: light,
+          )) {
+            return _arcValidationDecision(
+              session: session,
+              message: message,
+              understanding: understanding,
+              conversationGrounding: conversationGrounding,
+            );
+          }
+        }
         // One Release issuance per climb. A second Enough after Enough must
         // not re-stamp the close — speak once, then stay quiet.
         if (priorPhase == ConversationPhase.continuity) {

@@ -1,4 +1,5 @@
 import 'conversation_phase.dart';
+import 'conversation_arc_reader.dart';
 import 'night_session.dart';
 import 'post_audio_re_engagement.dart';
 import 'release_decision.dart';
@@ -139,6 +140,16 @@ class ReleaseEngine {
     // Fail-closed after a spoken Release: unclear must not invent acceptance
     // and absence of load alone must not advance into another Release dwell.
     if (priorWasRelease && stance == TurnResponseStance.unclear) {
+      return previous;
+    }
+
+    if (message != null &&
+        progressionGate.isBareAcknowledgement(message) &&
+        ConversationArcReader.fromSession(session).problemFocusedArcIncomplete) {
+      return previous;
+    }
+
+    if (ConversationArcReader.fromSession(session).problemFocusedArcIncomplete) {
       return previous;
     }
 

@@ -21,4 +21,10 @@ enum ConversationExpressionMode {
 
   /// Slice 2: after reframe — brief listen only, no new interpretation.
   postReframeListen,
+
+  /// Slice 3: connect confirmed reframe to tonight's mental loop.
+  integrate,
+
+  /// Slice 3: tonight boundary + personalized put-down from confirmed insight.
+  closure,
 }

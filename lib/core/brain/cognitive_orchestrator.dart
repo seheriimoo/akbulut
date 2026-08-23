@@ -195,6 +195,7 @@ class CognitiveOrchestrator {
           ? null
           : _conversationGroundingBuffer,
       priorAdmittedExpression: _lastAdmittedExpression(session),
+      nightSession: session,
     );
 
     final updatedSession = session.recordTurn(
@@ -240,6 +241,7 @@ class CognitiveOrchestrator {
     String? livedExpression,
     ConversationGroundingBuffer? conversationGrounding,
     PriorAdmittedExpression? priorAdmittedExpression,
+    NightSession? nightSession,
   }) {
     return conversationEngine.generate(
       conversationDecision: conversationDecision,
@@ -249,6 +251,7 @@ class CognitiveOrchestrator {
       livedExpression: livedExpression,
       conversationGrounding: conversationGrounding,
       priorAdmittedExpression: priorAdmittedExpression,
+      nightSession: nightSession,
     );
   }
 

@@ -22,6 +22,19 @@ class ObserveFallbackBuilder {
 
   static String? _turkishMirror(String user) {
     final n = _normalize(user);
+    if (_containsAny(n, ['bilmiyorum', 'net degil', 'net değil']) &&
+        _containsAny(n, ['hala', 'hâlâ', 'net'])) {
+      return 'Hâlâ net değil, biliyorsun.';
+    }
+    if (_containsAny(n, ['dusunmezsem', 'düşünmezsem', 'hazirliksiz', 'hazırlıksız', 'yakalanacak'])) {
+      return 'Hazırlıksız yakalanma hissi hâlâ orada.';
+    }
+    if (_containsAny(n, ['anlamiyor', 'anlamıyor', 'kimse'])) {
+      return 'Anlaşılmadığını hissetmek hâlâ orada.';
+    }
+    if (n.contains('belki') && _containsAny(n, ['isten', 'işten'])) {
+      return 'Belki işten geldiği aklında.';
+    }
     if (_containsAny(n, ['yarin', 'yarın']) &&
         _containsAny(n, ['mudur', 'müdür', 'konuş', 'konus', 'toplanti', 'toplantı', 'sunum'])) {
       return 'Yarınki konuşma hâlâ kafanda.';
@@ -113,7 +126,9 @@ class ObserveFallbackBuilder {
       'icime',
       'oturdu',
       'bilmiyorum',
-      'ozluyorum',
+      'dusunmezsem',
+      'hazirliksiz',
+      'anlamiyor',
     ]);
   }
 

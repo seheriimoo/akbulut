@@ -151,10 +151,30 @@ class UtteranceGuard {
       return null;
     }
 
+    // Integrate: no question; no empathy filler; mind-loop bridge required.
+    if (what == ConversationPhase.validation &&
+        expressionMode == ConversationExpressionMode.integrate &&
+        (normalized.contains('?') ||
+            _integrateForbiddenDrift(normalized) ||
+            !_matchesIntegrateContract(_normalizeForMatch(normalized)))) {
+      return null;
+    }
+
+    // Closure: no question; personalized tonight boundary required.
+    if (what == ConversationPhase.validation &&
+        expressionMode == ConversationExpressionMode.closure &&
+        (normalized.contains('?') ||
+            _closureForbiddenDrift(normalized) ||
+            !_matchesClosureContract(_normalizeForMatch(normalized)))) {
+      return null;
+    }
+
     // Receipt: do not admit invented tomorrow / racing when the person
     // did not name those objects this turn.
     if (what == ConversationPhase.validation &&
         expressionMode != ConversationExpressionMode.repair &&
+        expressionMode != ConversationExpressionMode.integrate &&
+        expressionMode != ConversationExpressionMode.closure &&
         _receiptInventedAgenda(normalized, userUtterance)) {
       return null;
     }
@@ -193,6 +213,10 @@ class UtteranceGuard {
         maxEnds = 2;
       } else if (expressionMode == ConversationExpressionMode.reframe) {
         maxEnds = 2;
+      } else if (expressionMode == ConversationExpressionMode.integrate) {
+        maxEnds = 2;
+      } else if (expressionMode == ConversationExpressionMode.closure) {
+        maxEnds = 3;
       } else {
         maxEnds = 3;
       }
@@ -241,6 +265,13 @@ class UtteranceGuard {
 
     for (final other in _speakablePhases) {
       if (other == what) continue;
+      // Integrate/Closure use personalized put-down language by design;
+      // do not cross-reject against Permission/Release phase signatures.
+      if (what == ConversationPhase.validation &&
+          (expressionMode == ConversationExpressionMode.integrate ||
+              expressionMode == ConversationExpressionMode.closure)) {
+        continue;
+      }
       // Later-phase lines often contain incidental soft frames (“perhaps…”,
       // “it’s…”) + textures (“quiet”, “carry”) that false-match Receipt
       // texture-first. Only classic Receipt stems collide.
@@ -384,6 +415,12 @@ class UtteranceGuard {
         }
         if (expressionMode == ConversationExpressionMode.reframe) {
           return _matchesReframeContract(lower);
+        }
+        if (expressionMode == ConversationExpressionMode.integrate) {
+          return _matchesIntegrateContract(lower);
+        }
+        if (expressionMode == ConversationExpressionMode.closure) {
+          return _matchesClosureContract(lower);
         }
         if (expressionMode == ConversationExpressionMode.postReframeListen) {
           return _matchesPostReframeListenContract(lower);
@@ -670,6 +707,85 @@ class UtteranceGuard {
     ]);
   }
 
+  bool _integrateForbiddenDrift(String text) {
+    final lower = _normalizeForMatch(text);
+    return _containsAny(lower, const [
+      'anliyorum',
+      'anlıyorum',
+      'bu cok zor',
+      'bu çok zor',
+      'belki zihnin',
+      'birakabilirsin',
+      'bırakabilirsin',
+    ]);
+  }
+
+  bool _closureForbiddenDrift(String text) {
+    final lower = _asciiFoldTr(_normalizeForMatch(text));
+    if (_containsAny(lower, const ['anliyorum'])) return true;
+    if (lower.contains('bu gece bunu cozmek zorunda degilsin')) {
+      return true;
+    }
+    return false;
+  }
+
+  bool _matchesIntegrateContract(String lower) {
+    if (lower.contains('?')) return false;
+    if (_integrateForbiddenDrift(lower)) return false;
+    return _containsAny(lower, const [
+      'zihnin',
+      'zihin',
+      'mind',
+      'calisiyor',
+      'çalışıyor',
+      'trying',
+      'guvence',
+      'güvence',
+      'risk gibi',
+      'loop',
+      'bu yuzden',
+      'bu yüzden',
+      'o zaman',
+    ]);
+  }
+
+  bool _matchesClosureContract(String lower) {
+    if (lower.contains('?')) return false;
+    if (_closureForbiddenDrift(lower)) return false;
+    final n = _asciiFoldTr(lower);
+    final hasTonight = _containsAny(n, const [
+      'bu gece',
+      'tonight',
+      'yarin',
+      'tomorrow',
+      'sabah',
+    ]);
+    final hasPutDown = _containsAny(n, const [
+      'zorunda degilsin',
+      "don't have to",
+      'do not have to',
+      'kesinlestiremez',
+      'birak',
+      'put down',
+      'leave',
+      'rest',
+    ]);
+    return hasTonight && hasPutDown;
+  }
+
+  String _asciiFoldTr(String s) {
+    return s
+        .replaceAll('ş', 's')
+        .replaceAll('ğ', 'g')
+        .replaceAll('ü', 'u')
+        .replaceAll('ö', 'o')
+        .replaceAll('ı', 'i')
+        .replaceAll('ç', 'c')
+        .replaceAll('â', 'a')
+        .replaceAll('î', 'i')
+        .replaceAll('û', 'u');
+  }
+
   bool _tooManyQuestions(String text) {
     return '?'.allMatches(text).length > 1;
   }
@@ -935,6 +1051,10 @@ class UtteranceGuard {
       'düşün',
       'yalniz',
       'yalnız',
+      'sakinim',
+      'rahatlad',
+      'rahatladim',
+      'rahatladım',
     ]);
     final hasTurkish = hasTurkishScript || hasTurkishLexeme;
     final hasEnglish = RegExp(

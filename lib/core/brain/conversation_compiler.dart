@@ -1,3 +1,4 @@
+import 'closure_intelligence.dart';
 import 'conversation_blueprint_binding.dart';
 import 'conversation_constitution.dart';
 import 'conversation_dna.dart';
@@ -7,6 +8,7 @@ import 'conversation_philosophy.dart';
 import 'compiled_instruction_package.dart';
 import 'enough_intelligence.dart';
 import 'exit_decision.dart';
+import 'integration_intelligence.dart';
 import 'language_style.dart';
 import 'llm_invocation_package.dart';
 import 'naming_intelligence.dart';
@@ -52,6 +54,8 @@ class ConversationCompiler {
     this.repairIntelligence = const RepairIntelligence(),
     this.narrowIntelligence = const NarrowIntelligence(),
     this.reframeIntelligence = const ReframeIntelligence(),
+    this.integrationIntelligence = const IntegrationIntelligence(),
+    this.closureIntelligence = const ClosureIntelligence(),
     this.languageStyle = LanguageStyle.instance,
   });
 
@@ -64,6 +68,8 @@ class ConversationCompiler {
   final RepairIntelligence repairIntelligence;
   final NarrowIntelligence narrowIntelligence;
   final ReframeIntelligence reframeIntelligence;
+  final IntegrationIntelligence integrationIntelligence;
+  final ClosureIntelligence closureIntelligence;
   final LanguageStyle languageStyle;
 
   static const String expectedConstitutionVersion =
@@ -166,6 +172,38 @@ class ConversationCompiler {
           final slice = reframeIntelligence.compile(
             stage: stage,
             conversationGrounding: package.conversationGrounding,
+          );
+          return _StageOverlay(
+            aim: slice.aim,
+            sealedWhatSignature: slice.sealedWhatSignature,
+            forbiddenMoves: slice.forbiddenMoves,
+            responseLength: slice.responseLength,
+            realizationDirective: slice.realizationDirective,
+            userContent: slice.userContent,
+            systemAppendix: slice.systemAppendix,
+          );
+        }
+        if (package.expressionMode == ConversationExpressionMode.integrate) {
+          final slice = integrationIntelligence.compile(
+            stage: stage,
+            conversationGrounding: package.conversationGrounding,
+            confirmedReframeText: package.priorAdmittedExpression?.text,
+          );
+          return _StageOverlay(
+            aim: slice.aim,
+            sealedWhatSignature: slice.sealedWhatSignature,
+            forbiddenMoves: slice.forbiddenMoves,
+            responseLength: slice.responseLength,
+            realizationDirective: slice.realizationDirective,
+            userContent: slice.userContent,
+            systemAppendix: slice.systemAppendix,
+          );
+        }
+        if (package.expressionMode == ConversationExpressionMode.closure) {
+          final slice = closureIntelligence.compile(
+            stage: stage,
+            conversationGrounding: package.conversationGrounding,
+            integrateText: package.priorAdmittedExpression?.text,
           );
           return _StageOverlay(
             aim: slice.aim,
@@ -694,6 +732,10 @@ $groundingBlock''';
         return 'Observe purity: questions are forbidden. No reframe on this turn.';
       case ConversationExpressionMode.postReframeListen:
         return 'Post-reframe listen: one brief acknowledgment only. No new reframe. No question.';
+      case ConversationExpressionMode.integrate:
+        return 'Integrate: no question. Connect confirmed reframe to tonight loop only.';
+      case ConversationExpressionMode.closure:
+        return 'Closure: no question. Tonight boundary + personalized put-down from their insight.';
       case ConversationExpressionMode.standard:
         return 'Questions are forbidden unless the stage explicitly allows them.';
     }

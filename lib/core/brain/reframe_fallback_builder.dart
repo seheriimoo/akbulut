@@ -33,6 +33,13 @@ class ReframeFallbackBuilder {
         _containsAny(n, ['ozle', 'ozluy', 'onu'])) {
       return 'O zaman onun yanındayken hissettiğin güven, şimdi eksik kalmış gibi duruyor olabilir.';
     }
+    if (_containsAny(n, ['yanimda', 'hissetmeyi', 'birinin yan']) &&
+        _containsAny(n, ['yalniz', 'sessiz', 'ozle', 'ozl'])) {
+      return 'O zaman bu gece eksik gelen şey sadece birinin fiziksel olarak burada olması değil; yanında biri varmış hissi olabilir.';
+    }
+    if (_containsAny(n, ['anlamiyor', 'anlamıyor', 'kimse'])) {
+      return 'O zaman bu gece eksik gelen şey belki de anlaşılmak; yalnız kalmaktan ayrı duruyor olabilir.';
+    }
     if (_containsAny(n, ['kirgin', 'ozle', 'ozlem'])) {
       return 'O zaman ikisi ayrı duygular gibi duruyor; özlem bir yanda, kırgınlık bir yanda duruyor olabilir.';
     }

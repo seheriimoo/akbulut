@@ -192,7 +192,7 @@ void main() {
   });
 
   group('Slice 2 golden arc routing', () {
-    test('T1 observe → T2 narrow after evet → T3 reframe → T4 postReframeListen',
+    test('T1 observe → T2 narrow after evet → T3 reframe → T4 integrate',
         () {
       final t1 = policy.decide(
         releaseDecision:
@@ -262,7 +262,7 @@ void main() {
         message: 'Evet, tam olarak bu.',
         session: s3,
       );
-      expect(t4.expressionMode, ConversationExpressionMode.postReframeListen);
+      expect(t4.expressionMode, ConversationExpressionMode.integrate);
     });
 
     test('reframe correction routes to repair', () {

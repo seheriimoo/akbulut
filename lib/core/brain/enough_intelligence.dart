@@ -174,11 +174,17 @@ class EnoughIntelligence {
     final anti = priorAdmittedExpression == null
         ? ''
         : '\n\n${priorAdmittedExpression.antiRepeatDirective()}';
+    final postClosure = priorAdmittedExpression != null &&
+        _looksLikePersonalizedClosure(priorAdmittedExpression.text);
     final lead = authorizeRestAudioHandoff
         ? 'Prefer one soft handoff sentence (max 16 words). Plain. Quiet. Human. '
             'Lead with the handoff; do not open with “it’s time to let…”. '
-        : 'Prefer one plain close sentence (max 16 words). Quiet. Human. '
-            'Do not prepare or promise audio. ';
+        : postClosure
+            ? 'Prior turn already personalized closure — emit ONLY a short landing '
+                '(e.g. “Bu kadar yeter.” / “That’s enough.”). No new insight. '
+                'No question. No therapy paragraph. '
+            : 'Prefer one plain close sentence (max 16 words). Quiet. Human. '
+                'Do not prepare or promise audio. ';
     return '$realization\n\n'
         '$close\n\n'
         '${lead}No question. No catchphrase stamp. No second agenda.$anti';
@@ -204,6 +210,14 @@ $anti
 Warmth rule: sound nearby and tired-kind, not clinical or protocol-confirming.
 Drift rule: do not Receipt, Name, grant Permission, or invite Release.
 ''';
+  }
+
+  bool _looksLikePersonalizedClosure(String prior) {
+    final n = prior.toLowerCase();
+    return n.contains('bu gece') &&
+        (n.contains('zorunda degilsin') ||
+            n.contains('zorunda değilsin') ||
+            n.contains("don't have to"));
   }
 }
 

@@ -143,7 +143,7 @@ void main() {
             ConversationExpressionMode.observePurity,
             ConversationExpressionMode.narrow,
             ConversationExpressionMode.reframe,
-            ConversationExpressionMode.postReframeListen,
+            ConversationExpressionMode.integrate,
           ][i];
           if (expr == expected) goldenArcMatch++;
         }

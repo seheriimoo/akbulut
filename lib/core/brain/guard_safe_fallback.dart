@@ -1,7 +1,12 @@
+import 'arc_evidence_context.dart';
 import 'conversation_expression_mode.dart';
+import 'conversation_grounding_buffer.dart';
 import 'conversation_phase.dart';
 import 'conversation_utterance.dart';
+import 'closure_fallback_builder.dart';
+import 'integrate_fallback_builder.dart';
 import 'narrow_fallback_builder.dart';
+import 'night_session.dart';
 import 'observe_fallback_builder.dart';
 import 'reframe_fallback_builder.dart';
 
@@ -11,20 +16,24 @@ import 'reframe_fallback_builder.dart';
 /// Expression-plane only. Does not reopen WHAT / Exit / Release.
 /// Does not rewrite the rejected text. Does not call an LLM.
 ///
-/// Lines are closed stems known to pass phase contracts for EN/TR.
+/// `Anlıyorum.` is ultimate last-resort only for validation standard mode.
 class GuardSafeFallback {
   const GuardSafeFallback._();
 
-  /// Returns a short, non-clinical fallback for [what], or `null` when [what]
-  /// is non-speakable (audio / silence) — those turns stay silent by design.
   static ConversationUtterance? forPhase({
     required ConversationPhase what,
     String? userUtterance,
     ConversationExpressionMode expressionMode =
         ConversationExpressionMode.standard,
     bool narrowRefinementAfterPartial = false,
+    NightSession? session,
+    ConversationGroundingBuffer? grounding,
   }) {
     if (!_isSpeakable(what)) return null;
+
+    final arc = ArcEvidenceContext.fromNight(session: session, grounding: grounding);
+    final prefersTurkish = arc.prefersTurkish || _looksTurkish(userUtterance);
+    final groundingBlob = arc.userEvidenceBlob;
 
     if (what == ConversationPhase.validation &&
         expressionMode == ConversationExpressionMode.observePurity) {
@@ -32,38 +41,71 @@ class GuardSafeFallback {
         userUtterance: userUtterance,
       );
       if (mirror != null) return mirror;
+      if (prefersTurkish && groundingBlob != null && groundingBlob.isNotEmpty) {
+        final fromCtx = ObserveFallbackBuilder.forValidation(
+          userUtterance: groundingBlob,
+        );
+        if (fromCtx != null) return fromCtx;
+      }
     }
 
     if (what == ConversationPhase.validation &&
         expressionMode == ConversationExpressionMode.narrow) {
       final fork = NarrowFallbackBuilder.forValidation(
         userUtterance: userUtterance,
+        priorUserUtterance: _priorUserLine(grounding),
         refinementAfterPartial: narrowRefinementAfterPartial,
+        groundingBlob: groundingBlob,
       );
       if (fork != null) return fork;
     }
 
     if (what == ConversationPhase.validation &&
         expressionMode == ConversationExpressionMode.postReframeListen) {
-      final turkish = _looksTurkish(userUtterance);
-      return ConversationUtterance(
-        text: turkish ? 'Tamam.' : 'Okay.',
-      );
+      return ConversationUtterance(text: prefersTurkish ? 'Tamam.' : 'Okay.');
     }
 
     if (what == ConversationPhase.validation &&
         expressionMode == ConversationExpressionMode.reframe) {
       final reframe = ReframeFallbackBuilder.forValidation(
-        userUtterance: userUtterance,
+        userUtterance: userUtterance ?? groundingBlob,
       );
       if (reframe != null) return reframe;
     }
 
-    final turkish = _looksTurkish(userUtterance);
-    final text = turkish
-        ? _turkishFor(what, expressionMode: expressionMode)
-        : _englishFor(what, expressionMode: expressionMode);
-    return ConversationUtterance(text: text);
+    if (what == ConversationPhase.validation &&
+        expressionMode == ConversationExpressionMode.integrate) {
+      final integrate = IntegrateFallbackBuilder.forValidation(
+        userUtterance: userUtterance ?? groundingBlob,
+        session: session,
+      );
+      if (integrate != null) return integrate;
+    }
+
+    if (what == ConversationPhase.validation &&
+        expressionMode == ConversationExpressionMode.closure) {
+      return ClosureFallbackBuilder.forValidation(
+        userUtterance: userUtterance,
+        session: session,
+        grounding: grounding,
+        arcEvidence: arc,
+      );
+    }
+
+    if (prefersTurkish) {
+      final tr = _turkishFor(what, expressionMode: expressionMode);
+      if (tr.isNotEmpty) return ConversationUtterance(text: tr);
+    }
+
+    final en = _englishFor(what, expressionMode: expressionMode);
+    return ConversationUtterance(text: en);
+  }
+
+  static String? _priorUserLine(ConversationGroundingBuffer? grounding) {
+    if (grounding == null || grounding.priorUserUtterances.isEmpty) {
+      return null;
+    }
+    return grounding.priorUserUtterances.last;
   }
 
   static bool _isSpeakable(ConversationPhase what) {
@@ -141,46 +183,34 @@ class GuardSafeFallback {
     }
   }
 
-  /// Lightweight EN/TR hint from the current user line only.
   static bool _looksTurkish(String? text) {
     if (text == null || text.trim().isEmpty) return false;
     final lower = text.toLowerCase();
     if (RegExp(r'[ğüşıöçâîû]').hasMatch(lower)) return true;
-    // ASCII Turkish night slang / common particles (no diacritics).
     const markers = [
       'bilmiyorum',
       'uyuyamiyorum',
       'uyuyamıyorum',
       'kafam',
-      'kafa',
       'aklim',
       'aklım',
       'durmuyor',
-      'donup',
-      'dönüp',
       'gece',
       'yarin',
       'yarın',
       'degil',
       'değil',
-      'icin',
-      'için',
-      'cok',
-      'çok',
-      'sadece',
       'belki',
-      'bence',
-      'hayir',
-      'hayır',
       'evet',
-      'ama ',
-      ' yani',
-      'ya.',
-      ' ya ',
+      'sakin',
+      'rahat',
+      'dogru',
+      'doğru',
+      'yalniz',
+      'yalnız',
+      'ozle',
       'miyim',
       'mıyım',
-      'misin',
-      'mısın',
     ];
     for (final marker in markers) {
       if (lower.contains(marker)) return true;

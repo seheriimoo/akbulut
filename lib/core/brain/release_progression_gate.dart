@@ -1,3 +1,4 @@
+import 'conversation_arc_reader.dart';
 import 'light_conversation_detector.dart';
 import 'night_session.dart';
 import 'validated_understanding.dart';
@@ -20,6 +21,18 @@ class ReleaseProgressionGate {
   }) {
     if (message != null && hasWindDownEvidence(message)) {
       return false;
+    }
+
+    if (message != null && hasWindDownEvidence(message)) {
+      return false;
+    }
+
+    final arc = ConversationArcReader.fromSession(session);
+    if (arc.problemFocusedArcIncomplete) {
+      if (message != null && hasWindDownEvidence(message) && arc.hadClosure) {
+        return false;
+      }
+      return true;
     }
 
     if (message != null && lightConversation.isLightConversation(message)) {

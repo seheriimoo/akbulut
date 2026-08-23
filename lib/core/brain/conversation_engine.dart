@@ -1,11 +1,14 @@
 import 'package:flutter/foundation.dart';
 
+import 'closure_fallback_builder.dart';
 import 'conversation_decision.dart';
+import 'conversation_expression_mode.dart';
 import 'conversation_grounding_buffer.dart';
 import 'conversation_utterance.dart';
 import 'exit_decision.dart';
 import 'guard_safe_fallback.dart';
 import 'language_model_client.dart';
+import 'night_session.dart';
 import 'prior_admitted_expression.dart';
 import 'prompt_architecture.dart';
 import 'utterance_guard.dart';
@@ -58,6 +61,7 @@ class ConversationEngine {
     String? livedExpression,
     ConversationGroundingBuffer? conversationGrounding,
     PriorAdmittedExpression? priorAdmittedExpression,
+    NightSession? nightSession,
   }) async {
     final package = promptArchitecture.package(
       conversationDecision: conversationDecision,
@@ -109,8 +113,26 @@ class ConversationEngine {
       userUtterance: userUtterance,
       expressionMode: package.expressionMode,
       narrowRefinementAfterPartial: package.narrowRefinementAfterPartial,
+      session: nightSession,
+      grounding: package.conversationGrounding,
     );
-    if (fallback == null) return null;
+    if (fallback == null) {
+      if (package.expressionMode == ConversationExpressionMode.closure) {
+        final closureOnly = ClosureFallbackBuilder.forValidation(
+          userUtterance: userUtterance,
+          session: nightSession,
+          grounding: package.conversationGrounding,
+        );
+        final closureAdmitted = utteranceGuard.allow(
+          utterance: closureOnly,
+          what: package.what,
+          userUtterance: userUtterance,
+          expressionMode: package.expressionMode,
+        );
+        if (closureAdmitted != null) return closureAdmitted;
+      }
+      return null;
+    }
 
     final fallbackAdmitted = utteranceGuard.allow(
       utterance: fallback,

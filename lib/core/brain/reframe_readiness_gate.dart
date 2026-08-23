@@ -24,7 +24,10 @@ class ReframeReadinessGate {
       return true;
     }
 
-    if (arc.hadNarrow && message != null && _substantiveAfterNarrow(message)) {
+    if (arc.hadNarrow && message != null && _substantiveAfterNarrow(
+          message,
+          conversationGrounding: conversationGrounding,
+        )) {
       return true;
     }
 
@@ -69,15 +72,20 @@ class ReframeReadinessGate {
     ]);
   }
 
-  bool _substantiveAfterNarrow(String message) {
+  bool _substantiveAfterNarrow(
+    String message, {
+    ConversationGroundingBuffer? conversationGrounding,
+  }) {
     final n = _normalize(message);
     if (n.length < 10) return false;
     if (_isBareAcknowledgment(n)) return false;
     if (_isVagueThinGuess(n)) return false;
+    if (_isThinStandaloneLoneliness(n)) return false;
 
     if (_explicitCausalOrMotiveInfo(message)) return true;
     if (_forkBranchPreference(n)) return true;
     if (_emotionalRelationEvidence(n)) return true;
+    if (_lonelinessRelationalEvidence(n, conversationGrounding)) return true;
 
     return _containsAny(n, const [
       'tepki',
@@ -170,6 +178,68 @@ class ReframeReadinessGate {
   }
 
   /// Thin ambiguous guess — do not force reframe.
+  bool isThinEvidence(String message) {
+    final n = _normalize(message);
+    if (_isBareAcknowledgment(n)) return false;
+    return _isVagueThinGuess(n) || _isThinStandaloneLoneliness(n);
+  }
+
+  /// Public for policy: after Narrow, thin lines refine — never Observe loop.
+  bool isThinEvidenceAfterNarrow(String message) => isThinEvidence(message);
+
+  /// "Yalnızım." / "Kimse yok." alone — not reframe-ready.
+  bool _isThinStandaloneLoneliness(String n) {
+    final stripped = n.replaceAll(RegExp(r'[.!?…]+$'), '').trim();
+    if (stripped.length > 22) return false;
+    return RegExp(
+      r'^(yalniz|yalnız|yalnizim|yalnızım|kimse yok|hic kimse|hiç kimse|yalniz his|yalnız his)',
+    ).hasMatch(stripped);
+  }
+
+  /// Substantive loneliness relational evidence after a loneliness Narrow.
+  bool _lonelinessRelationalEvidence(
+    String n,
+    ConversationGroundingBuffer? buffer,
+  ) {
+    if (_isThinStandaloneLoneliness(n)) return false;
+    final hasRelational = _containsAny(n, const [
+      'yanimda',
+      'yanımda',
+      'yaninda biri',
+      'yanında biri',
+      'birinin yan',
+      'burada olmas',
+      'hissetmeyi',
+      'hissetmek',
+      'sessizlikte',
+      'anlamiyor',
+      'anlamıyor',
+      'galiba birinin',
+      'yaninda oldugunu',
+      'yanında olduğunu',
+      'presence',
+      'someone there',
+    ]);
+    if (!hasRelational) return false;
+    final ctx = _groundingBlob(buffer);
+    return _containsAny('$ctx $n', const [
+      'yalniz',
+      'yalnız',
+      'yalnizim',
+      'yalnızım',
+      'sessiz',
+      'ev cok',
+      'ev çok',
+      'lonely',
+      'alone',
+    ]);
+  }
+
+  String _groundingBlob(ConversationGroundingBuffer? buffer) {
+    if (buffer == null || buffer.isEmpty) return '';
+    return buffer.userUtterances.join(' ').toLowerCase();
+  }
+
   bool _isVagueThinGuess(String n) {
     if (n.length > 16) return false;
     return RegExp(r'^(belki|galiba|sanirim|sanırım)\b').hasMatch(n.trim()) &&
@@ -224,7 +294,15 @@ class ReframeReadinessGate {
   }
 
   static String _normalize(String message) {
-    return message.trim().toLowerCase().replaceAll('’', "'");
+    var s = message.trim().toLowerCase().replaceAll('’', "'");
+    s = s
+        .replaceAll('ö', 'o')
+        .replaceAll('ü', 'u')
+        .replaceAll('ı', 'i')
+        .replaceAll('ğ', 'g')
+        .replaceAll('ş', 's')
+        .replaceAll('ç', 'c');
+    return s;
   }
 
   static bool _containsAny(String n, List<String> markers) {

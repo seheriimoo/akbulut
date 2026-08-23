@@ -7,6 +7,7 @@ import 'conversation_phase.dart';
 import 'explicit_exit_intent.dart';
 import 'grounded_progression.dart';
 import 'light_conversation_detector.dart';
+import 'listen_only_preference.dart';
 import 'neutral_entry_detector.dart';
 import 'night_session.dart';
 import 'post_audio_re_engagement.dart';
@@ -96,6 +97,20 @@ class ConversationPolicy {
         shouldSpeak: true,
         expressionMode: ConversationExpressionMode.repair,
         repairRepetitionProtest: _isRepetitionProtest(message),
+      );
+    }
+
+    if (message != null &&
+        ListenOnlyPreference.isActive(
+          currentMessage: message,
+          grounding: conversationGrounding,
+          sessionVentCorpus: sessionVentCorpus,
+        ) &&
+        !ListenOnlyPreference.requestsAnalysis(message)) {
+      return const ConversationDecision(
+        phase: ConversationPhase.validation,
+        shouldSpeak: true,
+        expressionMode: ConversationExpressionMode.groundedHold,
       );
     }
 
@@ -929,6 +944,7 @@ class ConversationPolicy {
     String sessionVentCorpus = '',
   }) {
     if (message == null) return false;
+    if (lightConversationDetector.hasRealLoadMarkers(message)) return false;
     if (SessionVentMemory.blocksPlayfulLight(
       session: session,
       grounding: conversationGrounding,

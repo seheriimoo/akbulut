@@ -3,6 +3,7 @@ import 'conversation_phase.dart';
 import 'conversation_utterance.dart';
 import 'hold_act_dedup.dart';
 import 'night_session.dart';
+import 'session_locale.dart';
 import 'surface_utterance_kind.dart';
 import 'user_object_mirror.dart';
 import 'utterance_guard.dart';
@@ -30,10 +31,27 @@ class ConversationalLanding {
 
     if (SurfaceUtteranceReader.isClosingIntent(user)) {
       final text = turkish ? 'İyi geceler.' : 'Good night.';
-      return _admit(text, user, expressionMode);
+      return _admit(text, user, expressionMode, groundingBlob: groundingBlob);
     }
 
-    if (!SurfaceUtteranceReader.isMinimalAck(user)) return null;
+    if (!SurfaceUtteranceReader.isMinimalAck(user) &&
+        !SurfaceUtteranceReader.isFillerDiscourse(user)) {
+      return null;
+    }
+
+    if (SurfaceUtteranceReader.isFillerDiscourse(user) &&
+        groundingBlob != null &&
+        groundingBlob.trim().length >= 8) {
+      final mirror = UserObjectMirror.forValidation(
+        userUtterance: groundingBlob,
+        groundingBlob: groundingBlob,
+        expressionMode: expressionMode,
+        session: session,
+      );
+      if (mirror != null) {
+        return _admit(mirror.text, user, expressionMode, groundingBlob: groundingBlob);
+      }
+    }
 
     if (SurfaceUtteranceReader.isAffirmationAck(user)) {
       // Affirmation of prior substantive turn — mirror handles via grounding.
@@ -51,7 +69,7 @@ class ConversationalLanding {
             session: session,
           );
           if (mirror != null) {
-            return _admit(mirror.text, user, expressionMode);
+            return _admit(mirror.text, user, expressionMode, groundingBlob: groundingBlob);
           }
         }
         final alt = HoldActDedup.alternateMinimalLanding(
@@ -60,11 +78,11 @@ class ConversationalLanding {
           prefersTurkish: turkish,
         );
         if (alt != null) {
-          return _admit(alt.text, user, expressionMode);
+          return _admit(alt.text, user, expressionMode, groundingBlob: groundingBlob);
         }
       }
       final text = turkish ? 'Tamam.' : 'Okay.';
-      return _admit(text, user, expressionMode);
+      return _admit(text, user, expressionMode, groundingBlob: groundingBlob);
     }
 
     return null;
@@ -99,27 +117,22 @@ class ConversationalLanding {
   static ConversationUtterance? _admit(
     String text,
     String userUtterance,
-    ConversationExpressionMode expressionMode,
-  ) {
+    ConversationExpressionMode expressionMode, {
+    String? groundingBlob,
+  }) {
     final utterance = ConversationUtterance(text: text);
     final admitted = _guard.allow(
       utterance: utterance,
       what: ConversationPhase.validation,
       userUtterance: userUtterance,
+      mirrorGroundingUtterance: groundingBlob,
       expressionMode: expressionMode,
     );
     return admitted;
   }
 
   static bool _prefersTurkish(String user, String? grounding) {
-    final blob = '$user ${grounding ?? ''}';
-    if (RegExp(r'[ğüşıöçâîû]').hasMatch(blob)) return true;
-    final lower = blob.toLowerCase();
-    const markers = ['evet', 'tamam', 'gece', 'uyuyam', 'bilmiyorum', 'iyi'];
-    for (final m in markers) {
-      if (lower.contains(m)) return true;
-    }
-    return false;
+    return SessionLocale.prefersTurkish(user, grounding);
   }
 
   static String _normalize(String s) {

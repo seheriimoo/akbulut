@@ -54,6 +54,13 @@ class SurfaceTextFuzzy {
 
     if (RegExp(r'\bbilmiy\w*\b|\bbilemiy\w*\b').hasMatch(lower)) return true;
 
+    if (RegExp(
+      r'\b(dim|dım|dum|düm|tim|tım|tum|tüm|iyor|uyor|erek|'
+      r'edecek|misin|mısın|musun|miyim|mıyım)\b',
+    ).hasMatch(lower)) {
+      return true;
+    }
+
     const markers = [
       'belki',
       'yorgun',
@@ -73,6 +80,35 @@ class SurfaceTextFuzzy {
       'yalnız',
       'miyim',
       'mıyım',
+      'yok',
+      'bilmem',
+      'işte',
+      'iste',
+      'beklemek',
+      'sadece',
+      'zor',
+      'endişe',
+      'endise',
+      'istemiyorum',
+      'yine',
+      'ertele',
+      'lazim',
+      'lazım',
+      'kelime',
+      'kork',
+      'yazm',
+      'garip',
+      'hissed',
+      'acikla',
+      'uzgun',
+      'sinir',
+      'beden',
+      'agir',
+      'ağır',
+      'boyle',
+      'böyle',
+      'bisi',
+      'bişi',
     ];
     for (final marker in markers) {
       if (lower.contains(marker)) return true;

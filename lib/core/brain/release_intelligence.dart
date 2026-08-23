@@ -1,3 +1,4 @@
+import '../../config/temporary_language_override.dart';
 import 'conversation_blueprint_binding.dart';
 import 'conversation_grounding_buffer.dart';
 import 'prior_admitted_expression.dart';
@@ -34,7 +35,9 @@ class ReleaseIntelligence {
 
     final currentTurn = _currentTurnGrounding(conversationGrounding);
     final lean = _deterministicLean(conversationGrounding);
-    final turkish = _looksTurkish(conversationGrounding);
+    final turkish = TemporaryLanguageOverride.responseIsTurkish(
+      detectedTurkish: _looksTurkish(conversationGrounding),
+    );
     final supportedFunctional =
         ThinkingFunctionIntelligenceShaping.isSupportedOrStrong(
       thinkingFunctionHypothesis,

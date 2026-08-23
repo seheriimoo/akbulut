@@ -17,6 +17,8 @@ import 'prior_admitted_expression.dart';
 import 'prompt_architecture.dart';
 import 'reframe_evidence_reader.dart';
 import 'user_object_mirror.dart';
+import 'listen_only_preference.dart';
+import 'session_locale.dart';
 import 'utterance_guard.dart';
 import 'validated_understanding.dart';
 import 'vendor_provider.dart';
@@ -53,6 +55,11 @@ class ConversationEngine {
         conversationGrounding?.currentUserUtterance ?? livedExpression;
     final expressionGrounding = _expressionGroundingBlob(
       conversationGrounding: conversationGrounding,
+      sessionVentCorpus: sessionVentCorpus,
+    );
+    final listenOnlyActive = ListenOnlyPreference.isActive(
+      currentMessage: userUtterance,
+      grounding: conversationGrounding,
       sessionVentCorpus: sessionVentCorpus,
     );
 
@@ -122,6 +129,7 @@ class ConversationEngine {
       mirrorGroundingUtterance: expressionGrounding,
       expressionMode: package.expressionMode,
       reframeEvidenceLedger: reframeLedger,
+      listenOnlyActive: listenOnlyActive,
     );
     if (admitted != null) return admitted;
 
@@ -138,6 +146,7 @@ class ConversationEngine {
       session: nightSession,
       grounding: package.conversationGrounding,
       sessionVentCorpus: sessionVentCorpus,
+      listenOnlyActive: listenOnlyActive,
     );
     if (fallback == null) {
       if (package.expressionMode == ConversationExpressionMode.closure) {
@@ -164,6 +173,8 @@ class ConversationEngine {
         nightSession: nightSession,
         conversationGrounding: package.conversationGrounding,
         groundingBlob: expressionGrounding,
+        listenOnlyActive: listenOnlyActive,
+        sessionVentCorpus: sessionVentCorpus,
       );
     }
 
@@ -174,6 +185,7 @@ class ConversationEngine {
       mirrorGroundingUtterance: expressionGrounding,
       expressionMode: package.expressionMode,
       reframeEvidenceLedger: reframeLedger,
+      listenOnlyActive: listenOnlyActive,
     );
     if (fallbackAdmitted == null) {
       debugPrint(
@@ -190,6 +202,8 @@ class ConversationEngine {
         nightSession: nightSession,
         conversationGrounding: package.conversationGrounding,
         groundingBlob: expressionGrounding,
+        listenOnlyActive: listenOnlyActive,
+        sessionVentCorpus: sessionVentCorpus,
       );
     }
     debugPrint(
@@ -224,6 +238,11 @@ class ConversationEngine {
       conversationGrounding:
           package?.conversationGrounding ?? conversationGrounding,
       groundingBlob: expressionGrounding,
+      listenOnlyActive: ListenOnlyPreference.isActive(
+        currentMessage: userUtterance,
+        grounding: package?.conversationGrounding ?? conversationGrounding,
+        sessionVentCorpus: '',
+      ),
     );
   }
 
@@ -257,6 +276,8 @@ class ConversationEngine {
     NightSession? nightSession,
     ConversationGroundingBuffer? conversationGrounding,
     String? groundingBlob,
+    bool listenOnlyActive = false,
+    String sessionVentCorpus = '',
   }) {
     if (what == ConversationPhase.validation &&
         expressionMode == ConversationExpressionMode.observePurity) {
@@ -273,6 +294,7 @@ class ConversationEngine {
           userUtterance: userUtterance,
           mirrorGroundingUtterance: groundingBlob,
           expressionMode: expressionMode,
+          listenOnlyActive: listenOnlyActive,
         );
         if (shiftAdmitted != null) {
           debugPrint(
@@ -303,7 +325,9 @@ class ConversationEngine {
       utterance: terminal,
       what: what,
       userUtterance: userUtterance,
+      mirrorGroundingUtterance: groundingBlob,
       expressionMode: expressionMode,
+      listenOnlyActive: listenOnlyActive,
     );
     if (admitted == null) {
       debugPrint(
@@ -322,13 +346,18 @@ class ConversationEngine {
             expressionMode: retreatMode,
             userUtterance: userUtterance,
             narrowRefinementAfterPartial: narrowRefinementAfterPartial,
+            groundingBlob: groundingBlob,
+            session: nightSession,
+            grounding: conversationGrounding,
           );
           if (retreat == null) continue;
           final retreatAdmitted = utteranceGuard.allow(
             utterance: retreat,
             what: what,
             userUtterance: userUtterance,
+            mirrorGroundingUtterance: groundingBlob,
             expressionMode: retreatMode,
+            listenOnlyActive: listenOnlyActive,
           );
           if (retreatAdmitted != null) {
             debugPrint(
@@ -346,6 +375,7 @@ class ConversationEngine {
         nightSession: nightSession,
         conversationGrounding: conversationGrounding,
         groundingBlob: groundingBlob,
+        listenOnlyActive: listenOnlyActive,
       );
     }
     debugPrint(
@@ -363,6 +393,7 @@ class ConversationEngine {
     NightSession? nightSession,
     ConversationGroundingBuffer? conversationGrounding,
     String? groundingBlob,
+    bool listenOnlyActive = false,
   }) {
     if (what != ConversationPhase.validation) return null;
 
@@ -378,10 +409,9 @@ class ConversationEngine {
         utterance: mirror,
         what: what,
         userUtterance: userUtterance,
-        mirrorGroundingUtterance: UserObjectMirror.mirrorEvidenceSource(
-          userUtterance: userUtterance,
-        ),
+        mirrorGroundingUtterance: groundingBlob,
         expressionMode: expressionMode,
+        listenOnlyActive: listenOnlyActive,
       );
       if (admitted != null) {
         debugPrint(
@@ -395,18 +425,24 @@ class ConversationEngine {
     for (final fallbackMode in const [
       ConversationExpressionMode.postReframeListen,
       ConversationExpressionMode.standard,
+      ConversationExpressionMode.observePurity,
     ]) {
       final line = ModeSafeTerminalFallback.forExpression(
         what: what,
         expressionMode: fallbackMode,
         userUtterance: userUtterance,
+        groundingBlob: groundingBlob,
+        session: nightSession,
+        grounding: conversationGrounding,
       );
       if (line == null) continue;
       final ok = utteranceGuard.allow(
         utterance: line,
         what: what,
         userUtterance: userUtterance,
+        mirrorGroundingUtterance: groundingBlob,
         expressionMode: fallbackMode,
+        listenOnlyActive: listenOnlyActive,
       );
       if (ok != null) {
         debugPrint(
@@ -423,12 +459,9 @@ class ConversationEngine {
     ConversationGroundingBuffer? conversationGrounding,
     String sessionVentCorpus = '',
   }) {
-    return UserObjectMirror.mirrorEvidenceSource(
-      userUtterance: conversationGrounding?.currentUserUtterance,
-      groundingBlob: [
-        sessionVentCorpus,
-        conversationGrounding?.userUtterances.join(' '),
-      ].whereType<String>().where((s) => s.trim().isNotEmpty).join(' '),
+    return SessionLocale.userEvidenceBlob(
+      conversationGrounding: conversationGrounding,
+      sessionVentCorpus: sessionVentCorpus,
     );
   }
 }

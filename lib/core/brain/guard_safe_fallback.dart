@@ -12,6 +12,9 @@ import 'narrow_fallback_builder.dart';
 import 'night_session.dart';
 import 'observe_fallback_builder.dart';
 import 'deterministic_reframe_builder.dart';
+import 'light_conversation_detector.dart';
+import 'listen_only_preference.dart';
+import 'mode_safe_terminal_fallback.dart';
 import 'reframe_evidence_reader.dart';
 import 'surface_text_fuzzy.dart';
 import 'surface_utterance_kind.dart';
@@ -23,8 +26,7 @@ import 'user_object_mirror.dart';
 /// Expression-plane only. Does not reopen WHAT / Exit / Release.
 /// Does not rewrite the rejected text. Does not call an LLM.
 ///
-/// `Anlıyorum.` is ultimate last-resort only when [UserObjectMirror] cannot
-/// extract a substantive user clause.
+/// Never emits exact `Anlıyorum.` on validation/observe — mode-safe terminal only.
 class GuardSafeFallback {
   const GuardSafeFallback._();
 
@@ -37,16 +39,26 @@ class GuardSafeFallback {
     NightSession? session,
     ConversationGroundingBuffer? grounding,
     String sessionVentCorpus = '',
+    bool listenOnlyActive = false,
   }) {
     if (!_isSpeakable(what)) return null;
 
+    var effectiveMode = expressionMode;
     final arc = ArcEvidenceContext.fromNight(session: session, grounding: grounding);
     final groundingBlob = arc.userEvidenceBlob;
     final prefersTurkish = arc.prefersTurkish ||
         SurfaceTextFuzzy.prefersTurkish(userUtterance, groundingBlob);
 
+    if (listenOnlyActive &&
+        what == ConversationPhase.validation &&
+        (effectiveMode == ConversationExpressionMode.narrow ||
+            effectiveMode == ConversationExpressionMode.reframe ||
+            effectiveMode == ConversationExpressionMode.integrate)) {
+      effectiveMode = ConversationExpressionMode.groundedHold;
+    }
+
     if (what == ConversationPhase.validation &&
-        expressionMode == ConversationExpressionMode.observePurity) {
+        effectiveMode == ConversationExpressionMode.observePurity) {
       final shiftAck = HoldActDedup.concernShiftAcknowledge(
         userUtterance: userUtterance,
         groundingBlob: groundingBlob,
@@ -57,7 +69,7 @@ class GuardSafeFallback {
     }
 
     if (what == ConversationPhase.validation &&
-        expressionMode == ConversationExpressionMode.groundedHold) {
+        effectiveMode == ConversationExpressionMode.groundedHold) {
       final hold = _holdFallback(
         userUtterance: userUtterance,
         groundingBlob: groundingBlob,
@@ -69,7 +81,7 @@ class GuardSafeFallback {
     }
 
     if (what == ConversationPhase.validation &&
-        expressionMode == ConversationExpressionMode.narrow) {
+        effectiveMode == ConversationExpressionMode.narrow) {
       final fork = NarrowFallbackBuilder.forValidation(
         userUtterance: userUtterance,
         priorUserUtterance: _priorUserLine(grounding),
@@ -80,12 +92,12 @@ class GuardSafeFallback {
     }
 
     if (what == ConversationPhase.validation &&
-        expressionMode == ConversationExpressionMode.postReframeListen) {
+        effectiveMode == ConversationExpressionMode.postReframeListen) {
       return ConversationUtterance(text: prefersTurkish ? 'Tamam.' : 'Okay.');
     }
 
     if (what == ConversationPhase.validation &&
-        expressionMode == ConversationExpressionMode.reframe) {
+        effectiveMode == ConversationExpressionMode.reframe) {
       final ledger = ReframeEvidenceReader.fromGrounding(grounding);
       final deterministic = DeterministicReframeBuilder.forValidation(
         ledger: ledger,
@@ -101,7 +113,7 @@ class GuardSafeFallback {
     }
 
     if (what == ConversationPhase.validation &&
-        expressionMode == ConversationExpressionMode.integrate) {
+        effectiveMode == ConversationExpressionMode.integrate) {
       final integrate = IntegrateFallbackBuilder.forValidation(
         userUtterance: userUtterance ?? groundingBlob,
         session: session,
@@ -110,7 +122,7 @@ class GuardSafeFallback {
     }
 
     if (what == ConversationPhase.validation &&
-        expressionMode == ConversationExpressionMode.closure) {
+        effectiveMode == ConversationExpressionMode.closure) {
       return ClosureFallbackBuilder.forValidation(
         userUtterance: userUtterance,
         session: session,
@@ -124,7 +136,7 @@ class GuardSafeFallback {
       final landing = ConversationalLanding.forValidation(
         userUtterance: userUtterance,
         groundingBlob: groundingBlob,
-        expressionMode: expressionMode,
+        expressionMode: effectiveMode,
         session: session,
       );
       if (landing != null) return landing;
@@ -143,7 +155,7 @@ class GuardSafeFallback {
       final objectMirror = UserObjectMirror.forValidation(
         userUtterance: userUtterance,
         groundingBlob: groundingBlob,
-        expressionMode: expressionMode,
+        expressionMode: effectiveMode,
         session: session,
         grounding: grounding,
       );
@@ -165,7 +177,7 @@ class GuardSafeFallback {
       final priorMirror = UserObjectMirror.forValidation(
         userUtterance: groundingBlob,
         groundingBlob: groundingBlob,
-        expressionMode: expressionMode,
+        expressionMode: effectiveMode,
         session: session,
         grounding: grounding,
       );
@@ -173,7 +185,7 @@ class GuardSafeFallback {
     }
 
     if (what == ConversationPhase.validation &&
-        expressionMode == ConversationExpressionMode.groundedHold) {
+        effectiveMode == ConversationExpressionMode.groundedHold) {
       final hold = _holdFallback(
         userUtterance: userUtterance,
         groundingBlob: groundingBlob,
@@ -231,9 +243,10 @@ class GuardSafeFallback {
 
     // Legacy keyword observe mirrors — only after B2 surface mirror abstains.
     if (what == ConversationPhase.validation &&
-        expressionMode == ConversationExpressionMode.observePurity) {
+        effectiveMode == ConversationExpressionMode.observePurity) {
       final observe = ObserveFallbackBuilder.forValidation(
         userUtterance: userUtterance,
+        groundingBlob: groundingBlob,
       );
       if (observe != null) return observe;
       final minimalCurrent = userUtterance != null &&
@@ -244,13 +257,33 @@ class GuardSafeFallback {
           groundingBlob.isNotEmpty) {
         final fromCtx = ObserveFallbackBuilder.forValidation(
           userUtterance: groundingBlob,
+          groundingBlob: groundingBlob,
         );
         if (fromCtx != null) return fromCtx;
       }
     }
 
     if (what == ConversationPhase.neutralEntry &&
-        expressionMode == ConversationExpressionMode.lightChat) {
+        effectiveMode == ConversationExpressionMode.lightChat) {
+      const light = LightConversationDetector();
+      if (userUtterance != null && light.hasRealLoadMarkers(userUtterance)) {
+        final hold = _holdFallback(
+          userUtterance: userUtterance,
+          groundingBlob: groundingBlob,
+          prefersTurkish: prefersTurkish,
+          session: session,
+          grounding: grounding,
+        );
+        if (hold != null) return hold;
+        final mirror = UserObjectMirror.forValidation(
+          userUtterance: userUtterance,
+          groundingBlob: groundingBlob,
+          expressionMode: ConversationExpressionMode.observePurity,
+          session: session,
+          grounding: grounding,
+        );
+        if (mirror != null) return mirror;
+      }
       if (SessionVentMemory.blocksPlayfulLight(
         session: session,
         grounding: grounding,
@@ -269,7 +302,7 @@ class GuardSafeFallback {
     }
 
     if (what == ConversationPhase.neutralEntry &&
-        expressionMode == ConversationExpressionMode.lightChat) {
+        effectiveMode == ConversationExpressionMode.lightChat) {
       final vent = VentStackDetector.ventAcknowledgement(
         userUtterance: userUtterance,
         groundingBlob: groundingBlob,
@@ -282,20 +315,33 @@ class GuardSafeFallback {
           )) {
         return ConversationUtterance(text: vent);
       }
-    }
-
-    if (prefersTurkish) {
-      final tr = _turkishFor(
-        what,
-        expressionMode: expressionMode,
+      final mirror = UserObjectMirror.forValidation(
         userUtterance: userUtterance,
         groundingBlob: groundingBlob,
+        expressionMode: ConversationExpressionMode.observePurity,
+        session: session,
+        grounding: grounding,
       );
-      if (tr.isNotEmpty) return ConversationUtterance(text: tr);
+      if (mirror != null) return mirror;
+      final hold = _holdFallback(
+        userUtterance: userUtterance,
+        groundingBlob: groundingBlob,
+        prefersTurkish: prefersTurkish,
+        session: session,
+        grounding: grounding,
+      );
+      if (hold != null) return hold;
     }
 
-    final en = _englishFor(what, expressionMode: expressionMode);
-    return ConversationUtterance(text: en);
+    return ModeSafeTerminalFallback.forExpression(
+      what: what,
+      expressionMode: effectiveMode,
+      userUtterance: userUtterance,
+      narrowRefinementAfterPartial: narrowRefinementAfterPartial,
+      session: session,
+      grounding: grounding,
+      groundingBlob: groundingBlob,
+    );
   }
 
   static ConversationUtterance? _holdFallback({
@@ -367,68 +413,6 @@ class GuardSafeFallback {
       case ConversationPhase.audio:
       case ConversationPhase.silence:
         return false;
-    }
-  }
-
-  static String _englishFor(
-    ConversationPhase what, {
-    ConversationExpressionMode expressionMode =
-        ConversationExpressionMode.standard,
-  }) {
-    switch (what) {
-      case ConversationPhase.validation:
-        if (expressionMode == ConversationExpressionMode.repair) {
-          return 'Okay, I read that wrong. What is keeping you up tonight?';
-        }
-        return 'I hear that.';
-      case ConversationPhase.naming:
-        return 'Something is still holding on.';
-      case ConversationPhase.permission:
-        return 'You do not have to solve this tonight.';
-      case ConversationPhase.release:
-        return 'You can let this rest for now.';
-      case ConversationPhase.continuity:
-        return 'Nothing more is needed right now.';
-      case ConversationPhase.neutralEntry:
-        if (expressionMode == ConversationExpressionMode.lightChat) {
-          return 'Oh, nice.';
-        }
-        return "Hi whenever you're ready.";
-      case ConversationPhase.audio:
-      case ConversationPhase.silence:
-        return '';
-    }
-  }
-
-  static String _turkishFor(
-    ConversationPhase what, {
-    ConversationExpressionMode expressionMode =
-        ConversationExpressionMode.standard,
-    String? userUtterance,
-    String? groundingBlob,
-  }) {
-    switch (what) {
-      case ConversationPhase.validation:
-        if (expressionMode == ConversationExpressionMode.repair) {
-          return 'Tamam, orayı yanlış okudum. Seni uyanık tutan ne?';
-        }
-        return 'Anlıyorum.';
-      case ConversationPhase.naming:
-        return 'Bir şey hâlâ aklında duruyor.';
-      case ConversationPhase.permission:
-        return 'Bu gece bunu çözmek zorunda değilsin.';
-      case ConversationPhase.release:
-        return 'Şimdilik burada bırakabilirsin.';
-      case ConversationPhase.continuity:
-        return 'Bu kadar yeter.';
-      case ConversationPhase.neutralEntry:
-        if (expressionMode == ConversationExpressionMode.lightChat) {
-          return 'Güzel :)';
-        }
-        return 'Merhaba, hazır olduğunda.';
-      case ConversationPhase.audio:
-      case ConversationPhase.silence:
-        return '';
     }
   }
 }

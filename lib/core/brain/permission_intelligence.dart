@@ -1,3 +1,4 @@
+import '../../config/temporary_language_override.dart';
 import 'conversation_blueprint_binding.dart';
 import 'conversation_grounding_buffer.dart';
 import 'permission_realization_contract.dart';
@@ -300,7 +301,7 @@ $grounding
         text.contains('gece') ||
         text.contains('yalniz') ||
         text.contains('yalnız');
-    if (turkish) {
+    if (TemporaryLanguageOverride.responseIsTurkish(detectedTurkish: turkish)) {
       return 'Language lock: the person wrote Turkish. Reply in Turkish only. '
           'Do not answer in English.';
     }

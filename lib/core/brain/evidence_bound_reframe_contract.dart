@@ -43,20 +43,25 @@ class EvidenceBoundReframeContract {
       }
     }
 
-    // Specificity ceiling: tomorrow pressure without evidence.
+    // Specificity ceiling: pressure/baskı semantics must exist in user corpus.
     if (_containsAny(lower, [
       'yarinki baskinin',
       'yarınki baskının',
       'yapacaklarin degil',
       'yapacakların değil',
+      'baskinin',
+      'baskının',
     ])) {
-      final hasPressureEvidence = ledger.hypotheses.any(
+      if (!_userCorpusHasPressureSemantics(ledger)) return true;
+      final hasEarnedPressure = ledger.hypotheses.any(
         (h) =>
             h.kind == ReframeHypothesisKind.tomorrowPressureReturn &&
             !h.invalidated &&
-            h.supportingTurnIds.isNotEmpty,
+            h.supportingTurnIds.isNotEmpty &&
+            (h.strength == EvidenceStrength.explicitCausal ||
+                h.strength == EvidenceStrength.composite),
       );
-      if (!hasPressureEvidence) return true;
+      if (!hasEarnedPressure) return true;
     }
 
     // Invented kırgınlık when user only named özlem.
@@ -151,6 +156,30 @@ class EvidenceBoundReframeContract {
           !h.invalidated &&
           h.strength == EvidenceStrength.explicitCausal,
     );
+  }
+
+  static bool _userCorpusHasPressureSemantics(EvidenceLedger ledger) {
+    for (final turn in ledger.turns) {
+      final n = _normalize(turn.text);
+      if (_containsAny(n, [
+        'baski',
+        'baskı',
+        'stres',
+        'stress',
+        'endis',
+        'endiş',
+        'kayg',
+        'bunald',
+        'bunal',
+        'gergin',
+        'anxious',
+        'worried',
+        'overwhelm',
+      ])) {
+        return true;
+      }
+    }
+    return false;
   }
 
   static bool _hasSoftTail(String lower) {

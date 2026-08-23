@@ -86,6 +86,15 @@ class SurfaceUtteranceReader {
     return RegExp(r'^(tamam|peki|ok|okay|tesekkur|teşekkür)$').hasMatch(n);
   }
 
+  /// Filler / discourse marker — not substantive; landing may use grounding.
+  static bool isFillerDiscourse(String text) {
+    final n = _normalize(text).replaceAll(RegExp(r'[.!?…]+$'), '').trim();
+    const fillers = {'iste', 'yani', 'falan', 'filan', 'hani', 'yani işte'};
+    if (fillers.contains(n)) return true;
+    return RegExp(r'^(işte|iste|yani)([\s,.-]+(falan|filan|yani|işte|iste))*$')
+        .hasMatch(n);
+  }
+
   /// Minimal surface ack — mirror abstains unless grounding supplies substance.
   static bool isMinimalAck(String text) {
     final n = _normalize(text).replaceAll(RegExp(r'[.!?…]+$'), '').trim();

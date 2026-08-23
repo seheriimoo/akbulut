@@ -26,7 +26,8 @@ class ReframeFallbackBuilder {
     if (_containsAny(n, ['rezil', 'sahne', 'sunum', 'presentation'])) {
       return 'O zaman sunumdan çok, sahnede nasıl görüneceğin geceyi açık tutuyor olabilir.';
     }
-    if (_containsAny(n, ['baski', 'baskı', 'yarin', 'yarın', 'is ', 'iş '])) {
+    if (_containsAny(n, ['baski', 'baskı', 'stres', 'endis', 'endiş', 'kayg']) &&
+        _containsAny(n, ['yarin', 'yarın', 'sunum', 'toplanti', 'toplantı'])) {
       return 'O zaman yapacakların değil, yarınki baskının tekrar geleceği hissi geceyi açık tutuyor olabilir.';
     }
     if (_containsAny(n, ['guven', 'onunlayken', 'hissed']) &&

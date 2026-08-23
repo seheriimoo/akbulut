@@ -4,6 +4,7 @@ import 'conversation_phase.dart';
 import 'conversation_utterance.dart';
 import 'hold_act_dedup.dart';
 import 'night_session.dart';
+import 'surface_text_fuzzy.dart';
 
 /// B1 — Mode-safe terminal fallback after Guard rejects both LLM and
 /// [GuardSafeFallback].
@@ -29,7 +30,7 @@ class ModeSafeTerminalFallback {
   }) {
     if (!_isSpeakable(what)) return null;
 
-    final turkish = _prefersTurkish(userUtterance);
+    final turkish = SurfaceTextFuzzy.prefersTurkish(userUtterance, groundingBlob);
 
     if (what == ConversationPhase.validation &&
         expressionMode == ConversationExpressionMode.observePurity) {
@@ -183,32 +184,4 @@ class ModeSafeTerminalFallback {
     }
   }
 
-  static bool _prefersTurkish(String? userUtterance) {
-    if (userUtterance == null || userUtterance.trim().isEmpty) {
-      return false;
-    }
-    final lower = userUtterance.toLowerCase();
-    if (RegExp(r'[ğüşıöçâîû]').hasMatch(lower)) return true;
-    const markers = [
-      'bilmiyorum',
-      'uyuyamiyorum',
-      'uyuyamıyorum',
-      'kafam',
-      'gece',
-      'yarin',
-      'yarın',
-      'evet',
-      'tamam',
-      'degil',
-      'değil',
-      'yalniz',
-      'yalnız',
-      'miyim',
-      'mıyım',
-    ];
-    for (final marker in markers) {
-      if (lower.contains(marker)) return true;
-    }
-    return false;
-  }
 }

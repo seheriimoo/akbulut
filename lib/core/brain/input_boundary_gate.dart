@@ -1,3 +1,4 @@
+import '../../config/temporary_language_override.dart';
 import 'conversation_utterance.dart';
 
 /// Minimal V1 input boundary classification.
@@ -40,7 +41,9 @@ class InputBoundaryGate {
         .replaceAll('ı', 'i')
         .replaceAll('ç', 'c');
 
-    final turkish = _looksTurkish(raw);
+    final turkish = TemporaryLanguageOverride.responseIsTurkish(
+      detectedTurkish: _looksTurkish(raw),
+    );
 
     // Order: self-harm first (P1-4), then injection, then sexual advance.
     if (_isSelfHarmHighRisk(n)) {

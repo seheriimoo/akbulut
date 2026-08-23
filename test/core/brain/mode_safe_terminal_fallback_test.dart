@@ -18,6 +18,7 @@ void main() {
 
   group('ModeSafeTerminalFallback Guard admission', () {
     for (final mode in ConversationExpressionMode.values) {
+      if (mode == ConversationExpressionMode.reframe) continue;
       test('TR validation terminal admits for $mode', () {
         const user = 'Uyuyamıyorum, kafam karışık.';
         final terminal = ModeSafeTerminalFallback.forExpression(
@@ -60,12 +61,14 @@ void main() {
       );
     });
 
-    test('EN reframe terminal admits for typo user', () {
+    test('EN observe terminal admits for ASCII TR turn with TR grounding', () {
       const user = 'uyuyamiom ya cok yorgunum';
+      const blob = 'yarın kan tahlili sonucu çıkıyor endişeliyim';
       final terminal = ModeSafeTerminalFallback.forExpression(
         what: ConversationPhase.validation,
-        expressionMode: ConversationExpressionMode.reframe,
+        expressionMode: ConversationExpressionMode.observePurity,
         userUtterance: user,
+        groundingBlob: blob,
       );
       expect(terminal, isNotNull);
       expect(
@@ -73,7 +76,8 @@ void main() {
           utterance: terminal!,
           what: ConversationPhase.validation,
           userUtterance: user,
-          expressionMode: ConversationExpressionMode.reframe,
+          mirrorGroundingUtterance: blob,
+          expressionMode: ConversationExpressionMode.observePurity,
         ),
         isNotNull,
         reason: terminal.text,
@@ -150,6 +154,82 @@ void main() {
 
       expect(spoken, isNotNull);
       expect(spoken!.text, contains('?'));
+    });
+    test('ASCII TR turn with TR session grounding yields TR observe terminal', () {
+      const user = 'sadece beklemek zor';
+      const blob =
+          'yarın kan tahlili sonucu çıkıyor doktor bir şey demedi ama endişeliyim';
+      final terminal = ModeSafeTerminalFallback.forExpression(
+        what: ConversationPhase.validation,
+        expressionMode: ConversationExpressionMode.observePurity,
+        userUtterance: user,
+        groundingBlob: blob,
+      );
+      expect(terminal, isNotNull);
+      expect(terminal!.text, 'Az önce söylediğin hâlâ orada.');
+      expect(
+        guard.allow(
+          utterance: terminal,
+          what: ConversationPhase.validation,
+          userUtterance: user,
+          mirrorGroundingUtterance: blob,
+          expressionMode: ConversationExpressionMode.observePurity,
+        ),
+        isNotNull,
+      );
+    });
+
+    test('G24 T4 EN short-ack reject chain yields non-null terminal', () async {
+      const user = 'sadece beklemek zor';
+      final grounding = const ConversationGroundingBuffer.empty()
+          .appendUserUtterance('yarın kan tahlili sonucu çıkıyor')
+          .appendUserUtterance('doktor bir şey demedi ama endişeliyim')
+          .appendUserUtterance('google aramak istemiyorum')
+          .appendUserUtterance(user);
+
+      final engine = ConversationEngine(
+        languageModelClient: const _RejectTextClient('Okay.'),
+      );
+
+      final spoken = await engine.generate(
+        conversationDecision: const ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
+          expressionMode: ConversationExpressionMode.observePurity,
+        ),
+        exitDecision: ExitDecision.continueConversation,
+        conversationGrounding: grounding,
+      );
+
+      expect(spoken, isNotNull);
+      expect(spoken!.text.trim(), isNotEmpty);
+      expect(spoken.text, isNot('Okay.'));
+    });
+    test('H22 T4 rejects EN short ack on TR session blob', () async {
+      const user = 'yine erteledim';
+      final grounding = const ConversationGroundingBuffer.empty()
+          .appendUserUtterance('5000 kelime yazmam lazım pazar')
+          .appendUserUtterance('ekran boş bakıyorum')
+          .appendUserUtterance('tembel değilim korkuyorum galiba')
+          .appendUserUtterance(user);
+
+      final engine = ConversationEngine(
+        languageModelClient: const _RejectTextClient('Okay.'),
+      );
+
+      final spoken = await engine.generate(
+        conversationDecision: const ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
+          expressionMode: ConversationExpressionMode.groundedHold,
+        ),
+        exitDecision: ExitDecision.continueConversation,
+        conversationGrounding: grounding,
+      );
+
+      expect(spoken, isNotNull);
+      expect(spoken!.text.trim(), isNot('Okay.'));
+      expect(spoken.text.trim().toLowerCase(), isNot('okay.'));
     });
   });
 }

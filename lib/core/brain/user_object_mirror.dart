@@ -5,6 +5,7 @@ import 'conversation_utterance.dart';
 import 'grounded_progression.dart';
 import 'night_session.dart';
 import 'surface_text_fuzzy.dart';
+import 'session_locale.dart';
 import 'surface_utterance_kind.dart';
 import 'utterance_guard.dart';
 
@@ -52,9 +53,12 @@ class UserObjectMirror {
     if (sourceLine == null || sourceLine.trim().isEmpty) return null;
 
     final kind = SurfaceUtteranceReader.classify(sourceLine);
-    if (kind == SurfaceUtteranceKind.abstain) return null;
+    if (kind == SurfaceUtteranceKind.abstain &&
+        !_isSubstantiveSource(sourceLine)) {
+      return null;
+    }
 
-    final turkish = _prefersTurkish(userUtterance, groundingBlob);
+    final turkish = SessionLocale.prefersTurkish(userUtterance, groundingBlob);
     final candidates = turkish
         ? _turkishSurfaceLines(kind, sourceLine, expressionMode)
         : _englishSurfaceLines(kind, sourceLine, expressionMode);
@@ -66,6 +70,7 @@ class UserObjectMirror {
         text: text,
         userUtterance: userUtterance,
         mirrorSourceLine: sourceLine,
+        groundingBlob: groundingBlob,
         expressionMode: expressionMode,
       )) {
         return ConversationUtterance(text: text);
@@ -86,6 +91,7 @@ class UserObjectMirror {
           text: text,
           userUtterance: userUtterance,
           mirrorSourceLine: sourceLine,
+          groundingBlob: groundingBlob,
           expressionMode: expressionMode,
         )) {
           return ConversationUtterance(text: text);
@@ -467,6 +473,17 @@ class UserObjectMirror {
         expressionMode,
       );
     }
+    final n = _normalize(source);
+    if (RegExp(r'\b(garip|hissed\w*)\b').hasMatch(n)) {
+      return _withStandardFallback(
+        [
+          'Garip bir his olduğunu söylüyorsun.',
+          'Adını koyamadığın bir his var gibi.',
+        ],
+        source,
+        expressionMode,
+      );
+    }
     final paraphrase = _paraphraseClauseToSecondPerson(source);
     if (paraphrase != null) {
       return _withStandardFallback(
@@ -572,6 +589,11 @@ class UserObjectMirror {
       RegExp(r'^(aslında|galiba|sanırım|belki)\s+', caseSensitive: false),
       '',
     );
+    // Strip at most one leading discourse/filler word — never eat the whole clause.
+    text = text.replaceFirst(
+      RegExp(r'^(?:aslında|galiba|sanırım|belki|işte|iste|yani)\s+', caseSensitive: false),
+      '',
+    );
     text = text.replaceAll(RegExp(r'\s+(ya|işte|falan|filan)\.?$'), '');
 
     final replacements = <RegExp, String>{
@@ -592,6 +614,14 @@ class UserObjectMirror {
       text = text.replaceAll(entry.key, entry.value);
     }
 
+    text = text.replaceAllMapped(
+      RegExp(r'\b(\w{3,}?)medi\b', caseSensitive: false),
+      (m) => '${m.group(1)!}medin',
+    );
+    text = text.replaceAllMapped(
+      RegExp(r'\b(\w{3,}?)madi\b', caseSensitive: false),
+      (m) => '${m.group(1)!}madin',
+    );
     text = text.replaceAllMapped(
       RegExp(r'\b(\w*?)iyorum\b', caseSensitive: false),
       (m) => '${m.group(1)}iyorsun',
@@ -690,14 +720,15 @@ class UserObjectMirror {
     required String text,
     required String? userUtterance,
     required String? mirrorSourceLine,
+    String? groundingBlob,
     required ConversationExpressionMode expressionMode,
   }) {
     return _guard.allow(
           utterance: ConversationUtterance(text: text),
           what: ConversationPhase.validation,
           userUtterance: userUtterance,
-          mirrorGroundingUtterance:
-              mirrorSourceLine != userUtterance ? mirrorSourceLine : null,
+          mirrorGroundingUtterance: groundingBlob ??
+              (mirrorSourceLine != userUtterance ? mirrorSourceLine : null),
           expressionMode: expressionMode,
         ) !=
         null;
@@ -707,7 +738,7 @@ class UserObjectMirror {
       SurfaceUtteranceReader.isMinimalAck(text);
 
   static bool _prefersTurkish(String? userUtterance, String? groundingBlob) =>
-      SurfaceTextFuzzy.prefersTurkish(userUtterance, groundingBlob);
+      SessionLocale.prefersTurkish(userUtterance, groundingBlob);
 
   static String _normalize(String s) {
     return s

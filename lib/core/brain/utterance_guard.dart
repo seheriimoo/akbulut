@@ -5,6 +5,10 @@ import 'conversation_utterance.dart';
 import 'evidence_bound_reframe_contract.dart';
 import 'evidence_ledger.dart';
 import 'grounded_progression.dart';
+import 'light_conversation_detector.dart';
+import 'listen_only_preference.dart';
+import 'session_locale.dart';
+import 'surface_text_fuzzy.dart';
 import 'permission_realization_contract.dart';
 import 'receipt_realization_contract.dart';
 import 'surface_mirror_contract.dart';
@@ -82,6 +86,7 @@ class UtteranceGuard {
     ConversationExpressionMode expressionMode =
         ConversationExpressionMode.standard,
     EvidenceLedger? reframeEvidenceLedger,
+    bool listenOnlyActive = false,
   }) {
     final text = utterance.text.trim();
 
@@ -111,7 +116,27 @@ class UtteranceGuard {
 
     // Mirror the person's language when it is clearly EN or TR.
     // Mixed / unknown user language: do not invent a lock.
-    if (!_matchesUserLanguage(normalized, userUtterance)) {
+    if (!_matchesUserLanguage(
+      normalized,
+      userUtterance,
+      mirrorGroundingUtterance: mirrorGroundingUtterance,
+    )) {
+      return null;
+    }
+
+    if (listenOnlyActive && _violatesListenOnlyContract(
+      normalized,
+      expressionMode: expressionMode,
+      what: what,
+    )) {
+      return null;
+    }
+
+    if (_inventedNarrowLoadLexeme(
+      normalized,
+      userUtterance: userUtterance,
+      mirrorGroundingUtterance: mirrorGroundingUtterance,
+    )) {
       return null;
     }
 
@@ -183,15 +208,16 @@ class UtteranceGuard {
       return null;
     }
 
-    // B3 — semantic evidence ceiling for reframe (not keyword-only safety).
+    // B3 — semantic evidence ceiling for reframe (fail closed without ledger).
     if (what == ConversationPhase.validation &&
-        expressionMode == ConversationExpressionMode.reframe &&
-        reframeEvidenceLedger != null &&
-        !EvidenceBoundReframeContract.admits(
-          reframeText: normalized,
-          ledger: reframeEvidenceLedger,
-        )) {
-      return null;
+        expressionMode == ConversationExpressionMode.reframe) {
+      if (reframeEvidenceLedger == null) return null;
+      if (!EvidenceBoundReframeContract.admits(
+        reframeText: normalized,
+        ledger: reframeEvidenceLedger,
+      )) {
+        return null;
+      }
     }
 
     // Integrate: no question; no empathy filler; mind-loop bridge required.
@@ -925,6 +951,10 @@ class UtteranceGuard {
     String? mirrorGroundingUtterance,
   }) {
     if (_lightChatUnsafe(lower)) return false;
+    if (userUtterance != null) {
+      const light = LightConversationDetector();
+      if (light.hasRealLoadMarkers(userUtterance)) return false;
+    }
     if (_isPlayfulLightAck(lower) && userUtterance != null) {
       final corpus =
           '${mirrorGroundingUtterance ?? ''} $userUtterance'.trim();
@@ -1073,26 +1103,115 @@ class UtteranceGuard {
       'sessizlik',
       'hazırlıyorum',
       'hazirliyorum',
-    ]);
+      'beklemek',
+      'sadece',
+      'istemiyorum',
+      'endişe',
+      'endise',
+    ]) ||
+        RegExp(r'\bzor\b').hasMatch(lower);
     final hasTurkish = hasTurkishScript || hasTurkishLexeme;
     final hasEnglish = RegExp(
-      r"\b(you|your|the|tonight|don't|dont|need|perhaps|mind|leave|preparing|enough|softening)\b",
+      r"\b(you|your|the|tonight|don't|dont|need|perhaps|mind|leave|preparing|enough|softening|hear)\b",
     ).hasMatch(lower);
     return hasTurkish && hasEnglish;
   }
 
   /// Fail closed when the reply is clearly the other language than the user.
   /// Mixed or unknown user language does not lock.
-  bool _matchesUserLanguage(String assistant, String? userUtterance) {
-    final userLang = _nightLanguage(userUtterance);
-    if (userLang == null || userLang == 'mixed') return true;
+  bool _matchesUserLanguage(
+    String assistant,
+    String? userUtterance, {
+    String? mirrorGroundingUtterance,
+  }) {
+    if (SessionLocale.isEnglishShortAck(assistant) &&
+        SessionLocale.prefersTurkish(userUtterance, mirrorGroundingUtterance) &&
+        !SessionLocale.prefersEnglish(mirrorGroundingUtterance)) {
+      return false;
+    }
+
+    var userLang = _nightLanguage(userUtterance);
+    if (userLang == null || userLang == 'mixed') {
+      userLang = _nightLanguage(mirrorGroundingUtterance);
+    }
+    if ((userLang == null || userLang == 'en') &&
+        SessionLocale.prefersTurkish(userUtterance, mirrorGroundingUtterance)) {
+      userLang = 'tr';
+    }
+    if (SessionLocale.prefersTurkish(userUtterance, mirrorGroundingUtterance) &&
+        SessionLocale.isEnglishShortAck(assistant)) {
+      return false;
+    }
+    if (userLang == null || userLang == 'mixed') {
+      if (SessionLocale.prefersTurkish(userUtterance, mirrorGroundingUtterance) &&
+          SessionLocale.isEnglishShortAck(assistant)) {
+        return false;
+      }
+      return true;
+    }
+    if (userLang == 'tr' && SessionLocale.isEnglishShortAck(assistant)) {
+      return false;
+    }
     final replyLang = _nightLanguage(assistant);
+    if (replyLang == 'en' &&
+        SessionLocale.prefersTurkish(userUtterance, mirrorGroundingUtterance) &&
+        !SessionLocale.prefersEnglish(mirrorGroundingUtterance)) {
+      return false;
+    }
     if (replyLang == null || replyLang == 'mixed') {
-      // Mixed assistant already rejected. Unknown assistant (short mm/ok)
-      // is not a language switch.
+      if (userLang == 'tr' &&
+          RegExp(r'\b(the|you|your|okay|sure|got it|alright|hear)\b')
+              .hasMatch(assistant.toLowerCase())) {
+        return false;
+      }
       return true;
     }
     return replyLang == userLang;
+  }
+
+  bool _violatesListenOnlyContract(
+    String assistant, {
+    required ConversationExpressionMode expressionMode,
+    required ConversationPhase what,
+  }) {
+    if (what != ConversationPhase.validation) return false;
+    switch (expressionMode) {
+      case ConversationExpressionMode.narrow:
+      case ConversationExpressionMode.reframe:
+      case ConversationExpressionMode.integrate:
+        return true;
+      case ConversationExpressionMode.observePurity:
+      case ConversationExpressionMode.standard:
+      case ConversationExpressionMode.lightChat:
+      case ConversationExpressionMode.postReframeListen:
+      case ConversationExpressionMode.closure:
+      case ConversationExpressionMode.repair:
+      case ConversationExpressionMode.groundedHold:
+        return ListenOnlyPreference.violatesListenOnly(assistant);
+    }
+  }
+
+  bool _isEnglishShortAck(String text) => SessionLocale.isEnglishShortAck(text);
+
+  /// Fail closed when assistant names load objects absent from user corpus.
+  bool _inventedNarrowLoadLexeme(
+    String assistant, {
+    String? userUtterance,
+    String? mirrorGroundingUtterance,
+  }) {
+    final corpus =
+        '${userUtterance ?? ''} ${mirrorGroundingUtterance ?? ''}'.toLowerCase();
+    final asst = assistant.toLowerCase();
+    if (RegExp(r'\bbaskı\b').hasMatch(asst) &&
+        !RegExp(r'\bbaskı\b').hasMatch(corpus)) {
+      return true;
+    }
+    if (RegExp(r'\byük\b').hasMatch(asst) &&
+        !corpus.contains('yük') &&
+        !corpus.contains('ağırlık')) {
+      return true;
+    }
+    return false;
   }
 
   /// Receipt-only: invented tomorrow / racing / swirl when this turn

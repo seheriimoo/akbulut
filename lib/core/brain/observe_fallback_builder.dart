@@ -1,4 +1,5 @@
 import 'conversation_utterance.dart';
+import 'session_locale.dart';
 
 /// User-object aware Observe fallback when Guard rejects LLM output (Slice 2).
 ///
@@ -8,11 +9,13 @@ class ObserveFallbackBuilder {
 
   static ConversationUtterance? forValidation({
     required String? userUtterance,
+    String? groundingBlob,
   }) {
     if (userUtterance == null || userUtterance.trim().isEmpty) {
       return null;
     }
-    final turkish = _looksTurkish(userUtterance);
+    final turkish =
+        SessionLocale.prefersTurkish(userUtterance, groundingBlob);
     final text = turkish
         ? _turkishMirror(userUtterance)
         : _englishMirror(userUtterance);
@@ -71,6 +74,12 @@ class ObserveFallbackBuilder {
     if (_containsAny(n, ['gergin', 'garip']) &&
         _containsAny(n, ['icimde', 'içimde', 'var'])) {
       return 'O gerginlik hâlâ içinde.';
+    }
+    if (_containsAny(n, ['beden', 'agir', 'ağır']) && n.contains('gibi')) {
+      return 'Bedende ağır bir his var gibi.';
+    }
+    if (n.contains('gibi') && _containsAny(n, ['garip', 'agir', 'ağır', 'beden'])) {
+      return 'Adını koyamadığın bir his var gibi.';
     }
     if (_containsAny(n, ['icime oturdu', 'içime oturdu', 'oturdu']) &&
         _containsAny(n, ['bilmiyorum', 'ne oldugunu', 'ne olduğunu'])) {

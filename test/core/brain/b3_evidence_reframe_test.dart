@@ -4,6 +4,7 @@ import 'package:slowave/core/brain/evidence_bound_reframe_contract.dart';
 import 'package:slowave/core/brain/reframe_admission_gate.dart';
 import 'package:slowave/core/brain/reframe_evidence_reader.dart';
 import 'package:slowave/core/brain/deterministic_reframe_builder.dart';
+import 'package:slowave/core/brain/conversation_utterance.dart';
 import 'package:slowave/core/brain/conversation_arc_reader.dart';
 import 'package:slowave/core/brain/conversation_expression_mode.dart';
 import 'package:slowave/core/brain/conversation_phase.dart';
@@ -50,6 +51,20 @@ void main() {
   const admissionGate = ReframeAdmissionGate();
 
   group('B3 evidence ledger', () {
+    test('reframe rejects when evidence ledger missing', () {
+      const baski =
+          'O zaman yapacakların değil, yarınki baskının tekrar geleceği hissi geceyi açık tutuyor olabilir.';
+      expect(
+        guard.allow(
+          utterance: const ConversationUtterance(text: baski),
+          what: ConversationPhase.validation,
+          userUtterance: 'yarın stresli',
+          expressionMode: ConversationExpressionMode.reframe,
+        ),
+        isNull,
+      );
+    });
+
     test('B15 correction invalidates mother/travma reframes', () {
       final grounding = const ConversationGroundingBuffer.empty()
           .appendUserUtterance('Annem aradı, yine aynı konular.')

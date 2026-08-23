@@ -102,7 +102,22 @@ class ReframeEvidenceReader {
       );
     }
 
-    final pressureIds = _turnIdsMatching(turns, [
+    final pressureLexemeIds = _turnIdsMatching(turns, [
+      'baski',
+      'baskı',
+      'stres',
+      'stress',
+      'endis',
+      'endiş',
+      'kayg',
+      'bunald',
+      'bunal',
+      'gergin',
+      'overwhelm',
+      'anxious',
+      'worried',
+    ]);
+    final tomorrowIds = _turnIdsMatching(turns, [
       'yarin ',
       'yarın ',
       'sunum',
@@ -112,22 +127,36 @@ class ReframeEvidenceReader {
       'müdür',
       'presentation',
       'tomorrow',
+      'deadline',
+      'teslim',
     ]);
-    final hasPressureContext = pressureIds.isNotEmpty ||
-        (_containsAny(n, ['baski', 'baskı']) &&
-            _containsAny(n, ['yarin', 'yarın', 'sunum', 'toplanti']));
-    if (hasPressureContext) {
+    final hasPressureLexeme = pressureLexemeIds.isNotEmpty ||
+        _containsAny(n, [
+          'baski',
+          'baskı',
+          'stres',
+          'endis',
+          'endiş',
+          'kayg',
+          'bunald',
+          'gergin',
+        ]);
+    final hasTomorrowLexeme = tomorrowIds.isNotEmpty ||
+        _containsAny(n, ['yarin ', 'yarın ', 'tomorrow', 'deadline', 'teslim']);
+    // Bare yarın alone is never enough — pressure semantics must co-exist.
+    if (hasPressureLexeme && hasTomorrowLexeme) {
+      final supporting = {...pressureLexemeIds, ...tomorrowIds}.toList();
       add(
         EvidenceHypothesis(
           kind: ReframeHypothesisKind.tomorrowPressureReturn,
           subject: 'tomorrow / meeting pressure',
           userStatedState: 'anticipatory work pressure',
           candidateRelation: 'return of tomorrow pressure vs tasks',
-          supportingTurnIds: pressureIds.isEmpty ? [turns.last.id] : pressureIds,
-          strength: pressureIds.length >= 2
+          supportingTurnIds: supporting.isEmpty ? [turns.last.id] : supporting,
+          strength: supporting.length >= 2
               ? EvidenceStrength.composite
               : EvidenceStrength.singleSignal,
-          confidence: pressureIds.length >= 2 ? 0.75 : 0.5,
+          confidence: supporting.length >= 2 ? 0.75 : 0.5,
           invalidated: invalidated.contains(InvalidatedTopic.tomorrowPressure),
         ),
       );

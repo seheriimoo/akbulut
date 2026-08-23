@@ -1,5 +1,6 @@
 import 'conversation_phase.dart';
 import 'night_session.dart';
+import 'post_audio_re_engagement.dart';
 import 'release_decision.dart';
 import 'turn_response_stance.dart';
 import 'validated_understanding.dart';
@@ -29,12 +30,17 @@ import 'working_mind_view.dart';
 /// post-Release softening path may advance out of the Release dwell so
 /// absence of load is never treated as permission to repeat Release.
 class ReleaseEngine {
-  const ReleaseEngine();
+  const ReleaseEngine({
+    this.postAudioReEngagement = const PostAudioReEngagement(),
+  });
+
+  final PostAudioReEngagement postAudioReEngagement;
 
   ReleaseDecision evaluate({
     required ValidatedUnderstanding understanding,
     required WorkingMindView workingMind,
     required NightSession session,
+    String? message,
   }) {
     // Persistent knowledge available through workingMind (read-only).
     final _ = workingMind.model.identity.userId;
@@ -44,6 +50,16 @@ class ReleaseEngine {
         : session.turns.last.releaseDecision.readiness;
     final previousPhase =
         session.turns.isEmpty ? null : session.turns.last.phase;
+
+    // Post-audio meaningful re-engagement: reset climb so conversation reopens.
+    if (previousPhase == ConversationPhase.audio &&
+        message != null &&
+        postAudioReEngagement.isMeaningful(message)) {
+      return ReleaseDecision(
+        readiness: ReleaseReadiness.hold,
+        confidence: _confidenceFor(ReleaseReadiness.hold),
+      );
+    }
 
     // Mental OR emotional patterns both mean active night load.
     // Emotional load must never be read as "feels received".

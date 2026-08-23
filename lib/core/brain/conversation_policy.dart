@@ -3,6 +3,7 @@ import 'conversation_phase.dart';
 import 'explicit_exit_intent.dart';
 import 'neutral_entry_detector.dart';
 import 'night_session.dart';
+import 'post_audio_re_engagement.dart';
 import 'release_decision.dart';
 import 'turn_response_stance.dart';
 import 'validated_understanding.dart';
@@ -29,10 +30,12 @@ class ConversationPolicy {
   const ConversationPolicy({
     this.neutralEntryDetector = const NeutralEntryDetector(),
     this.explicitExitIntent = const ExplicitExitIntent(),
+    this.postAudioReEngagement = const PostAudioReEngagement(),
   });
 
   final NeutralEntryDetector neutralEntryDetector;
   final ExplicitExitIntent explicitExitIntent;
+  final PostAudioReEngagement postAudioReEngagement;
 
   ConversationDecision decide({
     required ReleaseDecision releaseDecision,
@@ -55,6 +58,14 @@ class ConversationPolicy {
     if (_isConversationProtestOrCorrection(message)) {
       return const ConversationDecision(
         phase: ConversationPhase.permission,
+        shouldSpeak: true,
+      );
+    }
+
+    // Post-audio re-engagement: meaningful new turn reopens Receipt path.
+    if (_isPostAudioReEngagement(message: message, session: session)) {
+      return const ConversationDecision(
+        phase: ConversationPhase.validation,
         shouldSpeak: true,
       );
     }
@@ -238,6 +249,17 @@ class ConversationPolicy {
       if (turn.phase == ConversationPhase.naming) return false;
     }
     return true;
+  }
+
+  /// After terminal audio, a meaningful user turn reopens conversation.
+  bool _isPostAudioReEngagement({
+    required String? message,
+    required NightSession? session,
+  }) {
+    if (session == null || session.turns.isEmpty) return false;
+    if (session.turns.last.phase != ConversationPhase.audio) return false;
+    if (message == null) return false;
+    return postAudioReEngagement.isMeaningful(message);
   }
 
   bool _isNeutralEntry({

@@ -163,6 +163,7 @@ class CognitiveOrchestrator {
       understanding: understanding,
       workingMind: workingMind,
       session: session,
+      message: message,
     );
 
     final conversationDecision = conversationPolicy.decide(

@@ -268,12 +268,14 @@ class _TrackingReleaseEngine extends ReleaseEngine {
     required ValidatedUnderstanding understanding,
     required WorkingMindView workingMind,
     required NightSession session,
+    String? message,
   }) {
     order.add('release');
     return super.evaluate(
       understanding: understanding,
       workingMind: workingMind,
       session: session,
+      message: message,
     );
   }
 }
@@ -286,6 +288,7 @@ class _TransitionReadyReleaseEngine extends ReleaseEngine {
     required ValidatedUnderstanding understanding,
     required WorkingMindView workingMind,
     required NightSession session,
+    String? message,
   }) {
     return const ReleaseDecision(
       readiness: ReleaseReadiness.transitionReady,

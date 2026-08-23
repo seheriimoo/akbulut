@@ -450,12 +450,14 @@ class _OrderReleaseEngine extends ReleaseEngine {
     required ValidatedUnderstanding understanding,
     required WorkingMindView workingMind,
     required NightSession session,
+    String? message,
   }) {
     order.add('release');
     return super.evaluate(
       understanding: understanding,
       workingMind: workingMind,
       session: session,
+      message: message,
     );
   }
 }

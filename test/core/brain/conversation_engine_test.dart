@@ -120,7 +120,9 @@ void main() {
         exitDecision: ExitDecision.continueConversation,
       );
 
-      expect(utterance, isNull);
+      // P1-1: Guard-safe fallback may speak; drifted text must not.
+      expect(utterance, isNotNull);
+      expect(utterance!.text.toLowerCase(), isNot(contains('agenda')));
     });
 
     test('rejects DNA-violating multi-insight language', () async {
@@ -138,7 +140,8 @@ void main() {
         exitDecision: ExitDecision.continueConversation,
       );
 
-      expect(utterance, isNull);
+      expect(utterance, isNotNull);
+      expect(utterance!.text.toLowerCase(), isNot(contains('tip')));
     });
 
     test('rejects DNA-violating engagement hooks', () async {
@@ -156,7 +159,8 @@ void main() {
         exitDecision: ExitDecision.continueConversation,
       );
 
-      expect(utterance, isNull);
+      expect(utterance, isNotNull);
+      expect(utterance!.text.contains('?'), isFalse);
     });
 
     test('allows faithful DNA-compliant placeholder utterance', () async {

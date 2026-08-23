@@ -11,6 +11,7 @@ import 'package:slowave/core/brain/session_turn.dart';
 import 'package:slowave/core/brain/validated_understanding.dart';
 import 'package:slowave/core/brain/working_mind_view.dart';
 
+/// P1-2 — protest / correction leaves failed Receipt and recalibrates.
 void main() {
   const policy = ConversationPolicy();
 
@@ -61,12 +62,20 @@ void main() {
     ],
   );
 
-  test('protocol protest stays on Receipt even when regulated', () {
+  test('protest / correction leaves Receipt → Permission recalibration', () {
     for (final message in const [
       'ya yeter bu robot gibi konusma. beni anlamıyosun.',
       'sürekli aynı şeyi söylüyosun. sinir oluyorum.',
       "you don't understand me",
       'stop talking like a robot',
+      'aynı şeyi söylüyorsun',
+      'hayır beni yanlış anladın',
+      'öyle demedim',
+      'ben üzgün değilim',
+      'robot gibi konuşuyorsun',
+      'bu soruyu zaten sordun',
+      'you already asked that',
+      "that's not what i meant",
     ]) {
       final decision = policy.decide(
         releaseDecision: const ReleaseDecision(
@@ -79,14 +88,32 @@ void main() {
       );
       expect(
         decision.phase,
-        ConversationPhase.validation,
+        ConversationPhase.permission,
         reason: message,
       );
-      expect(decision.shouldSpeak, isTrue);
+      expect(decision.shouldSpeak, isTrue, reason: message);
+      expect(
+        decision.phase,
+        isNot(ConversationPhase.validation),
+        reason: 'must not re-Receipt after protest: $message',
+      );
     }
   });
 
-  test('sese geç still exits; protest does not steal audio', () {
+  test('ordinary load after Receipt still Names once on hold', () {
+    final decision = policy.decide(
+      releaseDecision: const ReleaseDecision(
+        readiness: ReleaseReadiness.hold,
+        confidence: 1,
+      ),
+      message: 'kafam durmuyor yarın için',
+      session: sessionAfterReceipt(),
+      understanding: load,
+    );
+    expect(decision.phase, ConversationPhase.naming);
+  });
+
+  test('explicit audio exit still wins over protest wording nearby', () {
     final decision = policy.decide(
       releaseDecision: const ReleaseDecision(
         readiness: ReleaseReadiness.hold,
@@ -96,18 +123,5 @@ void main() {
       session: sessionAfterReceipt(),
     );
     expect(decision.phase, ConversationPhase.continuity);
-  });
-
-  test('ordinary TR load after Receipt still Names once on hold', () {
-    final decision = policy.decide(
-      releaseDecision: const ReleaseDecision(
-        readiness: ReleaseReadiness.hold,
-        confidence: 1,
-      ),
-      message: 'aklim durmuyor ya.',
-      session: sessionAfterReceipt(),
-      understanding: load,
-    );
-    expect(decision.phase, ConversationPhase.naming);
   });
 }

@@ -2,12 +2,14 @@ import 'belief_detector.dart';
 import 'conversation_decision.dart';
 import 'conversation_engine.dart';
 import 'conversation_grounding_buffer.dart';
+import 'conversation_phase.dart';
 import 'conversation_policy.dart';
 import 'conversation_utterance.dart';
 import 'cognitive_turn_result.dart';
 import 'emotional_pattern_detector.dart';
 import 'exit_decision.dart';
 import 'exit_intelligence.dart';
+import 'input_boundary_gate.dart';
 import 'living_mind_model.dart';
 import 'memory_engine.dart';
 import 'mental_pattern_detector.dart';
@@ -16,6 +18,7 @@ import 'night_session.dart';
 import 'perception_engine.dart';
 import 'preference_detector.dart';
 import 'prior_admitted_expression.dart';
+import 'release_decision.dart';
 import 'release_engine.dart';
 import 'session_summarizer.dart';
 import 'session_turn.dart';
@@ -62,6 +65,8 @@ class CognitiveOrchestrator {
 
   final MemoryEngine memoryEngine;
 
+  final InputBoundaryGate inputBoundaryGate;
+
   /// Temporary same-night user grounding. Orchestrator-owned only.
   ConversationGroundingBuffer _conversationGroundingBuffer =
       const ConversationGroundingBuffer.empty();
@@ -81,6 +86,7 @@ class CognitiveOrchestrator {
     required this.exitIntelligence,
     required this.sessionSummarizer,
     required this.memoryEngine,
+    this.inputBoundaryGate = const InputBoundaryGate(),
   });
 
   /// Read-only view of the Orchestrator-owned grounding buffer.
@@ -112,6 +118,16 @@ class CognitiveOrchestrator {
     // Not decision authority. Not durable. Not expression-plane input yet.
     _conversationGroundingBuffer =
         _conversationGroundingBuffer.appendUserUtterance(message);
+
+    // P1 minimal input boundaries — before HCOS climb / sleep handoff.
+    final boundary = inputBoundaryGate.evaluate(message);
+    if (boundary != null) {
+      return _boundaryTurnResult(
+        session: session,
+        utterance: boundary.utterance,
+        kind: boundary.kind,
+      );
+    }
 
     final evidence = perceptionEngine.perceive(message);
 
@@ -266,5 +282,47 @@ class CognitiveOrchestrator {
   /// Called when the NightSession ends. Safe to call more than once.
   void discardConversationGrounding() {
     _conversationGroundingBuffer = _conversationGroundingBuffer.discard();
+  }
+
+  /// Fixed boundary reply — continues conversation, never sleep-handoff.
+  CognitiveTurnResult _boundaryTurnResult({
+    required NightSession session,
+    required ConversationUtterance utterance,
+    required InputBoundaryKind kind,
+  }) {
+    final phase = kind == InputBoundaryKind.selfHarmHighRisk
+        ? ConversationPhase.validation
+        : ConversationPhase.permission;
+    final conversationDecision = ConversationDecision(
+      phase: phase,
+      shouldSpeak: true,
+    );
+    const releaseDecision = ReleaseDecision(
+      readiness: ReleaseReadiness.hold,
+      confidence: 1,
+    );
+    const exitDecision = ExitDecision.continueConversation;
+
+    final updatedSession = session.recordTurn(
+      SessionTurn(
+        releaseDecision: releaseDecision,
+        phase: phase,
+        admittedExpression: PriorAdmittedExpression(
+          phase: phase,
+          text: utterance.text,
+        ),
+        mentalPatterns: const [],
+        emotionalPatterns: const [],
+      ),
+    );
+
+    return CognitiveTurnResult(
+      session: updatedSession,
+      releaseDecision: releaseDecision,
+      conversationDecision: conversationDecision,
+      exitDecision: exitDecision,
+      utterance: utterance,
+      conversationGroundingBuffer: _conversationGroundingBuffer,
+    );
   }
 }

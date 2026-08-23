@@ -4,6 +4,7 @@ import 'conversation_decision.dart';
 import 'conversation_grounding_buffer.dart';
 import 'conversation_utterance.dart';
 import 'exit_decision.dart';
+import 'guard_safe_fallback.dart';
 import 'language_model_client.dart';
 import 'prior_admitted_expression.dart';
 import 'prompt_architecture.dart';
@@ -45,8 +46,10 @@ class ConversationEngine {
   ///   [ConversationCompiler → VendorProvider]) → UtteranceGuard.
   ///
   /// On [LanguageModelClient] / [VendorError] failure, fails closed to `null`.
-  /// Does not reopen WHAT, Exit, Release, or protocol. Does not retry after
-  /// [UtteranceGuard] rejection.
+  /// Does not reopen WHAT, Exit, Release, or protocol.
+  ///
+  /// After [UtteranceGuard] rejection: never surface the rejected text; emit a
+  /// deterministic [GuardSafeFallback] only if that fallback itself admits.
   Future<ConversationUtterance?> generate({
     required ConversationDecision conversationDecision,
     required ExitDecision exitDecision,
@@ -84,18 +87,43 @@ class ConversationEngine {
       return null;
     }
 
+    final userUtterance =
+        package.conversationGrounding?.currentUserUtterance ?? livedExpression;
+
     final admitted = utteranceGuard.allow(
       utterance: utterance,
       what: package.what,
-      userUtterance: package.conversationGrounding?.currentUserUtterance ??
-          livedExpression,
+      userUtterance: userUtterance,
     );
-    if (admitted == null) {
+    if (admitted != null) return admitted;
+
+    debugPrint(
+      'Nocta expression Guard reject WHAT=${package.what.name} '
+      'text="${utterance.text}"',
+    );
+
+    // Guard-safe fallback: never show rejected model text; never LLM rewrite.
+    final fallback = GuardSafeFallback.forPhase(
+      what: package.what,
+      userUtterance: userUtterance,
+    );
+    if (fallback == null) return null;
+
+    final fallbackAdmitted = utteranceGuard.allow(
+      utterance: fallback,
+      what: package.what,
+      userUtterance: userUtterance,
+    );
+    if (fallbackAdmitted == null) {
       debugPrint(
-        'Nocta expression Guard reject WHAT=${package.what.name} '
-        'text="${utterance.text}"',
+        'Nocta expression Guard fallback also rejected WHAT='
+        '${package.what.name} text="${fallback.text}"',
       );
+      return null;
     }
-    return admitted;
+    debugPrint(
+      'Nocta expression Guard fallback admitted WHAT=${package.what.name}',
+    );
+    return fallbackAdmitted;
   }
 }

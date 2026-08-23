@@ -173,7 +173,7 @@ void main() {
       );
     });
 
-    test('protest stays Receipt, not Permission', () {
+    test('protest recalibrates via Permission, not Receipt restamp', () {
       final mind = HcosLiveEntry.emptyMindModel();
       var session = NightSession(
         workingMind: WorkingMindView(model: mind),
@@ -211,13 +211,11 @@ void main() {
         understanding: u2,
       );
       expect(intent.matches(protest), isFalse);
-      expect(p2.phase, isNot(ConversationPhase.permission));
+      // P1-2: leave failed Receipt pattern via Permission recalibration.
+      expect(p2.phase, ConversationPhase.permission);
       expect(p2.phase, isNot(ConversationPhase.release));
       expect(p2.phase, isNot(ConversationPhase.audio));
-      expect(
-        p2.phase,
-        anyOf(ConversationPhase.validation, ConversationPhase.naming),
-      );
+      expect(p2.phase, isNot(ConversationPhase.validation));
     });
   });
 

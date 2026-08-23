@@ -49,10 +49,12 @@ class ConversationPolicy {
       );
     }
 
-    // Protocol protest stays on Receipt — do not climb to Permission/Release.
-    if (_isProtocolProtest(message)) {
+    // Conversation protest / correction: leave failed Receipt pattern.
+    // Recalibrate via Permission (obligation-ease) — not another Receipt
+    // interpretation, not Enough→audio.
+    if (_isConversationProtestOrCorrection(message)) {
       return const ConversationDecision(
-        phase: ConversationPhase.validation,
+        phase: ConversationPhase.permission,
         shouldSpeak: true,
       );
     }
@@ -269,9 +271,9 @@ class ConversationPolicy {
     return hyp != null && hyp.confidence >= 0.55;
   }
 
-  /// Tight protest detector: the person is objecting to Nocta's speech, not
-  /// naming night-load. Private helper — not a new engine.
-  bool _isProtocolProtest(String? message) {
+  /// Conversation feedback: objecting to Nocta's speech or correcting a
+  /// misread. Private helper — not a new engine.
+  bool _isConversationProtestOrCorrection(String? message) {
     if (message == null) return false;
     var n = message.trim().toLowerCase();
     if (n.isEmpty) return false;
@@ -283,17 +285,45 @@ class ConversationPolicy {
         .replaceAll('ı', 'i')
         .replaceAll('ç', 'c');
 
+    // Protest — objecting to Nocta's style / repetition.
     if (n.contains('robot gibi')) return true;
     if (n.contains('beni anlam')) return true;
     if (n.contains('anlamiyosun')) return true;
     if (n.contains('anlamiyorsun')) return true;
     if (n.contains('surekli ayni')) return true;
     if (n.contains('ayni seyi soyl')) return true;
+    if (n.contains('ayni seyi soyluyor')) return true;
+    if (n.contains('bunu zaten soyled')) return true;
+    if (n.contains('bu soruyu zaten')) return true;
+    if (n.contains('tekrar ediyorsun')) return true;
+    if (n.contains('tekrarliyorsun')) return true;
     if (n.contains('like a robot')) return true;
     if (n.contains('talking like a robot')) return true;
     if (RegExp(r"you don'?t understand( me)?").hasMatch(n)) return true;
     if (n.contains('same thing over')) return true;
     if (n.contains('keep saying the same')) return true;
+    if (n.contains('you already said')) return true;
+    if (n.contains('you already asked')) return true;
+    if (n.contains('stop repeating')) return true;
+
+    // Correction — rejecting Nocta's interpretation / attributed feeling.
+    if (n.contains('yanlis anlad')) return true;
+    if (n.contains('yanlis anladin')) return true;
+    if (n.contains('yanlis anliyorsun')) return true;
+    if (n.contains('oyle demedim')) return true;
+    if (n.contains('demedim')) {
+      if (n.contains('oyle') || n.contains('oyle') || n.contains('ben')) {
+        return true;
+      }
+    }
+    if (n.contains('uzgun degilim')) return true;
+    if (n.contains('uzgun değilim')) return true;
+    if (n.contains("i'm not sad")) return true;
+    if (n.contains('i am not sad')) return true;
+    if (n.contains("that's not what i")) return true;
+    if (n.contains('thats not what i')) return true;
+    if (n.contains('you misunderstood')) return true;
+    if (n.contains('wrong about')) return true;
     return false;
   }
 }

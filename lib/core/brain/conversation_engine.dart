@@ -14,6 +14,7 @@ import 'mode_safe_terminal_fallback.dart';
 import 'night_session.dart';
 import 'prior_admitted_expression.dart';
 import 'prompt_architecture.dart';
+import 'user_object_mirror.dart';
 import 'utterance_guard.dart';
 import 'validated_understanding.dart';
 import 'vendor_provider.dart';
@@ -143,6 +144,12 @@ class ConversationEngine {
       utterance: fallback,
       what: package.what,
       userUtterance: userUtterance,
+      mirrorGroundingUtterance: UserObjectMirror.mirrorEvidenceSource(
+        userUtterance: userUtterance,
+        groundingBlob: package.conversationGrounding?.userUtterances
+            .map((u) => u)
+            .join(' '),
+      ),
       expressionMode: package.expressionMode,
     );
     if (fallbackAdmitted == null) {
@@ -240,12 +247,74 @@ class ConversationEngine {
         'mode=${expressionMode.name} text="${terminal.text}" '
         'reason=$reason prior="$priorRejectedText"',
       );
-      return null;
+      return _zeroSilenceSurfaceRetreat(
+        what: what,
+        userUtterance: userUtterance,
+        expressionMode: expressionMode,
+      );
     }
     debugPrint(
       'Nocta expression terminal fallback admitted WHAT=${what.name} '
       'mode=${expressionMode.name} reason=$reason',
     );
     return admitted;
+  }
+
+  /// B2.2.1 — Hard zero-silence retreat when mode terminal fails Guard.
+  ConversationUtterance? _zeroSilenceSurfaceRetreat({
+    required ConversationPhase what,
+    required String? userUtterance,
+    required ConversationExpressionMode expressionMode,
+  }) {
+    if (what != ConversationPhase.validation) return null;
+
+    final mirror = UserObjectMirror.forValidation(
+      userUtterance: userUtterance,
+      expressionMode: expressionMode,
+    );
+    if (mirror != null) {
+      final admitted = utteranceGuard.allow(
+        utterance: mirror,
+        what: what,
+        userUtterance: userUtterance,
+        mirrorGroundingUtterance: UserObjectMirror.mirrorEvidenceSource(
+          userUtterance: userUtterance,
+        ),
+        expressionMode: expressionMode,
+      );
+      if (admitted != null) {
+        debugPrint(
+          'Nocta expression zero-silence surface retreat admitted WHAT='
+          '${what.name}',
+        );
+        return admitted;
+      }
+    }
+
+    for (final fallbackMode in const [
+      ConversationExpressionMode.postReframeListen,
+      ConversationExpressionMode.standard,
+    ]) {
+      final line = ModeSafeTerminalFallback.forExpression(
+        what: what,
+        expressionMode: fallbackMode,
+        userUtterance: userUtterance,
+      );
+      if (line == null) continue;
+      final ok = utteranceGuard.allow(
+        utterance: line,
+        what: what,
+        userUtterance: userUtterance,
+        expressionMode: fallbackMode,
+      );
+      if (ok != null) {
+        debugPrint(
+          'Nocta expression zero-silence mode retreat admitted WHAT='
+          '${what.name} mode=${fallbackMode.name}',
+        );
+        return ok;
+      }
+    }
+    return null;
   }
 }

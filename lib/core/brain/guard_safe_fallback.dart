@@ -4,11 +4,15 @@ import 'conversation_grounding_buffer.dart';
 import 'conversation_phase.dart';
 import 'conversation_utterance.dart';
 import 'closure_fallback_builder.dart';
+import 'conversational_landing.dart';
 import 'integrate_fallback_builder.dart';
 import 'narrow_fallback_builder.dart';
 import 'night_session.dart';
 import 'observe_fallback_builder.dart';
 import 'reframe_fallback_builder.dart';
+import 'surface_text_fuzzy.dart';
+import 'surface_utterance_kind.dart';
+import 'user_object_mirror.dart';
 
 /// Deterministic Guard-legal lines after [UtteranceGuard] rejects a model
 /// candidate.
@@ -16,7 +20,8 @@ import 'reframe_fallback_builder.dart';
 /// Expression-plane only. Does not reopen WHAT / Exit / Release.
 /// Does not rewrite the rejected text. Does not call an LLM.
 ///
-/// `Anlıyorum.` is ultimate last-resort only for validation standard mode.
+/// `Anlıyorum.` is ultimate last-resort only when [UserObjectMirror] cannot
+/// extract a substantive user clause.
 class GuardSafeFallback {
   const GuardSafeFallback._();
 
@@ -32,22 +37,9 @@ class GuardSafeFallback {
     if (!_isSpeakable(what)) return null;
 
     final arc = ArcEvidenceContext.fromNight(session: session, grounding: grounding);
-    final prefersTurkish = arc.prefersTurkish || _looksTurkish(userUtterance);
     final groundingBlob = arc.userEvidenceBlob;
-
-    if (what == ConversationPhase.validation &&
-        expressionMode == ConversationExpressionMode.observePurity) {
-      final mirror = ObserveFallbackBuilder.forValidation(
-        userUtterance: userUtterance,
-      );
-      if (mirror != null) return mirror;
-      if (prefersTurkish && groundingBlob != null && groundingBlob.isNotEmpty) {
-        final fromCtx = ObserveFallbackBuilder.forValidation(
-          userUtterance: groundingBlob,
-        );
-        if (fromCtx != null) return fromCtx;
-      }
-    }
+    final prefersTurkish = arc.prefersTurkish ||
+        SurfaceTextFuzzy.prefersTurkish(userUtterance, groundingBlob);
 
     if (what == ConversationPhase.validation &&
         expressionMode == ConversationExpressionMode.narrow) {
@@ -90,6 +82,46 @@ class GuardSafeFallback {
         grounding: grounding,
         arcEvidence: arc,
       );
+    }
+
+    // B2.2 — conversational landing before mirror for closing/minimal ack.
+    if (what == ConversationPhase.validation) {
+      final landing = ConversationalLanding.forValidation(
+        userUtterance: userUtterance,
+        groundingBlob: groundingBlob,
+        expressionMode: expressionMode,
+      );
+      if (landing != null) return landing;
+    }
+
+    // B2 — structural user-object mirror before generic empathy filler.
+    if (what == ConversationPhase.validation) {
+      final objectMirror = UserObjectMirror.forValidation(
+        userUtterance: userUtterance,
+        groundingBlob: groundingBlob,
+        expressionMode: expressionMode,
+      );
+      if (objectMirror != null) return objectMirror;
+    }
+
+    // Legacy keyword observe mirrors — only after B2 surface mirror abstains.
+    if (what == ConversationPhase.validation &&
+        expressionMode == ConversationExpressionMode.observePurity) {
+      final observe = ObserveFallbackBuilder.forValidation(
+        userUtterance: userUtterance,
+      );
+      if (observe != null) return observe;
+      final minimalCurrent = userUtterance != null &&
+          SurfaceUtteranceReader.isMinimalAck(userUtterance);
+      if (minimalCurrent &&
+          prefersTurkish &&
+          groundingBlob != null &&
+          groundingBlob.isNotEmpty) {
+        final fromCtx = ObserveFallbackBuilder.forValidation(
+          userUtterance: groundingBlob,
+        );
+        if (fromCtx != null) return fromCtx;
+      }
     }
 
     if (prefersTurkish) {
@@ -181,40 +213,5 @@ class GuardSafeFallback {
       case ConversationPhase.silence:
         return '';
     }
-  }
-
-  static bool _looksTurkish(String? text) {
-    if (text == null || text.trim().isEmpty) return false;
-    final lower = text.toLowerCase();
-    if (RegExp(r'[ğüşıöçâîû]').hasMatch(lower)) return true;
-    const markers = [
-      'bilmiyorum',
-      'uyuyamiyorum',
-      'uyuyamıyorum',
-      'kafam',
-      'aklim',
-      'aklım',
-      'durmuyor',
-      'gece',
-      'yarin',
-      'yarın',
-      'degil',
-      'değil',
-      'belki',
-      'evet',
-      'sakin',
-      'rahat',
-      'dogru',
-      'doğru',
-      'yalniz',
-      'yalnız',
-      'ozle',
-      'miyim',
-      'mıyım',
-    ];
-    for (final marker in markers) {
-      if (lower.contains(marker)) return true;
-    }
-    return false;
   }
 }

@@ -90,10 +90,9 @@ void main() {
 
       expect(spoken, isNotNull);
       expect(spoken!.text.trim(), isNotEmpty);
+      expect(spoken.text, contains('conversation'));
       expect(spoken.text.toLowerCase(), isNot(contains('tip tonight')));
       expect(spoken.text.toLowerCase(), isNot(contains('search for clarity')));
-      // Known Receipt-safe fallback for EN.
-      expect(spoken.text, 'I hear that.');
     });
 
     test('rejected clinical text is not shown; Guard-safe fallback is', () async {
@@ -114,7 +113,7 @@ void main() {
 
       expect(spoken, isNotNull);
       expect(spoken!.text.toLowerCase(), isNot(contains('therapist')));
-      expect(spoken.text, 'I hear that.');
+      expect(spoken.text.toLowerCase(), contains('tomorrow'));
     });
 
     test('rejected sleep-command text is not shown; Guard-safe fallback is', () async {
@@ -135,7 +134,7 @@ void main() {
 
       expect(spoken, isNotNull);
       expect(spoken!.text.toLowerCase(), isNot(contains('should sleep')));
-      expect(spoken.text, 'I hear that.');
+      expect(spoken.text.toLowerCase(), contains('awake'));
     });
 
     test('TR Guard reject uses Turkish fallback', () async {
@@ -158,7 +157,8 @@ void main() {
       );
 
       expect(spoken, isNotNull);
-      expect(spoken!.text, 'Anlıyorum.');
+      expect(spoken!.text, isNot('Anlıyorum.'));
+      expect(spoken.text.toLowerCase(), anyOf(contains('kafam'), contains('kafan'), contains('durmuyor')));
       expect(spoken.text.toLowerCase(), isNot(contains('tip')));
     });
   });

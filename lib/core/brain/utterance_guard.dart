@@ -4,6 +4,7 @@ import 'conversation_phase.dart';
 import 'conversation_utterance.dart';
 import 'permission_realization_contract.dart';
 import 'receipt_realization_contract.dart';
+import 'surface_mirror_contract.dart';
 
 /// UtteranceGuard
 ///
@@ -74,6 +75,7 @@ class UtteranceGuard {
     required ConversationPhase what,
     ConversationDNA dna = ConversationDNA.instance,
     String? userUtterance,
+    String? mirrorGroundingUtterance,
     ConversationExpressionMode expressionMode =
         ConversationExpressionMode.standard,
   }) {
@@ -110,7 +112,13 @@ class UtteranceGuard {
     }
 
     // Stay inside the decided WHAT (DNA principle 9 / anti-rule rewrite).
-    if (!_faithfulToWhat(normalized, what, expressionMode: expressionMode)) {
+    if (!_faithfulToWhat(
+      normalized,
+      what,
+      expressionMode: expressionMode,
+      userUtterance: userUtterance,
+      mirrorGroundingUtterance: mirrorGroundingUtterance,
+    )) {
       return null;
     }
 
@@ -185,6 +193,8 @@ class UtteranceGuard {
       what: what,
       dna: dna,
       expressionMode: expressionMode,
+      userUtterance: userUtterance,
+      mirrorGroundingUtterance: mirrorGroundingUtterance,
     )) {
       return null;
     }
@@ -243,6 +253,8 @@ class UtteranceGuard {
     ConversationPhase what, {
     ConversationExpressionMode expressionMode =
         ConversationExpressionMode.standard,
+    String? userUtterance,
+    String? mirrorGroundingUtterance,
   }) {
     switch (what) {
       case ConversationPhase.audio:
@@ -259,7 +271,13 @@ class UtteranceGuard {
 
     final lower = _normalizeForMatch(text);
 
-    if (!_matchesPhase(lower, what, expressionMode: expressionMode)) {
+    if (!_matchesPhase(
+      lower,
+      what,
+      expressionMode: expressionMode,
+      userUtterance: userUtterance,
+      mirrorGroundingUtterance: mirrorGroundingUtterance,
+    )) {
       return false;
     }
 
@@ -401,6 +419,8 @@ class UtteranceGuard {
     ConversationPhase phase, {
     ConversationExpressionMode expressionMode =
         ConversationExpressionMode.standard,
+    String? userUtterance,
+    String? mirrorGroundingUtterance,
   }) {
     switch (phase) {
       case ConversationPhase.validation:
@@ -408,7 +428,11 @@ class UtteranceGuard {
           return _matchesRepairContract(lower);
         }
         if (expressionMode == ConversationExpressionMode.observePurity) {
-          return _matchesObservePurityContract(lower);
+          return _matchesObservePurityContract(
+            lower,
+            userUtterance: userUtterance,
+            mirrorGroundingUtterance: mirrorGroundingUtterance,
+          );
         }
         if (expressionMode == ConversationExpressionMode.narrow) {
           return _matchesNarrowContract(lower);
@@ -425,7 +449,11 @@ class UtteranceGuard {
         if (expressionMode == ConversationExpressionMode.postReframeListen) {
           return _matchesPostReframeListenContract(lower);
         }
-        return _matchesReceiptContract(lower);
+        return _matchesReceiptContract(
+          lower,
+          userUtterance: userUtterance,
+          mirrorGroundingUtterance: mirrorGroundingUtterance,
+        );
       case ConversationPhase.naming:
         return _matchesNamingContract(lower);
       case ConversationPhase.permission:
@@ -606,11 +634,21 @@ class UtteranceGuard {
     return _containsAny(lower, const ['belki', 'sanki', 'perhaps', 'maybe']);
   }
 
-  bool _matchesObservePurityContract(String lower) {
+  bool _matchesObservePurityContract(
+    String lower, {
+    String? userUtterance,
+    String? mirrorGroundingUtterance,
+  }) {
     if (_observePurityReframeDrift(lower)) return false;
     if (lower.contains('?')) return false;
     if (_receiptOverInference(lower)) return false;
-    if (_matchesReceiptContract(lower)) return true;
+    if (_matchesReceiptContract(
+      lower,
+      userUtterance: userUtterance,
+      mirrorGroundingUtterance: mirrorGroundingUtterance,
+    )) {
+      return true;
+    }
     return _containsAny(lower, const [
           'kafanda',
           'aklinda',
@@ -1076,7 +1114,11 @@ class UtteranceGuard {
   /// soft-functional frame+texture pairs, excluding Naming-stem drift and
   /// compound second moves. Fail closed on invented psychology / stillness /
   /// presence / hard diagnosis. Mechanism-agnostic — no psychological scoring.
-  bool _matchesReceiptContract(String lower) {
+  bool _matchesReceiptContract(
+    String lower, {
+    String? userUtterance,
+    String? mirrorGroundingUtterance,
+  }) {
     if (_receiptOverInference(lower)) {
       return false;
     }
@@ -1094,7 +1136,27 @@ class UtteranceGuard {
       return true;
     }
 
-    return ReceiptRealizationContract.matchesTextureFirst(lower);
+    if (ReceiptRealizationContract.matchesTextureFirst(lower)) {
+      return true;
+    }
+
+    // B2.2 — source-grounded surface mirror (no night-language crutch required).
+    if (userUtterance != null &&
+        userUtterance.trim().isNotEmpty &&
+        SurfaceMirrorContract.matches(
+          lower,
+          userUtterance,
+          groundingUtterance: mirrorGroundingUtterance,
+        )) {
+      return true;
+    }
+
+    // B2.2 — brief conversational landing when mirror abstains.
+    if (ConversationalLandingContract.matches(lower)) {
+      return true;
+    }
+
+    return false;
   }
 
   /// Fail-closed Receipt exclusions: invented stillness / presence / psychology.
@@ -1483,6 +1545,8 @@ class UtteranceGuard {
     required ConversationDNA dna,
     ConversationExpressionMode expressionMode =
         ConversationExpressionMode.standard,
+    String? userUtterance,
+    String? mirrorGroundingUtterance,
   }) {
     // Only the bound canonical DNA may authorize emission.
     if (!identical(dna, ConversationDNA.instance)) {
@@ -1497,6 +1561,8 @@ class UtteranceGuard {
         what: what,
         antiRule: antiRule,
         expressionMode: expressionMode,
+        userUtterance: userUtterance,
+        mirrorGroundingUtterance: mirrorGroundingUtterance,
       )) {
         return false;
       }
@@ -1506,8 +1572,11 @@ class UtteranceGuard {
       if (!_principleClear(
         lower: lower,
         text: text,
+        what: what,
         principle: principle,
         expressionMode: expressionMode,
+        userUtterance: userUtterance,
+        mirrorGroundingUtterance: mirrorGroundingUtterance,
       )) {
         return false;
       }
@@ -1522,6 +1591,8 @@ class UtteranceGuard {
     required ConversationDNAAntiRule antiRule,
     ConversationExpressionMode expressionMode =
         ConversationExpressionMode.standard,
+    String? userUtterance,
+    String? mirrorGroundingUtterance,
   }) {
     switch (antiRule.name) {
       case 'Multiple insights in one turn':
@@ -1606,7 +1677,13 @@ class UtteranceGuard {
       case 'Rewriting the decided conversational move':
         // Enforced by the WHAT faithfulness gate before DNA checks.
         // Re-assert against the same sealed WHAT; never rewrite text.
-        return _faithfulToWhat(lower, what, expressionMode: expressionMode);
+        return _faithfulToWhat(
+          lower,
+          what,
+          expressionMode: expressionMode,
+          userUtterance: userUtterance,
+          mirrorGroundingUtterance: mirrorGroundingUtterance,
+        );
       default:
         // Unknown anti-rule on a non-canonical DNA binding cannot pass.
         return false;
@@ -1616,9 +1693,12 @@ class UtteranceGuard {
   bool _principleClear({
     required String lower,
     required String text,
+    required ConversationPhase what,
     required ConversationDNAPrinciple principle,
     ConversationExpressionMode expressionMode =
         ConversationExpressionMode.standard,
+    String? userUtterance,
+    String? mirrorGroundingUtterance,
   }) {
     switch (principle.id) {
       case 1: // Subtract, do not add

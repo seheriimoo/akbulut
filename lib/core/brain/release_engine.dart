@@ -2,6 +2,7 @@ import 'conversation_phase.dart';
 import 'night_session.dart';
 import 'post_audio_re_engagement.dart';
 import 'release_decision.dart';
+import 'release_progression_gate.dart';
 import 'turn_response_stance.dart';
 import 'validated_understanding.dart';
 import 'working_mind_view.dart';
@@ -32,9 +33,11 @@ import 'working_mind_view.dart';
 class ReleaseEngine {
   const ReleaseEngine({
     this.postAudioReEngagement = const PostAudioReEngagement(),
+    this.progressionGate = const ReleaseProgressionGate(),
   });
 
   final PostAudioReEngagement postAudioReEngagement;
+  final ReleaseProgressionGate progressionGate;
 
   ReleaseDecision evaluate({
     required ValidatedUnderstanding understanding,
@@ -71,6 +74,9 @@ class ReleaseEngine {
       previousPhase: previousPhase,
       highActivation: highActivation,
       stance: understanding.turnResponseStance,
+      understanding: understanding,
+      session: session,
+      message: message,
     );
 
     return ReleaseDecision(
@@ -84,11 +90,22 @@ class ReleaseEngine {
     required ConversationPhase? previousPhase,
     required bool highActivation,
     required TurnResponseStance stance,
+    required ValidatedUnderstanding understanding,
+    required NightSession session,
+    String? message,
   }) {
     if (previous == null) {
       // First turn: always begin at hold. Load or not, Receipt comes first.
       return ReleaseReadiness.hold;
     }
+
+    final stillActive = progressionGate.conversationStillActive(
+      understanding: understanding,
+      session: session,
+      message: message,
+    );
+    final windDown =
+        message != null && progressionGate.hasWindDownEvidence(message);
 
     final priorWasRelease = previousPhase == ConversationPhase.release;
     final resisting = stance == TurnResponseStance.holdingAgainstEase ||
@@ -97,21 +114,25 @@ class ReleaseEngine {
 
     // Resistance / continued load after a Release (or while still in the
     // Release readiness band) must leave the Release-capable band.
-    if (resisting) {
+    if (resisting || stillActive) {
       if (priorWasRelease ||
           previous == ReleaseReadiness.settling ||
-          previous == ReleaseReadiness.receptive) {
+          previous == ReleaseReadiness.receptive ||
+          previous == ReleaseReadiness.transitionReady) {
         return _stepBackAtMostRegulated(previous);
       }
       return _stepBack(previous);
     }
 
-    // Softening after Release / Release-band: advance toward transition;
-    // do not dwell for another Release-capable turn.
+    // Softening after Release / Release-band: advance toward transition only
+    // when the night is not still actively unfolding.
     if (stance == TurnResponseStance.softeningAcceptance &&
         (priorWasRelease ||
             previous == ReleaseReadiness.settling ||
             previous == ReleaseReadiness.receptive)) {
+      if (stillActive) {
+        return _stepBackAtMostRegulated(previous);
+      }
       return ReleaseReadiness.transitionReady;
     }
 
@@ -121,7 +142,16 @@ class ReleaseEngine {
       return previous;
     }
 
-    // Pre-Release calm continuation: move one step toward rest.
+    // Climb only on explicit wind-down evidence; neutral calm may still climb
+    // when the night is not actively continuing.
+    if (windDown) {
+      return _stepForward(previous);
+    }
+
+    if (stillActive) {
+      return previous;
+    }
+
     return _stepForward(previous);
   }
 

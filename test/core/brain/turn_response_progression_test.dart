@@ -426,8 +426,7 @@ void main() {
       expect(updatedMind.preferences, isEmpty);
     });
 
-    test('ReleaseEngine does not take a raw message argument', () {
-      // Structural API contract: evaluate signature stays understanding-based.
+    test('ReleaseEngine evaluate accepts optional message for gating', () {
       expect(
         const ReleaseEngine().evaluate,
         isA<
@@ -435,6 +434,7 @@ void main() {
               required ValidatedUnderstanding understanding,
               required WorkingMindView workingMind,
               required NightSession session,
+              String? message,
             })>(),
       );
     });

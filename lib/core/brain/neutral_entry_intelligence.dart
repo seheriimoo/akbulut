@@ -23,31 +23,65 @@ class NeutralEntryIntelligence {
   NeutralEntryCompileSlice compile({
     required BlueprintStageBinding stage,
     ConversationGroundingBuffer? conversationGrounding,
+    bool lightChatMode = false,
   }) {
     assert(stage.stage == BlueprintStage.neutralEntry);
 
     final currentTurn = _currentTurnGrounding(conversationGrounding);
-    final isLightTurn = currentTurn != null &&
-        lightConversation.isLightConversation(currentTurn);
+    final isLightTurn = lightChatMode ||
+        (currentTurn != null &&
+            lightConversation.isLightConversation(currentTurn));
 
     final forbidden = <String>[
       ...stage.forbiddenMoves,
-      ..._neutralEntryForbidden,
-      if (isLightTurn) ..._lightConversationForbidden,
+      ..._neutralEntryForbidden.where(
+        (rule) => !lightChatMode || !rule.startsWith('Questions'),
+      ),
+      if (isLightTurn && !lightChatMode) ..._lightConversationForbidden,
+      if (lightChatMode) ..._lightChatForbidden,
     ];
 
     return NeutralEntryCompileSlice(
-      aim: isLightTurn ? _aimLight : _aim,
-      sealedWhatSignature:
-          isLightTurn ? _sealedWhatSignatureLight : _sealedWhatSignature,
+      aim: lightChatMode ? _aimLightChat : (isLightTurn ? _aimLight : _aim),
+      sealedWhatSignature: lightChatMode
+          ? _sealedWhatSignatureLightChat
+          : (isLightTurn ? _sealedWhatSignatureLight : _sealedWhatSignature),
       forbiddenMoves: forbidden,
-      responseLength: isLightTurn ? _responseLengthLight : _responseLength,
-      welcomeDirective: isLightTurn ? _lightWelcomeDirective : _welcomeDirective,
+      responseLength:
+          lightChatMode ? _responseLengthLightChat : (isLightTurn ? _responseLengthLight : _responseLength),
+      welcomeDirective: lightChatMode
+          ? _lightChatDirective
+          : (isLightTurn ? _lightWelcomeDirective : _welcomeDirective),
       realizationDirective: _realizationDirective,
-      userContent: _userContent(isLightTurn: isLightTurn),
-      systemAppendix: _systemAppendix(isLightTurn: isLightTurn),
+      userContent: _userContent(
+        isLightTurn: isLightTurn,
+        lightChatMode: lightChatMode,
+      ),
+      systemAppendix: _systemAppendix(
+        isLightTurn: isLightTurn,
+        lightChatMode: lightChatMode,
+      ),
     );
   }
+
+  static const String _aimLightChat =
+      'Respond like a warm human in light conversation. Mirror their moment '
+      'briefly. You may ask exactly one natural follow-up question.';
+
+  static const String _sealedWhatSignatureLightChat =
+      'neutralEntry / Light chat — warm everyday acknowledgment. One natural '
+      'follow-up question allowed. No mental load, reframe, Permission, '
+      'Release, or sleep pressure.';
+
+  static const String _responseLengthLightChat =
+      'One or two short sentences, maximum 22 words. At most one question mark.';
+
+  static const String _lightChatDirective =
+      'Light chat only: respond like a normal friend — warm, brief, curious. '
+      'Mirror what they shared (coffee, laughter, a good day). You may ask '
+      'exactly one natural follow-up question (e.g. what made them laugh). '
+      'Never invent distress, burden, mental load, Permission, Release, or '
+      'sleep pressure. Stay in their light loop.';
 
   static String? _currentTurnGrounding(ConversationGroundingBuffer? buffer) {
     if (buffer == null || buffer.isEmpty) return null;
@@ -97,6 +131,18 @@ class NeutralEntryIntelligence {
       'Do not drift into Receipt, Naming, Permission, Release, Enough, '
       'or another WHAT. Do not choose release, protocol, exit, or silence.';
 
+  static const List<String> _lightChatForbidden = [
+    'Inverting positive or mundane content into distress: “hard”, “heavy”, '
+        '“difficult”, “zor geliyor”, “ağır geliyor”, “yük”, “burden”',
+    'Permission / obligation-ease: “don’t have to think”, “gerekmiyor”, '
+        '“düşünmene gerek yok”',
+    'Release / put-down: “bırak”, “let go”, “leave it here”, “geceye bırak”',
+    'Belki/Sanki difficulty reframes on clearly positive turns',
+    'Inventing worry about tomorrow when they named a mundane plan only',
+    'Mental load / sleep pressure / insomnia framing',
+    'More than one question',
+  ];
+
   static const List<String> _lightConversationForbidden = [
     'Inverting positive or mundane content into distress: “hard”, “heavy”, '
         '“difficult”, “zor geliyor”, “ağır geliyor”, “yük”, “burden”',
@@ -121,14 +167,35 @@ class NeutralEntryIntelligence {
     'How-are-you or feeling check-ins',
   ];
 
-  String _userContent({required bool isLightTurn}) {
+  String _userContent({
+    required bool isLightTurn,
+    required bool lightChatMode,
+  }) {
+    if (lightChatMode) {
+      return '$_realizationDirective\n\n'
+          '$_lightChatDirective\n\n'
+          'One or two short sentences. At most one natural follow-up question. '
+          'No invented distress, load, Permission, Release, or sleep pressure.';
+    }
     return '$_realizationDirective\n\n'
         '${isLightTurn ? _lightWelcomeDirective : _welcomeDirective}\n\n'
         'Exactly one short sentence. Natural. Quiet. '
         'No question. No invented emotion, presence, stillness, or problem.';
   }
 
-  String _systemAppendix({required bool isLightTurn}) {
+  String _systemAppendix({
+    required bool isLightTurn,
+    required bool lightChatMode,
+  }) {
+    if (lightChatMode) {
+      return '''
+Neutral Entry Intelligence v$version (Light chat):
+$_lightChatDirective
+Question rule: exactly one natural follow-up question is allowed.
+No-invention rule: do not invent distress, mental load, Permission, Release, or sleep pressure.
+Drift rule: do not Receipt, Name, grant Permission, invite Release, or close.
+''';
+    }
     return '''
 Neutral Entry Intelligence v$version:
 ${isLightTurn ? _lightWelcomeDirective : _welcomeDirective}

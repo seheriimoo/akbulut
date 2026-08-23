@@ -1,3 +1,4 @@
+import 'conversation_expression_mode.dart';
 import 'conversation_phase.dart';
 import 'conversation_utterance.dart';
 
@@ -16,11 +17,15 @@ class GuardSafeFallback {
   static ConversationUtterance? forPhase({
     required ConversationPhase what,
     String? userUtterance,
+    ConversationExpressionMode expressionMode =
+        ConversationExpressionMode.standard,
   }) {
     if (!_isSpeakable(what)) return null;
 
     final turkish = _looksTurkish(userUtterance);
-    final text = turkish ? _turkishFor(what) : _englishFor(what);
+    final text = turkish
+        ? _turkishFor(what, expressionMode: expressionMode)
+        : _englishFor(what, expressionMode: expressionMode);
     return ConversationUtterance(text: text);
   }
 
@@ -39,9 +44,16 @@ class GuardSafeFallback {
     }
   }
 
-  static String _englishFor(ConversationPhase what) {
+  static String _englishFor(
+    ConversationPhase what, {
+    ConversationExpressionMode expressionMode =
+        ConversationExpressionMode.standard,
+  }) {
     switch (what) {
       case ConversationPhase.validation:
+        if (expressionMode == ConversationExpressionMode.repair) {
+          return 'Okay, I read that wrong. What is keeping you up tonight?';
+        }
         return 'I hear that.';
       case ConversationPhase.naming:
         return 'Something is still holding on.';
@@ -52,6 +64,9 @@ class GuardSafeFallback {
       case ConversationPhase.continuity:
         return 'Nothing more is needed right now.';
       case ConversationPhase.neutralEntry:
+        if (expressionMode == ConversationExpressionMode.lightChat) {
+          return 'Oh, nice.';
+        }
         return "Hi whenever you're ready.";
       case ConversationPhase.audio:
       case ConversationPhase.silence:
@@ -59,9 +74,16 @@ class GuardSafeFallback {
     }
   }
 
-  static String _turkishFor(ConversationPhase what) {
+  static String _turkishFor(
+    ConversationPhase what, {
+    ConversationExpressionMode expressionMode =
+        ConversationExpressionMode.standard,
+  }) {
     switch (what) {
       case ConversationPhase.validation:
+        if (expressionMode == ConversationExpressionMode.repair) {
+          return 'Tamam, orayı yanlış okudum. Seni uyanık tutan ne?';
+        }
         return 'Anlıyorum.';
       case ConversationPhase.naming:
         return 'Bir şey hâlâ aklında duruyor.';
@@ -72,6 +94,9 @@ class GuardSafeFallback {
       case ConversationPhase.continuity:
         return 'Bu kadar yeter.';
       case ConversationPhase.neutralEntry:
+        if (expressionMode == ConversationExpressionMode.lightChat) {
+          return 'Güzel :)';
+        }
         return 'Merhaba, hazır olduğunda.';
       case ConversationPhase.audio:
       case ConversationPhase.silence:

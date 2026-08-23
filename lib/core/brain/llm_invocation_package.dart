@@ -1,6 +1,7 @@
 import 'dart:collection';
 
 import 'conversation_dna.dart';
+import 'conversation_expression_mode.dart';
 import 'conversation_grounding_buffer.dart';
 import 'conversation_phase.dart';
 import 'exit_decision.dart';
@@ -51,6 +52,12 @@ class LlmInvocationPackage {
   /// promise language only when this is [ExitDecision.transitionToAudio].
   final ExitDecision? exitDecision;
 
+  /// Optional expression steering (observe purity, repair, light chat).
+  final ConversationExpressionMode expressionMode;
+
+  /// Repair-only: repetition protest vs correction misread.
+  final bool repairRepetitionProtest;
+
   /// Bound Conversation DNA constraints (not enforced by this package).
   final ConversationDNA dna;
 
@@ -77,6 +84,8 @@ class LlmInvocationPackage {
     this.conversationGrounding,
     this.priorAdmittedExpression,
     this.exitDecision,
+    this.expressionMode = ConversationExpressionMode.standard,
+    this.repairRepetitionProtest = false,
     this.dna = ConversationDNA.instance,
   }) {
     if (!_isSpeakableWhat(what)) {

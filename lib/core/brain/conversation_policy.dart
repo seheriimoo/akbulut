@@ -1,4 +1,5 @@
 import 'conversation_decision.dart';
+import 'conversation_expression_mode.dart';
 import 'conversation_phase.dart';
 import 'explicit_exit_intent.dart';
 import 'light_conversation_detector.dart';
@@ -55,22 +56,19 @@ class ConversationPolicy {
       );
     }
 
-    // Conversation protest / correction: leave failed Receipt pattern.
-    // Recalibrate via Permission (obligation-ease) — not another Receipt
-    // interpretation, not Enough→audio.
+    // Conversation protest / correction: genuine repair — not Permission ease.
     if (_isConversationProtestOrCorrection(message)) {
-      return const ConversationDecision(
-        phase: ConversationPhase.permission,
+      return ConversationDecision(
+        phase: ConversationPhase.validation,
         shouldSpeak: true,
+        expressionMode: ConversationExpressionMode.repair,
+        repairRepetitionProtest: _isRepetitionProtest(message),
       );
     }
 
     // Post-audio re-engagement: meaningful new turn reopens Receipt path.
     if (_isPostAudioReEngagement(message: message, session: session)) {
-      return const ConversationDecision(
-        phase: ConversationPhase.validation,
-        shouldSpeak: true,
-      );
+      return _validationDecision(session: session);
     }
 
     if (_isLightConversationTurn(
@@ -81,6 +79,7 @@ class ConversationPolicy {
       return const ConversationDecision(
         phase: ConversationPhase.neutralEntry,
         shouldSpeak: true,
+        expressionMode: ConversationExpressionMode.lightChat,
       );
     }
 
@@ -109,6 +108,7 @@ class ConversationPolicy {
         hasLoad: hasLoad,
         priorPhase: ConversationPhase.release,
         message: message,
+        session: session,
       );
     }
 
@@ -121,12 +121,37 @@ class ConversationPolicy {
     );
   }
 
+  ConversationDecision _validationDecision({
+    required NightSession? session,
+  }) {
+    final observePurity = _isFirstReceiptTurn(session);
+    return ConversationDecision(
+      phase: ConversationPhase.validation,
+      shouldSpeak: true,
+      expressionMode: observePurity
+          ? ConversationExpressionMode.observePurity
+          : ConversationExpressionMode.standard,
+    );
+  }
+
+  bool _isFirstReceiptTurn(NightSession? session) {
+    if (session == null || session.turns.isEmpty) return true;
+    for (final turn in session.turns) {
+      if (turn.phase == ConversationPhase.validation ||
+          turn.phase == ConversationPhase.naming) {
+        return false;
+      }
+    }
+    return true;
+  }
+
   ConversationDecision _decideAfterRelease({
     required ReleaseDecision releaseDecision,
     required TurnResponseStance stance,
     required bool hasLoad,
     required ConversationPhase priorPhase,
     String? message,
+    NightSession? session,
   }) {
     if (message != null &&
         !hasLoad &&
@@ -134,6 +159,7 @@ class ConversationPolicy {
       return const ConversationDecision(
         phase: ConversationPhase.neutralEntry,
         shouldSpeak: true,
+        expressionMode: ConversationExpressionMode.lightChat,
       );
     }
 
@@ -159,10 +185,7 @@ class ConversationPolicy {
     if (resisting) {
       // Resistance after Release → Receipt/Permission, never Release.
       if (releaseDecision.readiness == ReleaseReadiness.hold) {
-        return const ConversationDecision(
-          phase: ConversationPhase.validation,
-          shouldSpeak: true,
-        );
+        return _validationDecision(session: session);
       }
       return const ConversationDecision(
         phase: ConversationPhase.permission,
@@ -180,10 +203,7 @@ class ConversationPolicy {
     // Unclear after Release: fail closed on acceptance/audio, but never
     // re-issue Release merely because load was absent.
     if (releaseDecision.readiness == ReleaseReadiness.hold) {
-      return const ConversationDecision(
-        phase: ConversationPhase.validation,
-        shouldSpeak: true,
-      );
+      return _validationDecision(session: session);
     }
     if (releaseDecision.readiness == ReleaseReadiness.regulated) {
       return const ConversationDecision(
@@ -216,10 +236,7 @@ class ConversationPolicy {
             shouldSpeak: true,
           );
         }
-        return const ConversationDecision(
-          phase: ConversationPhase.validation,
-          shouldSpeak: true,
-        );
+        return _validationDecision(session: session);
 
       case ReleaseReadiness.regulated:
         if (!hasLoad &&
@@ -228,13 +245,11 @@ class ConversationPolicy {
           return const ConversationDecision(
             phase: ConversationPhase.neutralEntry,
             shouldSpeak: true,
+            expressionMode: ConversationExpressionMode.lightChat,
           );
         }
         if (!hasLoad) {
-          return const ConversationDecision(
-            phase: ConversationPhase.validation,
-            shouldSpeak: true,
-          );
+          return _validationDecision(session: session);
         }
         return const ConversationDecision(
           phase: ConversationPhase.permission,
@@ -352,53 +367,61 @@ class ConversationPolicy {
     return hyp != null && hyp.confidence >= 0.55;
   }
 
-  /// Conversation feedback: objecting to Nocta's speech or correcting a
-  /// misread. Private helper — not a new engine.
-  bool _isConversationProtestOrCorrection(String? message) {
+  bool _isRepetitionProtest(String? message) {
     if (message == null) return false;
-    var n = message.trim().toLowerCase();
-    if (n.isEmpty) return false;
-    n = n
-        .replaceAll('ş', 's')
-        .replaceAll('ğ', 'g')
-        .replaceAll('ü', 'u')
-        .replaceAll('ö', 'o')
-        .replaceAll('ı', 'i')
-        .replaceAll('ç', 'c');
-
-    // Protest — objecting to Nocta's style / repetition.
+    final n = _normalizeProtestText(message);
     if (n.contains('robot gibi')) return true;
-    if (n.contains('beni anlam')) return true;
-    if (n.contains('anlamiyosun')) return true;
-    if (n.contains('anlamiyorsun')) return true;
     if (n.contains('surekli ayni')) return true;
     if (n.contains('ayni seyi soyl')) return true;
-    if (n.contains('ayni seyi soyluyor')) return true;
     if (n.contains('bunu zaten soyled')) return true;
     if (n.contains('bu soruyu zaten')) return true;
     if (n.contains('tekrar ediyorsun')) return true;
     if (n.contains('tekrarliyorsun')) return true;
     if (n.contains('like a robot')) return true;
     if (n.contains('talking like a robot')) return true;
-    if (RegExp(r"you don'?t understand( me)?").hasMatch(n)) return true;
     if (n.contains('same thing over')) return true;
     if (n.contains('keep saying the same')) return true;
     if (n.contains('you already said')) return true;
     if (n.contains('you already asked')) return true;
     if (n.contains('stop repeating')) return true;
+    return false;
+  }
+
+  String _normalizeProtestText(String message) {
+    return message
+        .trim()
+        .toLowerCase()
+        .replaceAll('ş', 's')
+        .replaceAll('ğ', 'g')
+        .replaceAll('ü', 'u')
+        .replaceAll('ö', 'o')
+        .replaceAll('ı', 'i')
+        .replaceAll('ç', 'c');
+  }
+
+  /// Conversation feedback: objecting to Nocta's speech or correcting a
+  /// misread. Private helper — not a new engine.
+  bool _isConversationProtestOrCorrection(String? message) {
+    if (message == null) return false;
+    final n = _normalizeProtestText(message);
+    if (n.isEmpty) return false;
+
+    if (_isRepetitionProtest(message)) return true;
+
+    // Protest — objecting to Nocta's style / understanding.
+    if (n.contains('beni anlam')) return true;
+    if (n.contains('anlamiyosun')) return true;
+    if (n.contains('anlamiyorsun')) return true;
+    if (RegExp(r"you don'?t understand( me)?").hasMatch(n)) return true;
 
     // Correction — rejecting Nocta's interpretation / attributed feeling.
     if (n.contains('yanlis anlad')) return true;
-    if (n.contains('yanlis anladin')) return true;
-    if (n.contains('yanlis anliyorsun')) return true;
+    if (n.contains('alakasi yok')) return true;
     if (n.contains('oyle demedim')) return true;
     if (n.contains('demedim')) {
-      if (n.contains('oyle') || n.contains('oyle') || n.contains('ben')) {
-        return true;
-      }
+      if (n.contains('oyle') || n.contains('ben')) return true;
     }
     if (n.contains('uzgun degilim')) return true;
-    if (n.contains('uzgun değilim')) return true;
     if (n.contains("i'm not sad")) return true;
     if (n.contains('i am not sad')) return true;
     if (n.contains("that's not what i")) return true;

@@ -1,6 +1,7 @@
 import 'conversation_blueprint_binding.dart';
 import 'conversation_constitution.dart';
 import 'conversation_dna.dart';
+import 'conversation_expression_mode.dart';
 import 'conversation_grounding_buffer.dart';
 import 'conversation_philosophy.dart';
 import 'compiled_instruction_package.dart';
@@ -13,6 +14,7 @@ import 'neutral_entry_intelligence.dart';
 import 'permission_intelligence.dart';
 import 'receipt_intelligence.dart';
 import 'release_intelligence.dart';
+import 'repair_intelligence.dart';
 
 /// Conversation Compiler V1
 ///
@@ -45,6 +47,7 @@ class ConversationCompiler {
     this.releaseIntelligence = const ReleaseIntelligence(),
     this.enoughIntelligence = const EnoughIntelligence(),
     this.neutralEntryIntelligence = const NeutralEntryIntelligence(),
+    this.repairIntelligence = const RepairIntelligence(),
     this.languageStyle = LanguageStyle.instance,
   });
 
@@ -54,6 +57,7 @@ class ConversationCompiler {
   final ReleaseIntelligence releaseIntelligence;
   final EnoughIntelligence enoughIntelligence;
   final NeutralEntryIntelligence neutralEntryIntelligence;
+  final RepairIntelligence repairIntelligence;
   final LanguageStyle languageStyle;
 
   static const String expectedConstitutionVersion =
@@ -110,6 +114,7 @@ class ConversationCompiler {
       shapingNote: stageF.shapingNote,
       groundingMaterialization: stageF.groundingMaterialization,
       overlay: overlay,
+      expressionMode: package.expressionMode,
     );
   }
 
@@ -119,12 +124,30 @@ class ConversationCompiler {
   ) {
     switch (stage.stage) {
       case BlueprintStage.receipt:
+        if (package.expressionMode == ConversationExpressionMode.repair) {
+          final slice = repairIntelligence.compile(
+            stage: stage,
+            conversationGrounding: package.conversationGrounding,
+            repetitionProtest: package.repairRepetitionProtest,
+          );
+          return _StageOverlay(
+            aim: slice.aim,
+            sealedWhatSignature: slice.sealedWhatSignature,
+            forbiddenMoves: slice.forbiddenMoves,
+            responseLength: slice.responseLength,
+            realizationDirective: slice.realizationDirective,
+            userContent: slice.userContent,
+            systemAppendix: slice.systemAppendix,
+          );
+        }
         final slice = receiptIntelligence.compile(
           stage: stage,
           conversationGrounding: package.conversationGrounding,
           thinkingFunctionHypothesis:
               package.understanding?.thinkingFunctionHypothesis,
           priorAdmittedExpression: package.priorAdmittedExpression,
+          observePurity: package.expressionMode ==
+              ConversationExpressionMode.observePurity,
         );
         return _StageOverlay(
           aim: slice.aim,
@@ -205,6 +228,8 @@ class ConversationCompiler {
         final slice = neutralEntryIntelligence.compile(
           stage: stage,
           conversationGrounding: package.conversationGrounding,
+          lightChatMode:
+              package.expressionMode == ConversationExpressionMode.lightChat,
         );
         return _StageOverlay(
           aim: slice.aim,
@@ -329,6 +354,8 @@ class ConversationCompiler {
     required String shapingNote,
     String? groundingMaterialization,
     _StageOverlay? overlay,
+    ConversationExpressionMode expressionMode =
+        ConversationExpressionMode.standard,
   }) {
     final aim = overlay?.aim ?? stage.aim;
     final signature =
@@ -398,6 +425,7 @@ class ConversationCompiler {
       stageAppendix: overlay?.systemAppendix,
       languageBinding: languageBinding,
       languageLock: languageLock,
+      expressionMode: expressionMode,
     );
 
     if (systemContent.trim().isEmpty || userContent.trim().isEmpty) {
@@ -515,6 +543,8 @@ class ConversationCompiler {
     required String languageBinding,
     String? stageAppendix,
     String? languageLock,
+    ConversationExpressionMode expressionMode =
+        ConversationExpressionMode.standard,
   }) {
     final forbidden = forbiddenMoves.map((m) => '- $m').join('\n');
     final laws = constitutional.map((l) => '- $l').join('\n');
@@ -535,6 +565,7 @@ class ConversationCompiler {
         : '\n${groundingMaterialization.trim()}\n';
     final lockBlock =
         languageLock == null ? '' : '${languageLock.trim()}\n\n';
+    final questionRule = _questionRuleFor(expressionMode);
 
     return '''
 ${lockBlock}You are a transport HOW adapter. Realize only the sealed speakable WHAT.
@@ -547,7 +578,7 @@ Never open Receipt with "It sounds like" / "It seems like".
 Keep their night-objects (tomorrow, the list, the person). Never paste
 their clause with I/you swapped.
 Other stages stay to one short sentence.
-Questions are forbidden unless the stage explicitly allows them.
+$questionRule
 Never ask more than one question.
 No multi-message bundles. Prefer short spoken lines that land the felt truth.
 Do not paste canned Gold library lines.
@@ -604,6 +635,19 @@ $antiRules
 
 $shapingNote
 $groundingBlock''';
+  }
+
+  String _questionRuleFor(ConversationExpressionMode expressionMode) {
+    switch (expressionMode) {
+      case ConversationExpressionMode.lightChat:
+        return 'Light chat: exactly one natural follow-up question is allowed.';
+      case ConversationExpressionMode.repair:
+        return 'Repair: one short clarifying question is allowed after conceding the misread.';
+      case ConversationExpressionMode.observePurity:
+        return 'Observe purity: questions are forbidden. No reframe on this turn.';
+      case ConversationExpressionMode.standard:
+        return 'Questions are forbidden unless the stage explicitly allows them.';
+    }
   }
 
   bool _sameStrings(List<String> actual, List<String> expected) {

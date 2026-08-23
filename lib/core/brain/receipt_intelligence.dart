@@ -52,13 +52,16 @@ class ReceiptIntelligence {
     ConversationGroundingBuffer? conversationGrounding,
     ThinkingFunctionHypothesis? thinkingFunctionHypothesis,
     PriorAdmittedExpression? priorAdmittedExpression,
+    bool observePurity = false,
   }) {
     assert(stage.stage == BlueprintStage.receipt);
 
     final currentTurn = _currentTurnGrounding(conversationGrounding);
-    final isLightTurn = currentTurn != null &&
+    final isLightTurn = !observePurity &&
+        currentTurn != null &&
         lightConversation.isLightConversation(currentTurn);
-    final supportedFunctional = !isLightTurn &&
+    final supportedFunctional = !observePurity &&
+        !isLightTurn &&
         ThinkingFunctionIntelligenceShaping.isSupportedOrStrong(
       thinkingFunctionHypothesis,
     );
@@ -66,26 +69,35 @@ class ReceiptIntelligence {
       ...stage.forbiddenMoves,
       ..._receiptIntelligenceForbidden,
       ...ReceiptRealizationContract.intelligenceForbiddenMoves(),
+      if (observePurity) ..._observePurityForbidden,
       if (isLightTurn) ..._lightConversationForbidden,
       if (supportedFunctional) ..._supportedFunctionalForbidden,
     ];
 
     return ReceiptCompileSlice(
-      aim: isLightTurn
-          ? _aimLight
-          : (supportedFunctional ? _aimSupportedFunctional : _aim),
-      sealedWhatSignature: isLightTurn
-          ? _sealedWhatSignatureLight
-          : (supportedFunctional
-              ? _sealedWhatSignatureSupportedFunctional
-              : _sealedWhatSignature),
+      aim: observePurity
+          ? _aimObservePurity
+          : (isLightTurn
+              ? _aimLight
+              : (supportedFunctional ? _aimSupportedFunctional : _aim)),
+      sealedWhatSignature: observePurity
+          ? _sealedWhatSignatureObservePurity
+          : (isLightTurn
+              ? _sealedWhatSignatureLight
+              : (supportedFunctional
+                  ? _sealedWhatSignatureSupportedFunctional
+                  : _sealedWhatSignature)),
       forbiddenMoves: forbidden,
-      responseLength: isLightTurn
-          ? _responseLengthLight
-          : (supportedFunctional
-              ? _responseLengthSupportedFunctional
-              : _responseLengthShort),
-      fsmDirective: isLightTurn ? _lightReceiptDirective : _fsmDirective,
+      responseLength: observePurity
+          ? _responseLengthObservePurity
+          : (isLightTurn
+              ? _responseLengthLight
+              : (supportedFunctional
+                  ? _responseLengthSupportedFunctional
+                  : _responseLengthShort)),
+      fsmDirective: observePurity
+          ? _observePurityDirective
+          : (isLightTurn ? _lightReceiptDirective : _fsmDirective),
       realizationDirective: _realizationDirective,
       userContent: _userContent(
         currentTurn: currentTurn,
@@ -93,6 +105,7 @@ class ReceiptIntelligence {
         supportedFunctional: supportedFunctional,
         priorAdmittedExpression: priorAdmittedExpression,
         isLightTurn: isLightTurn,
+        observePurity: observePurity,
       ),
       systemAppendix: _systemAppendix(
         currentTurn: currentTurn,
@@ -100,9 +113,37 @@ class ReceiptIntelligence {
         supportedFunctional: supportedFunctional,
         priorAdmittedExpression: priorAdmittedExpression,
         isLightTurn: isLightTurn,
+        observePurity: observePurity,
       ),
     );
   }
+
+  static const String _aimObservePurity =
+      'Mirror only what they actually said tonight in one natural line. '
+      'No reframe, no hypothesis, no invented psychology.';
+
+  static const String _sealedWhatSignatureObservePurity =
+      'validation / Receipt — pure observe only. Reflect their words and '
+      'night-objects. No Belki/Sanki/aslında reframe. No Permission or Release.';
+
+  static const String _responseLengthObservePurity =
+      'Exactly one short sentence, maximum 22 words. Plain, natural, direct.';
+
+  static const String _observePurityDirective =
+      'Observe Purity (first Receipt only): receive what they said in fresh '
+      'wording. Keep their night-objects (tomorrow, the person, the meeting). '
+      'Never use Belki/Sanki/aslında/perhaps/maybe. No functional hypothesis. '
+      'No Permission or Release language. One sentence only. No question.';
+
+  static const List<String> _observePurityForbidden = [
+    'Belki / Sanki / aslında / perhaps / maybe reframe or hypothesis',
+    'Functional recognition hinge on first Receipt',
+    'Permission obligation-ease: gerekmiyor, zorunda değilsin, solve tonight',
+    'Release put-down: bırak, geceye bırak, let go, let it rest',
+    'Inventing psychology they did not say',
+    'Questions of any kind',
+    'Second hinge sentence or soft reframe',
+  ];
 
   static const String _aimLight =
       'Receive positive, mundane, playful, or chat-only warmth with one brief '
@@ -255,13 +296,18 @@ class ReceiptIntelligence {
     required bool supportedFunctional,
     PriorAdmittedExpression? priorAdmittedExpression,
     required bool isLightTurn,
+    required bool observePurity,
   }) {
     final buffer = StringBuffer()
       ..writeln(_realizationDirective)
       ..writeln()
-      ..writeln(isLightTurn ? _lightReceiptDirective : _fsmDirective);
+      ..writeln(
+        observePurity
+            ? _observePurityDirective
+            : (isLightTurn ? _lightReceiptDirective : _fsmDirective),
+      );
 
-    if (!isLightTurn) {
+    if (!isLightTurn && !observePurity) {
       buffer
         ..writeln()
         ..writeln(
@@ -385,7 +431,19 @@ class ReceiptIntelligence {
     required bool supportedFunctional,
     PriorAdmittedExpression? priorAdmittedExpression,
     required bool isLightTurn,
+    required bool observePurity,
   }) {
+    if (observePurity) {
+      return '''
+Receipt Intelligence v$version (Observe Purity — first Receipt):
+$_observePurityDirective
+No-reframe rule: no Belki/Sanki/aslında/perhaps/maybe on this turn.
+No-invention rule: stay inside their actual words and night-objects.
+No-question rule: questions are forbidden.
+Drift rule: do not Name, grant Permission, invite Release, or close.
+''';
+    }
+
     if (isLightTurn) {
       return '''
 Receipt Intelligence v$version (light turn):

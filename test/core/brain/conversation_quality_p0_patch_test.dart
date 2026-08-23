@@ -1,4 +1,5 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:slowave/core/brain/conversation_expression_mode.dart';
 import 'package:slowave/core/brain/conversation_blueprint_binding.dart';
 import 'package:slowave/core/brain/conversation_compiler.dart';
 import 'package:slowave/core/brain/conversation_grounding_buffer.dart';
@@ -173,7 +174,7 @@ void main() {
       );
     });
 
-    test('protest recalibrates via Permission, not Receipt restamp', () {
+    test('protest recalibrates via repair, not Permission restamp', () {
       final mind = HcosLiveEntry.emptyMindModel();
       var session = NightSession(
         workingMind: WorkingMindView(model: mind),
@@ -211,11 +212,13 @@ void main() {
         understanding: u2,
       );
       expect(intent.matches(protest), isFalse);
-      // P1-2: leave failed Receipt pattern via Permission recalibration.
-      expect(p2.phase, ConversationPhase.permission);
+      // Slice 1: genuine repair on validation — not Permission ease.
+      expect(p2.phase, ConversationPhase.validation);
+      expect(p2.expressionMode, ConversationExpressionMode.repair);
+      expect(p2.repairRepetitionProtest, isTrue);
+      expect(p2.phase, isNot(ConversationPhase.permission));
       expect(p2.phase, isNot(ConversationPhase.release));
       expect(p2.phase, isNot(ConversationPhase.audio));
-      expect(p2.phase, isNot(ConversationPhase.validation));
     });
   });
 

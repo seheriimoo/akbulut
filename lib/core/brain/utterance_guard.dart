@@ -1,4 +1,5 @@
 import 'conversation_dna.dart';
+import 'conversation_expression_mode.dart';
 import 'conversation_phase.dart';
 import 'conversation_utterance.dart';
 import 'permission_realization_contract.dart';
@@ -73,6 +74,8 @@ class UtteranceGuard {
     required ConversationPhase what,
     ConversationDNA dna = ConversationDNA.instance,
     String? userUtterance,
+    ConversationExpressionMode expressionMode =
+        ConversationExpressionMode.standard,
   }) {
     final text = utterance.text.trim();
 
@@ -91,7 +94,7 @@ class UtteranceGuard {
 
     // Output Contract: one speech artifact (no multi-message bundles).
     // Receipt/Naming may use two short sentences for soft perspective.
-    if (!_singleSpeechOutcome(normalized, what)) {
+    if (!_singleSpeechOutcome(normalized, what, expressionMode: expressionMode)) {
       return null;
     }
 
@@ -107,19 +110,47 @@ class UtteranceGuard {
     }
 
     // Stay inside the decided WHAT (DNA principle 9 / anti-rule rewrite).
-    if (!_faithfulToWhat(normalized, what)) {
+    if (!_faithfulToWhat(normalized, what, expressionMode: expressionMode)) {
+      return null;
+    }
+
+    // Observe purity: reject early reframe stems on first Receipt.
+    if (what == ConversationPhase.validation &&
+        expressionMode == ConversationExpressionMode.observePurity &&
+        _observePurityReframeDrift(normalized)) {
+      return null;
+    }
+
+    // Repair: one question max.
+    if (what == ConversationPhase.validation &&
+        expressionMode == ConversationExpressionMode.repair &&
+        _tooManyQuestions(normalized)) {
+      return null;
+    }
+
+    // Light chat: one question max.
+    if (what == ConversationPhase.neutralEntry &&
+        expressionMode == ConversationExpressionMode.lightChat &&
+        _tooManyQuestions(normalized)) {
       return null;
     }
 
     // Receipt: do not admit invented tomorrow / racing when the person
     // did not name those objects this turn.
+    // Receipt invented-agenda check does not apply to repair turns.
     if (what == ConversationPhase.validation &&
+        expressionMode != ConversationExpressionMode.repair &&
         _receiptInventedAgenda(normalized, userUtterance)) {
       return null;
     }
 
     // Bound Conversation DNA: every anti-rule and principle must hold.
-    if (!_satisfiesDna(text: normalized, what: what, dna: dna)) {
+    if (!_satisfiesDna(
+      text: normalized,
+      what: what,
+      dna: dna,
+      expressionMode: expressionMode,
+    )) {
       return null;
     }
 
@@ -127,23 +158,29 @@ class UtteranceGuard {
     return ConversationUtterance(text: normalized);
   }
 
-  bool _singleSpeechOutcome(String text, ConversationPhase what) {
+  bool _singleSpeechOutcome(
+    String text,
+    ConversationPhase what, {
+    ConversationExpressionMode expressionMode =
+        ConversationExpressionMode.standard,
+  }) {
     if (text.contains('\n')) {
       return false;
     }
-    // Receipt / Naming: Golden Conversations V2 short-line breath (up to 5).
-    // Enough: up to 2 short lines for soft rest-audio handoff.
-    // Release: up to 2 short lines (put-down + night-hold breath).
-    // Other stages: one sentence keeps restward moves tight.
     final sentenceEnds = RegExp(r'[.!?]+').allMatches(text).length;
     final int maxEnds;
     if (what == ConversationPhase.validation ||
         what == ConversationPhase.naming) {
-      maxEnds = 3;
+      maxEnds = expressionMode == ConversationExpressionMode.observePurity
+          ? 1
+          : 3;
     } else if (what == ConversationPhase.continuity ||
         what == ConversationPhase.release) {
       maxEnds = 3;
     } else if (what == ConversationPhase.permission) {
+      maxEnds = 2;
+    } else if (what == ConversationPhase.neutralEntry &&
+        expressionMode == ConversationExpressionMode.lightChat) {
       maxEnds = 2;
     } else {
       maxEnds = 1;
@@ -155,7 +192,12 @@ class UtteranceGuard {
   ///
   /// Allows natural wording variation inside the sealed WHAT.
   /// Rejects non-speech emission and semantic drift into another agenda/phase.
-  bool _faithfulToWhat(String text, ConversationPhase what) {
+  bool _faithfulToWhat(
+    String text,
+    ConversationPhase what, {
+    ConversationExpressionMode expressionMode =
+        ConversationExpressionMode.standard,
+  }) {
     switch (what) {
       case ConversationPhase.audio:
       case ConversationPhase.silence:
@@ -171,7 +213,7 @@ class UtteranceGuard {
 
     final lower = _normalizeForMatch(text);
 
-    if (!_matchesPhase(lower, what)) {
+    if (!_matchesPhase(lower, what, expressionMode: expressionMode)) {
       return false;
     }
 
@@ -301,9 +343,17 @@ class UtteranceGuard {
   }
 
   /// Semantic signature of a speakable protocol phase.
-  bool _matchesPhase(String lower, ConversationPhase phase) {
+  bool _matchesPhase(
+    String lower,
+    ConversationPhase phase, {
+    ConversationExpressionMode expressionMode =
+        ConversationExpressionMode.standard,
+  }) {
     switch (phase) {
       case ConversationPhase.validation:
+        if (expressionMode == ConversationExpressionMode.repair) {
+          return _matchesRepairContract(lower);
+        }
         return _matchesReceiptContract(lower);
       case ConversationPhase.naming:
         return _matchesNamingContract(lower);
@@ -358,6 +408,9 @@ class UtteranceGuard {
           'daha fazlası gerekmiyor',
         ]);
       case ConversationPhase.neutralEntry:
+        if (expressionMode == ConversationExpressionMode.lightChat) {
+          return _matchesLightChatContract(lower);
+        }
         return _matchesNeutralEntryContract(lower);
       case ConversationPhase.audio:
       case ConversationPhase.silence:
@@ -444,6 +497,122 @@ class UtteranceGuard {
       'holding on',
       'nothing more',
       "that's enough",
+    ]);
+  }
+
+  bool _observePurityReframeDrift(String text) {
+    final lower = _normalizeForMatch(text);
+    return _containsAny(lower, const [
+      'belki',
+      'sanki',
+      'aslında',
+      'aslinda',
+      'perhaps',
+      'maybe',
+      'almost as if',
+      'almost like',
+      'part of your mind',
+    ]);
+  }
+
+  bool _tooManyQuestions(String text) {
+    return '?'.allMatches(text).length > 1;
+  }
+
+  /// Guard Repair Contract V1 (Slice 1).
+  bool _matchesRepairContract(String lower) {
+    if (_repairUnsafe(lower)) return false;
+    return _containsAny(lower, const [
+      'yanlis okudum',
+      'yanlış okudum',
+      'orayi yanlis',
+      'orayı yanlış',
+      'read that wrong',
+      'read it wrong',
+      'misread',
+      'misunderstood',
+      'haklisin',
+      'haklısın',
+      "you're right",
+      'you are right',
+      'kept saying',
+      'same thing',
+      'ayni yere',
+      'aynı yere',
+      'baska yerden',
+      'başka yerden',
+    ]);
+  }
+
+  bool _repairUnsafe(String lower) {
+    return _containsAny(lower, const [
+      'gerekmiyor',
+      'zorunda degilsin',
+      'zorunda değilsin',
+      "don't have to",
+      'do not have to',
+      'let go',
+      'let it rest',
+      'let this rest',
+      'bırak',
+      'birak',
+      'geceye bırak',
+      'geceye birak',
+      'bu kadar yeter',
+      'nothing more',
+    ]);
+  }
+
+  /// Guard Light Chat Contract V1 (Slice 1).
+  bool _matchesLightChatContract(String lower) {
+    if (_lightChatUnsafe(lower)) return false;
+    return lower.trim().isNotEmpty;
+  }
+
+  bool _lightChatUnsafe(String lower) {
+    return _containsAny(lower, const [
+      'how are you feeling',
+      'stillness',
+      'being present',
+      'mindful',
+      'inner peace',
+      'heavy',
+      'heaviness',
+      'dread',
+      'lonely',
+      'loneliness',
+      'ache',
+      'anxious',
+      'anxiety',
+      'overwhelm',
+      'insomnia',
+      "can't sleep",
+      'cannot sleep',
+      'go to sleep',
+      'have you tried',
+      'you should',
+      'try this',
+      'that sounds',
+      'it sounds',
+      'makes sense',
+      'do not have to',
+      "don't have to",
+      'gerekmiyor',
+      'dusunmene gerek',
+      'düşünmene gerek',
+      'let it rest',
+      'let this rest',
+      'set this down',
+      'set it down',
+      'holding on',
+      'nothing more',
+      "that's enough",
+      'belki',
+      'sanki',
+      'zor geliyor',
+      'ağır geliyor',
+      'agir geliyor',
+      'yük',
     ]);
   }
 
@@ -1037,6 +1206,8 @@ class UtteranceGuard {
     required String text,
     required ConversationPhase what,
     required ConversationDNA dna,
+    ConversationExpressionMode expressionMode =
+        ConversationExpressionMode.standard,
   }) {
     // Only the bound canonical DNA may authorize emission.
     if (!identical(dna, ConversationDNA.instance)) {
@@ -1046,13 +1217,23 @@ class UtteranceGuard {
     final lower = _normalizeForMatch(text);
 
     for (final antiRule in ConversationDNA.antiRules) {
-      if (!_antiRuleClear(lower: lower, what: what, antiRule: antiRule)) {
+      if (!_antiRuleClear(
+        lower: lower,
+        what: what,
+        antiRule: antiRule,
+        expressionMode: expressionMode,
+      )) {
         return false;
       }
     }
 
     for (final principle in ConversationDNA.principles) {
-      if (!_principleClear(lower: lower, text: text, principle: principle)) {
+      if (!_principleClear(
+        lower: lower,
+        text: text,
+        principle: principle,
+        expressionMode: expressionMode,
+      )) {
         return false;
       }
     }
@@ -1064,6 +1245,8 @@ class UtteranceGuard {
     required String lower,
     required ConversationPhase what,
     required ConversationDNAAntiRule antiRule,
+    ConversationExpressionMode expressionMode =
+        ConversationExpressionMode.standard,
   }) {
     switch (antiRule.name) {
       case 'Multiple insights in one turn':
@@ -1091,6 +1274,23 @@ class UtteranceGuard {
           'based on your data',
         ]);
       case 'Engagement hooks or follow-up bait':
+        if (expressionMode == ConversationExpressionMode.lightChat ||
+            expressionMode == ConversationExpressionMode.repair) {
+          if (_tooManyQuestions(lower)) return false;
+          return !_containsAny(lower, const [
+            'tell me more',
+            'what else',
+            'let’s keep talking',
+            "let's keep talking",
+            'want to keep going',
+            "let's keep going",
+            'lets keep going',
+            'keep going?',
+            'keep talking',
+            'want to talk',
+            'share more',
+          ]);
+        }
         return !_containsAny(lower, const [
           '?',
           'tell me more',
@@ -1130,7 +1330,7 @@ class UtteranceGuard {
       case 'Rewriting the decided conversational move':
         // Enforced by the WHAT faithfulness gate before DNA checks.
         // Re-assert against the same sealed WHAT; never rewrite text.
-        return _faithfulToWhat(lower, what);
+        return _faithfulToWhat(lower, what, expressionMode: expressionMode);
       default:
         // Unknown anti-rule on a non-canonical DNA binding cannot pass.
         return false;
@@ -1141,6 +1341,8 @@ class UtteranceGuard {
     required String lower,
     required String text,
     required ConversationDNAPrinciple principle,
+    ConversationExpressionMode expressionMode =
+        ConversationExpressionMode.standard,
   }) {
     switch (principle.id) {
       case 1: // Subtract, do not add
@@ -1191,6 +1393,18 @@ class UtteranceGuard {
           'from your data',
         ]);
       case 6: // Relief over engagement
+        if (expressionMode == ConversationExpressionMode.lightChat ||
+            expressionMode == ConversationExpressionMode.repair) {
+          if (_tooManyQuestions(text)) return false;
+          return !_containsAny(lower, const [
+            'tell me more',
+            'what else',
+            'let’s keep talking',
+            "let's keep talking",
+            'keep talking',
+            'continue this',
+          ]);
+        }
         return !_containsAny(lower, const [
           '?',
           'tell me more',

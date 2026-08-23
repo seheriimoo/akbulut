@@ -64,6 +64,8 @@ class PromptArchitecture {
       conversationGrounding: conversationGrounding,
       priorAdmittedExpression: priorAdmittedExpression,
       exitDecision: exitDecision,
+      expressionMode: conversationDecision.expressionMode,
+      repairRepetitionProtest: conversationDecision.repairRepetitionProtest,
       dna: ConversationDNA.instance,
     );
   }

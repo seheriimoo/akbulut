@@ -94,6 +94,7 @@ class ConversationEngine {
       utterance: utterance,
       what: package.what,
       userUtterance: userUtterance,
+      expressionMode: package.expressionMode,
     );
     if (admitted != null) return admitted;
 
@@ -106,6 +107,7 @@ class ConversationEngine {
     final fallback = GuardSafeFallback.forPhase(
       what: package.what,
       userUtterance: userUtterance,
+      expressionMode: package.expressionMode,
     );
     if (fallback == null) return null;
 
@@ -113,6 +115,7 @@ class ConversationEngine {
       utterance: fallback,
       what: package.what,
       userUtterance: userUtterance,
+      expressionMode: package.expressionMode,
     );
     if (fallbackAdmitted == null) {
       debugPrint(

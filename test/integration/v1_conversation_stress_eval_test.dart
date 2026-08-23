@@ -316,18 +316,17 @@ void _assertR13(_NightTrace night) {
     final turn = night.turns[i];
     expect(
       turn.phase,
-      ConversationPhase.validation,
-      reason: '${night.id} T${i + 1} protest must stay Receipt',
+      ConversationPhase.permission,
+      reason: '${night.id} T${i + 1} protest recalibrates to Permission (P1-2)',
     );
     expect(
       turn.phase,
       isNot(anyOf(
-        ConversationPhase.permission,
         ConversationPhase.release,
         ConversationPhase.audio,
         ConversationPhase.continuity,
       )),
-      reason: '${night.id} protest must not climb or close',
+      reason: '${night.id} protest must not climb to release or close',
     );
   }
   _assertNoAudio(night);

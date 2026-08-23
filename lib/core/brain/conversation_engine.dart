@@ -4,10 +4,13 @@ import 'closure_fallback_builder.dart';
 import 'conversation_decision.dart';
 import 'conversation_expression_mode.dart';
 import 'conversation_grounding_buffer.dart';
+import 'conversation_phase.dart';
 import 'conversation_utterance.dart';
 import 'exit_decision.dart';
 import 'guard_safe_fallback.dart';
 import 'language_model_client.dart';
+import 'llm_invocation_package.dart';
+import 'mode_safe_terminal_fallback.dart';
 import 'night_session.dart';
 import 'prior_admitted_expression.dart';
 import 'prompt_architecture.dart';
@@ -19,15 +22,6 @@ import 'working_mind_view.dart';
 /// ConversationEngine
 ///
 /// Expression stage only. Renders language after upstream decisions.
-///
-/// Required inputs: ConversationDecision, ExitDecision.
-/// Optional inputs: ValidatedUnderstanding, WorkingMindView,
-/// ConversationGroundingBuffer, livedExpression (shaping only).
-///
-/// Output: one ConversationUtterance, or no conversational language.
-///
-/// Owns no release, protocol, exit, or memory decisions.
-/// Does not own or invent conversation grounding.
 class ConversationEngine {
   final PromptArchitecture promptArchitecture;
 
@@ -41,18 +35,6 @@ class ConversationEngine {
     this.utteranceGuard = const UtteranceGuard(),
   });
 
-  /// Emits exactly one speech outcome for the turn:
-  /// a single [ConversationUtterance], or `null` for no conversational language.
-  ///
-  /// Expression path:
-  /// PromptArchitecture → (abstain | LanguageModelClient
-  ///   [ConversationCompiler → VendorProvider]) → UtteranceGuard.
-  ///
-  /// On [LanguageModelClient] / [VendorError] failure, fails closed to `null`.
-  /// Does not reopen WHAT, Exit, Release, or protocol.
-  ///
-  /// After [UtteranceGuard] rejection: never surface the rejected text; emit a
-  /// deterministic [GuardSafeFallback] only if that fallback itself admits.
   Future<ConversationUtterance?> generate({
     required ConversationDecision conversationDecision,
     required ExitDecision exitDecision,
@@ -63,6 +45,9 @@ class ConversationEngine {
     PriorAdmittedExpression? priorAdmittedExpression,
     NightSession? nightSession,
   }) async {
+    final userUtterance =
+        conversationGrounding?.currentUserUtterance ?? livedExpression;
+
     final package = promptArchitecture.package(
       conversationDecision: conversationDecision,
       exitDecision: exitDecision,
@@ -75,7 +60,12 @@ class ConversationEngine {
 
     if (package == null) {
       debugPrint('Nocta expression abstain: no LLM package');
-      return null;
+      return _zeroSilenceTerminal(
+        conversationDecision: conversationDecision,
+        exitDecision: exitDecision,
+        userUtterance: userUtterance,
+        reason: 'package abstain',
+      );
     }
 
     final ConversationUtterance utterance;
@@ -85,14 +75,23 @@ class ConversationEngine {
       debugPrint(
         'Nocta expression vendor fail: ${error.kind.name} ${error.message}',
       );
-      return null;
+      return _zeroSilenceTerminal(
+        conversationDecision: conversationDecision,
+        exitDecision: exitDecision,
+        userUtterance: userUtterance,
+        reason: 'vendor fail',
+        package: package,
+      );
     } on StateError catch (error) {
       debugPrint('Nocta expression compile/config fail: $error');
-      return null;
+      return _zeroSilenceTerminal(
+        conversationDecision: conversationDecision,
+        exitDecision: exitDecision,
+        userUtterance: userUtterance,
+        reason: 'compile fail',
+        package: package,
+      );
     }
-
-    final userUtterance =
-        package.conversationGrounding?.currentUserUtterance ?? livedExpression;
 
     final admitted = utteranceGuard.allow(
       utterance: utterance,
@@ -107,7 +106,6 @@ class ConversationEngine {
       'text="${utterance.text}"',
     );
 
-    // Guard-safe fallback: never show rejected model text; never LLM rewrite.
     final fallback = GuardSafeFallback.forPhase(
       what: package.what,
       userUtterance: userUtterance,
@@ -131,7 +129,14 @@ class ConversationEngine {
         );
         if (closureAdmitted != null) return closureAdmitted;
       }
-      return null;
+      return _admitTerminalFallback(
+        what: package.what,
+        expressionMode: package.expressionMode,
+        narrowRefinementAfterPartial: package.narrowRefinementAfterPartial,
+        userUtterance: userUtterance,
+        priorRejectedText: utterance.text,
+        reason: 'primary fallback null',
+      );
     }
 
     final fallbackAdmitted = utteranceGuard.allow(
@@ -145,11 +150,102 @@ class ConversationEngine {
         'Nocta expression Guard fallback also rejected WHAT='
         '${package.what.name} text="${fallback.text}"',
       );
-      return null;
+      return _admitTerminalFallback(
+        what: package.what,
+        expressionMode: package.expressionMode,
+        narrowRefinementAfterPartial: package.narrowRefinementAfterPartial,
+        userUtterance: userUtterance,
+        priorRejectedText: fallback.text,
+        reason: 'fallback double-reject',
+      );
     }
     debugPrint(
       'Nocta expression Guard fallback admitted WHAT=${package.what.name}',
     );
     return fallbackAdmitted;
+  }
+
+  ConversationUtterance? _zeroSilenceTerminal({
+    required ConversationDecision conversationDecision,
+    required ExitDecision exitDecision,
+    required String? userUtterance,
+    required String reason,
+    LlmInvocationPackage? package,
+  }) {
+    if (!_requiresZeroSilence(conversationDecision, exitDecision)) {
+      return null;
+    }
+    return _admitTerminalFallback(
+      what: package?.what ?? conversationDecision.phase,
+      expressionMode:
+          package?.expressionMode ?? conversationDecision.expressionMode,
+      narrowRefinementAfterPartial: package?.narrowRefinementAfterPartial ??
+          conversationDecision.narrowRefinementAfterPartial,
+      userUtterance: userUtterance,
+      priorRejectedText: '',
+      reason: reason,
+    );
+  }
+
+  bool _requiresZeroSilence(
+    ConversationDecision conversationDecision,
+    ExitDecision exitDecision,
+  ) {
+    if (!conversationDecision.shouldSpeak) return false;
+    if (exitDecision == ExitDecision.silence) return false;
+    switch (conversationDecision.phase) {
+      case ConversationPhase.audio:
+      case ConversationPhase.silence:
+        return false;
+      case ConversationPhase.validation:
+      case ConversationPhase.naming:
+      case ConversationPhase.permission:
+      case ConversationPhase.release:
+      case ConversationPhase.continuity:
+      case ConversationPhase.neutralEntry:
+        return true;
+    }
+  }
+
+  ConversationUtterance? _admitTerminalFallback({
+    required ConversationPhase what,
+    required ConversationExpressionMode expressionMode,
+    required bool narrowRefinementAfterPartial,
+    required String? userUtterance,
+    required String priorRejectedText,
+    required String reason,
+  }) {
+    final terminal = ModeSafeTerminalFallback.forExpression(
+      what: what,
+      expressionMode: expressionMode,
+      userUtterance: userUtterance,
+      narrowRefinementAfterPartial: narrowRefinementAfterPartial,
+    );
+    if (terminal == null) {
+      debugPrint(
+        'Nocta expression terminal abstain WHAT=${what.name} reason=$reason',
+      );
+      return null;
+    }
+
+    final admitted = utteranceGuard.allow(
+      utterance: terminal,
+      what: what,
+      userUtterance: userUtterance,
+      expressionMode: expressionMode,
+    );
+    if (admitted == null) {
+      debugPrint(
+        'Nocta expression CRITICAL terminal rejected WHAT=${what.name} '
+        'mode=${expressionMode.name} text="${terminal.text}" '
+        'reason=$reason prior="$priorRejectedText"',
+      );
+      return null;
+    }
+    debugPrint(
+      'Nocta expression terminal fallback admitted WHAT=${what.name} '
+      'mode=${expressionMode.name} reason=$reason',
+    );
+    return admitted;
   }
 }

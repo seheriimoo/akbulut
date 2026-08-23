@@ -393,6 +393,10 @@ class UtteranceGuard {
     "when you're ready",
     'when you are ready',
     'take your time',
+    // Turkish Neutral Entry parity (greeting ack only — not a safety loosen).
+    'merhaba',
+    'hazır olduğunda',
+    'hazir oldugunda',
   ];
 
   bool _neutralEntryUnsafe(String lower) {

@@ -44,16 +44,17 @@ void main() {
         ),
       );
 
-      expect(
-        await engine.generate(
-          conversationDecision: const ConversationDecision(
-            phase: ConversationPhase.validation,
-            shouldSpeak: true,
-          ),
-          exitDecision: ExitDecision.continueConversation,
+      final spoken = await engine.generate(
+        conversationDecision: const ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
         ),
-        isNull,
+        exitDecision: ExitDecision.continueConversation,
+        livedExpression: 'I keep thinking.',
       );
+      // P1-1: Guard-safe fallback may speak; rejected clinical text must not.
+      expect(spoken, isNotNull);
+      expect(spoken!.text.toLowerCase(), isNot(contains('therapist')));
     });
 
     test('sleep-command language cannot leave Conversation layer', () async {
@@ -63,16 +64,16 @@ void main() {
         ),
       );
 
-      expect(
-        await engine.generate(
-          conversationDecision: const ConversationDecision(
-            phase: ConversationPhase.validation,
-            shouldSpeak: true,
-          ),
-          exitDecision: ExitDecision.continueConversation,
+      final spoken = await engine.generate(
+        conversationDecision: const ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
         ),
-        isNull,
+        exitDecision: ExitDecision.continueConversation,
+        livedExpression: 'I am still awake.',
       );
+      expect(spoken, isNotNull);
+      expect(spoken!.text.toLowerCase(), isNot(contains('should sleep')));
     });
 
     test('faithful placeholder language can leave Conversation layer', () async {

@@ -197,7 +197,7 @@ const List<V1ScenarioFixture> v1ScenarioFixtures = [
   ),
   V1ScenarioFixture(
     id: 'S20',
-    title: 'Guard/null — no fabricated filler',
+    title: 'Guard reject — safe fallback, never rejected text',
     userTurns: [
       'I keep replaying everything for tomorrow.',
     ],

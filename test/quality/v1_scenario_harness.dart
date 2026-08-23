@@ -182,20 +182,26 @@ class V1ScenarioHarness {
           }
         }
 
-        // Null / Guard reject: no fabricated utterance text.
+        // Null / Guard reject: rejected vendor text must never surface.
         final utterance = result.utterance;
         if (utterance != null) {
           if (utterance.text.trim().isEmpty) {
             fail('turn $turnIndex: empty utterance fabricated');
           }
           seenAssistantTexts.add(utterance.text);
+          if (scenario.forceGuardReject &&
+              capture.lastCompletedText != null &&
+              utterance.text.trim() == capture.lastCompletedText!.trim()) {
+            fail(
+              'turn $turnIndex: rejected vendor text surfaced after Guard',
+            );
+          }
         } else if (scenario.forceGuardReject &&
             exit == ExitDecision.continueConversation) {
-          // Expected null after Guard reject — must not invent filler later.
-          if (capture.lastCompletedText != null &&
-              utterance == null) {
-            // Vendor produced a candidate; Guard rejected → null is correct.
-          }
+          fail(
+            'turn $turnIndex: Guard reject left silence — expected safe '
+            'fallback',
+          );
         }
 
         // Non-speech authorized paths may legally have null utterance.
@@ -226,10 +232,21 @@ class V1ScenarioHarness {
         fail('compiler non-deterministic for identical package');
       }
 
-      // S20: must have null utterance (Guard reject) and no assistant text.
+      // S20: Guard reject → admitted fallback; never rejected vendor wording.
       if (scenario.forceGuardReject) {
-        if (seenAssistantTexts.isNotEmpty) {
-          fail('S20: fabricated/admitted utterance after Guard reject path');
+        if (seenAssistantTexts.isEmpty) {
+          fail('S20: silence after Guard reject — expected safe fallback');
+        }
+        final rejected = capture.lastCompletedText?.trim();
+        if (rejected != null &&
+            seenAssistantTexts.any((t) => t.trim() == rejected)) {
+          fail('S20: rejected vendor text was admitted');
+        }
+        if (rejected != null &&
+            seenAssistantTexts.any(
+              (t) => t.toLowerCase().contains('tip tonight'),
+            )) {
+          fail('S20: rejected tip language leaked into fallback');
         }
       }
     } catch (e, st) {

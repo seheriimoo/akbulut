@@ -7,6 +7,7 @@ import 'package:slowave/core/brain/belief_detector.dart';
 import 'package:slowave/core/brain/cognitive_orchestrator.dart';
 import 'package:slowave/core/brain/conversation_engine.dart';
 import 'package:slowave/core/brain/conversation_grounding_buffer.dart';
+import 'package:slowave/core/brain/conversation_phase.dart';
 import 'package:slowave/core/brain/conversation_policy.dart';
 import 'package:slowave/core/brain/emotional_pattern_detector.dart';
 import 'package:slowave/core/brain/exit_decision.dart';
@@ -19,6 +20,7 @@ import 'package:slowave/core/brain/need_detector.dart';
 import 'package:slowave/core/brain/openai_vendor_provider.dart';
 import 'package:slowave/core/brain/perception_engine.dart';
 import 'package:slowave/core/brain/preference_detector.dart';
+import 'package:slowave/core/brain/release_decision.dart';
 import 'package:slowave/core/brain/release_engine.dart';
 import 'package:slowave/core/brain/session_summarizer.dart';
 import 'package:slowave/core/brain/vendor_provider.dart';
@@ -128,13 +130,14 @@ void main() {
   };
 
   test('ROUTING 18 nights', () async {
-    final report = await _runNights(
+    final run = await _runNights(
       nights: nights,
       live: false,
       vendor: const FaithfulTestVendorProvider(),
     );
     // ignore: avoid_print
-    print(report);
+    print(run.report);
+    _assertTargetRoutingContracts(run.nights);
   });
 
   test('LIVE OpenAI 18 nights', () async {
@@ -152,18 +155,250 @@ void main() {
       reason: 'OPENAI_API_KEY via --dart-define-from-file=config/secrets.local.json',
     );
 
-    final report = await _runNights(
+    final run = await _runNights(
       nights: nights,
       live: true,
       vendor: OpenAIVendorProvider.fromEnv(),
     );
-    File('/tmp/nocta_v1_live_stress.txt').writeAsStringSync(report);
+    File('/tmp/nocta_v1_live_stress.txt').writeAsStringSync(run.report);
     // ignore: avoid_print
-    print(report);
+    print(run.report);
   }, timeout: const Timeout(Duration(seconds: 1200)));
 }
 
-Future<String> _runNights({
+class _TurnTrace {
+  const _TurnTrace({
+    required this.phase,
+    required this.readiness,
+    required this.exit,
+    required this.hasLoad,
+    required this.spoken,
+    required this.dropped,
+  });
+
+  final ConversationPhase phase;
+  final ReleaseReadiness readiness;
+  final ExitDecision exit;
+  final bool hasLoad;
+  final String? spoken;
+  final bool dropped;
+}
+
+class _NightTrace {
+  const _NightTrace({
+    required this.id,
+    required this.turns,
+    required this.audio,
+    required this.firstSystem,
+  });
+
+  final String id;
+  final List<_TurnTrace> turns;
+  final bool audio;
+  final String? firstSystem;
+}
+
+class _RoutingRun {
+  const _RoutingRun({required this.report, required this.nights});
+
+  final String report;
+  final List<_NightTrace> nights;
+}
+
+_NightTrace _night(List<_NightTrace> nights, String idPrefix) {
+  return nights.firstWhere(
+    (night) => night.id.startsWith(idPrefix),
+    orElse: () => throw StateError('missing night $idPrefix'),
+  );
+}
+
+void _assertTargetRoutingContracts(List<_NightTrace> nights) {
+  _assertR07(_night(nights, 'R07'));
+  _assertR08(_night(nights, 'R08'));
+  _assertR10(_night(nights, 'R10'));
+  _assertR12(_night(nights, 'R12'));
+  _assertR13(_night(nights, 'R13'));
+  _assertR14(_night(nights, 'R14'));
+  _assertR16(_night(nights, 'R16'));
+  _assertR05(_night(nights, 'R05'));
+  _assertR15(_night(nights, 'R15'));
+}
+
+void _assertHoldReceiptOpen(
+  _NightTrace night, {
+  required bool expectLoad,
+}) {
+  expect(night.turns, isNotEmpty, reason: '${night.id} ran no turns');
+  final t1 = night.turns.first;
+  expect(
+    t1.phase,
+    ConversationPhase.validation,
+    reason: '${night.id} T1 must be Receipt, not greeting/close',
+  );
+  expect(
+    t1.readiness,
+    ReleaseReadiness.hold,
+    reason: '${night.id} T1 must stay on hold',
+  );
+  expect(
+    t1.exit,
+    ExitDecision.continueConversation,
+    reason: '${night.id} T1 must not exit',
+  );
+  if (expectLoad) {
+    expect(t1.hasLoad, isTrue, reason: '${night.id} T1 must register load');
+  }
+}
+
+void _assertNoAudio(_NightTrace night) {
+  expect(night.audio, isFalse, reason: '${night.id} must not go to audio');
+  expect(
+    night.turns.any((turn) => turn.exit == ExitDecision.transitionToAudio),
+    isFalse,
+    reason: '${night.id} must not emit transitionToAudio',
+  );
+}
+
+void _assertTurkishLanguageLock(_NightTrace night) {
+  expect(night.firstSystem, isNotNull, reason: '${night.id} compiled no system');
+  expect(
+    night.firstSystem!.toLowerCase(),
+    contains('reply in turkish only'),
+    reason: '${night.id} must lock Turkish on a TR turn',
+  );
+}
+
+void _assertR07(_NightTrace night) {
+  _assertHoldReceiptOpen(night, expectLoad: true);
+  _assertNoAudio(night);
+  _assertTurkishLanguageLock(night);
+}
+
+void _assertR08(_NightTrace night) {
+  _assertHoldReceiptOpen(night, expectLoad: false);
+  _assertNoAudio(night);
+}
+
+void _assertR10(_NightTrace night) {
+  _assertHoldReceiptOpen(night, expectLoad: false);
+  _assertNoAudio(night);
+  _assertTurkishLanguageLock(night);
+  for (final turn in night.turns) {
+    final spoken = turn.spoken?.toLowerCase() ?? '';
+    expect(
+      spoken.contains('tomorrow'),
+      isFalse,
+      reason: '${night.id} must not invent tomorrow on thin turns',
+    );
+  }
+}
+
+void _assertR12(_NightTrace night) {
+  _assertHoldReceiptOpen(night, expectLoad: true);
+  _assertNoAudio(night);
+  expect(night.turns.length, greaterThanOrEqualTo(2), reason: '${night.id} T2 missing');
+  expect(
+    night.turns[1].phase,
+    ConversationPhase.naming,
+    reason: '${night.id} T2 must Name remaining load after Receipt',
+  );
+  expect(
+    night.turns[1].exit,
+    ExitDecision.continueConversation,
+    reason: '${night.id} topic change is not an exit',
+  );
+}
+
+void _assertR13(_NightTrace night) {
+  expect(night.turns.length, greaterThanOrEqualTo(3), reason: '${night.id} protest turns missing');
+  expect(night.turns.first.phase, ConversationPhase.validation);
+  for (var i = 1; i < night.turns.length; i++) {
+    final turn = night.turns[i];
+    expect(
+      turn.phase,
+      ConversationPhase.permission,
+      reason: '${night.id} T${i + 1} protest recalibrates to Permission (P1-2)',
+    );
+    expect(
+      turn.phase,
+      isNot(anyOf(
+        ConversationPhase.release,
+        ConversationPhase.audio,
+        ConversationPhase.continuity,
+      )),
+      reason: '${night.id} protest must not climb to release or close',
+    );
+  }
+  _assertNoAudio(night);
+}
+
+void _assertR14(_NightTrace night) {
+  expect(night.turns, hasLength(1));
+  expect(
+    night.turns.first.phase,
+    ConversationPhase.continuity,
+    reason: '${night.id} ASCII close must route Enough',
+  );
+  expect(
+    night.turns.first.exit,
+    ExitDecision.transitionToAudio,
+    reason: '${night.id} ASCII close must go to audio',
+  );
+  expect(night.audio, isTrue);
+}
+
+void _assertR16(_NightTrace night) {
+  _assertHoldReceiptOpen(night, expectLoad: true);
+  _assertNoAudio(night);
+  _assertTurkishLanguageLock(night);
+  expect(night.turns.length, greaterThanOrEqualTo(2));
+  expect(
+    night.turns[1].phase,
+    ConversationPhase.naming,
+    reason: '${night.id} T2 must Name remaining ASCII TR load',
+  );
+  expect(night.turns[1].readiness, ReleaseReadiness.hold);
+}
+
+void _assertR05(_NightTrace night) {
+  _assertHoldReceiptOpen(night, expectLoad: true);
+  _assertNoAudio(night);
+  expect(night.firstSystem, isNotNull);
+  expect(
+    night.firstSystem!.toLowerCase(),
+    contains('reply in english only'),
+    reason: '${night.id} must lock English on an EN turn',
+  );
+  expect(
+    night.turns.first.spoken,
+    isNotNull,
+    reason: '${night.id} English Receipt must still be admitted',
+  );
+  expect(night.turns.first.dropped, isFalse);
+  expect(night.turns.length, greaterThanOrEqualTo(2));
+  expect(
+    night.turns[1].phase,
+    ConversationPhase.naming,
+    reason: '${night.id} T2 Naming after Receipt must not regress',
+  );
+}
+
+void _assertR15(_NightTrace night) {
+  expect(night.turns, hasLength(1));
+  expect(
+    night.turns.first.phase,
+    ConversationPhase.continuity,
+    reason: '${night.id} sese gec must route Enough',
+  );
+  expect(
+    night.turns.first.exit,
+    ExitDecision.transitionToAudio,
+    reason: '${night.id} sese gec must go to audio',
+  );
+  expect(night.audio, isTrue);
+}
+
+Future<_RoutingRun> _runNights({
   required Map<String, List<String>> nights,
   required bool live,
   required VendorProvider vendor,
@@ -171,6 +406,7 @@ Future<String> _runNights({
   final report = StringBuffer()
     ..writeln(live ? '=== LIVE OPENAI STRESS ===' : '=== ROUTING STRESS ===')
     ..writeln();
+  final traces = <_NightTrace>[];
 
   for (final entry in nights.entries) {
     if (live) {
@@ -198,8 +434,10 @@ Future<String> _runNights({
     var session = HcosLiveEntry.openNightSession(mind);
     ConversationGroundingBuffer? grounding;
     final phases = <String>[];
+    final turns = <_TurnTrace>[];
     var drops = 0;
     var audio = false;
+    String? firstSystem;
 
     report.writeln('--- ${entry.key} live=$live ---');
 
@@ -234,6 +472,16 @@ Future<String> _runNights({
         audio = true;
       }
       phases.add(summaryBit);
+      turns.add(
+        _TurnTrace(
+          phase: result.conversationDecision.phase,
+          readiness: result.releaseDecision.readiness,
+          exit: result.exitDecision,
+          hasLoad: mental.isNotEmpty || emo.isNotEmpty,
+          spoken: spoken,
+          dropped: dropped,
+        ),
+      );
 
       report
         ..writeln('T${i + 1} USER: $message')
@@ -251,6 +499,7 @@ Future<String> _runNights({
         );
 
       if (i == 0 && capture.lastSystem != null) {
+        firstSystem = capture.lastSystem;
         final snip = capture.lastSystem!;
         report.writeln(
           '    SYS_SNIP: ${snip.substring(0, snip.length.clamp(0, 280))}',
@@ -263,6 +512,15 @@ Future<String> _runNights({
       }
     }
 
+    traces.add(
+      _NightTrace(
+        id: entry.key,
+        turns: turns,
+        audio: audio,
+        firstSystem: firstSystem,
+      ),
+    );
+
     report
       ..writeln(
         'SUMMARY phases=${phases.join(' > ')} audio=$audio drops=$drops '
@@ -272,7 +530,7 @@ Future<String> _runNights({
       ..writeln();
   }
 
-  return report.toString();
+  return _RoutingRun(report: report.toString(), nights: traces);
 }
 
 class _CapturingVendorProvider implements VendorProvider {

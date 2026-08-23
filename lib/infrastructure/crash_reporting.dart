@@ -34,8 +34,8 @@ class CrashReporting {
       return true;
     };
 
-    final dsn = AppConfig.sentryDsn;
-    if (dsn.isEmpty) {
+    // Skip upload for empty or placeholder DSN (REPLACE_WITH_…).
+    if (!AppConfig.hasSentryDsn) {
       _ready = false;
       await appRunner();
       return;
@@ -43,7 +43,7 @@ class CrashReporting {
 
     await SentryFlutter.init(
       (options) {
-        options.dsn = dsn;
+        options.dsn = AppConfig.sentryDsn;
         options.sendDefaultPii = false;
         options.attachScreenshot = false;
         options.enablePrintBreadcrumbs = false;

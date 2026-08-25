@@ -93,7 +93,12 @@ class GuardSafeFallback {
 
     if (what == ConversationPhase.validation &&
         effectiveMode == ConversationExpressionMode.postReframeListen) {
-      return ConversationUtterance(text: prefersTurkish ? 'Tamam.' : 'Okay.');
+      // Bare Okay/Tamam only for minimal post-reframe confirms.
+      if (!SurfaceUtteranceReader.isSubstantiveUserTurn(userUtterance)) {
+        return ConversationUtterance(text: prefersTurkish ? 'Tamam.' : 'Okay.');
+      }
+      // Substantive turn: continue as observe — never terminal bare ack.
+      effectiveMode = ConversationExpressionMode.observePurity;
     }
 
     if (what == ConversationPhase.validation &&

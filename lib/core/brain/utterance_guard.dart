@@ -12,6 +12,7 @@ import 'surface_text_fuzzy.dart';
 import 'permission_realization_contract.dart';
 import 'receipt_realization_contract.dart';
 import 'surface_mirror_contract.dart';
+import 'surface_utterance_kind.dart';
 
 /// UtteranceGuard
 ///
@@ -121,6 +122,13 @@ class UtteranceGuard {
       userUtterance,
       mirrorGroundingUtterance: mirrorGroundingUtterance,
     )) {
+      return null;
+    }
+
+    // Bare Okay/Ok/Tamam must not close a substantive user turn (EN or TR).
+    // Minimal user acks / true post-reframe confirms still may land briefly.
+    if (SurfaceUtteranceReader.isBareTerminalAck(normalized) &&
+        SurfaceUtteranceReader.isSubstantiveUserTurn(userUtterance)) {
       return null;
     }
 

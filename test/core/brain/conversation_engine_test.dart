@@ -79,7 +79,7 @@ void main() {
       }
     });
 
-    test('vendor failure fails closed to null without escaping VendorError', () async {
+    test('vendor failure does not escape VendorError; B1 terminal when shouldSpeak', () async {
       final engine = ConversationEngine(
         languageModelClient: LanguageModelClient(
           vendorProvider: _FailingVendorProvider(
@@ -91,16 +91,16 @@ void main() {
         ),
       );
 
-      await expectLater(
-        engine.generate(
-          conversationDecision: const ConversationDecision(
-            phase: ConversationPhase.validation,
-            shouldSpeak: true,
-          ),
-          exitDecision: ExitDecision.continueConversation,
+      final utterance = await engine.generate(
+        conversationDecision: const ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
         ),
-        completion(isNull),
+        exitDecision: ExitDecision.continueConversation,
       );
+      // VendorError stays internal; Zero Silence Contract admits a terminal.
+      expect(utterance, isNotNull);
+      expect(utterance!.text.trim(), isNotEmpty);
     });
   });
 

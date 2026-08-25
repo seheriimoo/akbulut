@@ -214,6 +214,8 @@ class SurfaceMirrorContract {
 /// B2.2 — Brief conversational landings when mirror abstains.
 ///
 /// Closed list only — not a general Guard loosen.
+/// Bare okay/tamam landings are additionally gated by [UtteranceGuard] against
+/// substantive user turns.
 class ConversationalLandingContract {
   const ConversationalLandingContract._();
 

@@ -19,6 +19,7 @@ import 'reframe_evidence_reader.dart';
 import 'user_object_mirror.dart';
 import 'listen_only_preference.dart';
 import 'session_locale.dart';
+import 'surface_utterance_kind.dart';
 import 'utterance_guard.dart';
 import 'validated_understanding.dart';
 import 'vendor_provider.dart';
@@ -339,7 +340,8 @@ class ConversationEngine {
         for (final retreatMode in const [
           ConversationExpressionMode.narrow,
           ConversationExpressionMode.observePurity,
-          ConversationExpressionMode.postReframeListen,
+          // postReframeListen only when user turn is a minimal confirm —
+          // substantive turns must not land on bare Okay via this retreat.
         ]) {
           final retreat = ModeSafeTerminalFallback.forExpression(
             what: what,
@@ -365,6 +367,34 @@ class ConversationEngine {
               '${retreatMode.name}',
             );
             return retreatAdmitted;
+          }
+        }
+        if (!SurfaceUtteranceReader.isSubstantiveUserTurn(userUtterance)) {
+          final listen = ModeSafeTerminalFallback.forExpression(
+            what: what,
+            expressionMode: ConversationExpressionMode.postReframeListen,
+            userUtterance: userUtterance,
+            narrowRefinementAfterPartial: narrowRefinementAfterPartial,
+            groundingBlob: groundingBlob,
+            session: nightSession,
+            grounding: conversationGrounding,
+          );
+          if (listen != null) {
+            final listenAdmitted = utteranceGuard.allow(
+              utterance: listen,
+              what: what,
+              userUtterance: userUtterance,
+              mirrorGroundingUtterance: groundingBlob,
+              expressionMode: ConversationExpressionMode.postReframeListen,
+              listenOnlyActive: listenOnlyActive,
+            );
+            if (listenAdmitted != null) {
+              debugPrint(
+                'Nocta expression reframe terminal mode retreat '
+                'postReframeListen',
+              );
+              return listenAdmitted;
+            }
           }
         }
       }
@@ -423,10 +453,15 @@ class ConversationEngine {
     }
 
     for (final fallbackMode in const [
-      ConversationExpressionMode.postReframeListen,
-      ConversationExpressionMode.standard,
       ConversationExpressionMode.observePurity,
+      ConversationExpressionMode.standard,
+      ConversationExpressionMode.postReframeListen,
     ]) {
+      // Never prefer bare Okay retreat on a substantive user turn.
+      if (fallbackMode == ConversationExpressionMode.postReframeListen &&
+          SurfaceUtteranceReader.isSubstantiveUserTurn(userUtterance)) {
+        continue;
+      }
       final line = ModeSafeTerminalFallback.forExpression(
         what: what,
         expressionMode: fallbackMode,

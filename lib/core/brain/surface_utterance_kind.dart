@@ -126,6 +126,37 @@ class SurfaceUtteranceReader {
     return false;
   }
 
+  /// Bare terminal assistant acks that must not close a substantive user turn.
+  static bool isBareTerminalAck(String text) {
+    final n = _normalize(text).replaceAll(RegExp(r'[.!?…]+$'), '').trim();
+    return n == 'okay' || n == 'ok' || n == 'tamam';
+  }
+
+  /// True when the current user turn carries meaningful cognitive/emotional load.
+  ///
+  /// Minimal acks, closings, thanks, and fillers are not substantive — those
+  /// may still receive a bare landing acknowledgment.
+  static bool isSubstantiveUserTurn(String? text) {
+    if (text == null || text.trim().isEmpty) return false;
+    if (isMinimalAck(text) ||
+        isClosingAck(text) ||
+        isClosingIntent(text) ||
+        isFillerDiscourse(text) ||
+        isAffirmationAck(text)) {
+      return false;
+    }
+    final n = _normalize(text).replaceAll(RegExp(r'[.!?…]+$'), '').trim();
+    if (RegExp(
+      r'^(thanks|thank you|thx|tesekkur|tesekkurler|tesekkur ederim)$',
+    ).hasMatch(n)) {
+      return false;
+    }
+    final words =
+        n.split(RegExp(r'\s+')).where((w) => w.isNotEmpty).toList();
+    if (words.length <= 2 && n.length <= 16) return false;
+    return words.length >= 3 || n.length >= 20;
+  }
+
   static bool _hasSettlingProgress(String n) {
     return RegExp(
       r'\b(sakinles\w*|rahatlad\w*|iyiles\w*|daha iyi his\w*)\b',

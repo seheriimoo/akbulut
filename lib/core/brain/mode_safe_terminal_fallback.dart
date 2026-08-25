@@ -5,6 +5,7 @@ import 'conversation_utterance.dart';
 import 'hold_act_dedup.dart';
 import 'night_session.dart';
 import 'surface_text_fuzzy.dart';
+import 'surface_utterance_kind.dart';
 
 /// B1 — Mode-safe terminal fallback after Guard rejects both LLM and
 /// [GuardSafeFallback].
@@ -62,10 +63,12 @@ class ModeSafeTerminalFallback {
         ? _terminalValidationTr(
             expressionMode: expressionMode,
             narrowRefinementAfterPartial: narrowRefinementAfterPartial,
+            userUtterance: userUtterance,
           )
         : _terminalValidationEn(
             expressionMode: expressionMode,
             narrowRefinementAfterPartial: narrowRefinementAfterPartial,
+            userUtterance: userUtterance,
           );
 
     return ConversationUtterance(text: text);
@@ -74,6 +77,7 @@ class ModeSafeTerminalFallback {
   static String _terminalValidationTr({
     required ConversationExpressionMode expressionMode,
     required bool narrowRefinementAfterPartial,
+    String? userUtterance,
   }) {
     switch (expressionMode) {
       case ConversationExpressionMode.observePurity:
@@ -82,6 +86,10 @@ class ModeSafeTerminalFallback {
       case ConversationExpressionMode.lightChat:
         return 'Bu gece söylediğin zor geliyor gibi.';
       case ConversationExpressionMode.postReframeListen:
+        // Bare Tamam/Okay only when the user turn itself is a minimal confirm.
+        if (SurfaceUtteranceReader.isSubstantiveUserTurn(userUtterance)) {
+          return 'Az önce söylediğin hâlâ orada.';
+        }
         return 'Tamam.';
       case ConversationExpressionMode.narrow:
         if (narrowRefinementAfterPartial) {
@@ -104,6 +112,7 @@ class ModeSafeTerminalFallback {
   static String _terminalValidationEn({
     required ConversationExpressionMode expressionMode,
     required bool narrowRefinementAfterPartial,
+    String? userUtterance,
   }) {
     switch (expressionMode) {
       case ConversationExpressionMode.observePurity:
@@ -112,6 +121,9 @@ class ModeSafeTerminalFallback {
       case ConversationExpressionMode.lightChat:
         return 'That sounds hard tonight.';
       case ConversationExpressionMode.postReframeListen:
+        if (SurfaceUtteranceReader.isSubstantiveUserTurn(userUtterance)) {
+          return 'What you said is still there tonight.';
+        }
         return 'Okay.';
       case ConversationExpressionMode.narrow:
         if (narrowRefinementAfterPartial) {

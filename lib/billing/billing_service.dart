@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:purchases_flutter/purchases_flutter.dart';
@@ -37,6 +39,16 @@ class BillingService {
   static const String premiumEntitlementId =
       BillingCatalog.premiumEntitlementId;
 
+  /// Bounded wait for the native purchase sheet / RevenueCat callback.
+  static const Duration purchaseWaitTimeout = Duration(minutes: 2);
+
+  /// Deterministic post-purchase entitlement refresh attempts (no infinite loop).
+  static const List<Duration> postPurchaseEntitlementBackoff = [
+    Duration(milliseconds: 400),
+    Duration(milliseconds: 800),
+    Duration(milliseconds: 1600),
+  ];
+
   final BillingPurchasesPort _purchases;
   final bool? _configuredOverride;
 
@@ -75,6 +87,37 @@ class BillingService {
     if (!isConfigured) return false;
     final info = await getCustomerInfo();
     return customerHasPremium(info);
+  }
+
+  /// Purchase with a bounded wait; on timeout refresh [CustomerInfo] only.
+  ///
+  /// Never grants premium locally — callers must verify entitlements.
+  Future<CustomerInfo> purchasePackageWithBoundedWait(Package package) async {
+    try {
+      return await purchasePackage(package).timeout(purchaseWaitTimeout);
+    } on TimeoutException {
+      return getCustomerInfo();
+    }
+  }
+
+  /// Resolve premium after purchase using the purchase snapshot, then bounded
+  /// [getCustomerInfo] retries when RevenueCat lags TestFlight propagation.
+  Future<bool> resolvePremiumAfterPurchase(
+    CustomerInfo purchaseResult, {
+    List<Duration>? backoff,
+  }) async {
+    if (customerHasPremium(purchaseResult)) return true;
+
+    final delays = backoff ?? postPurchaseEntitlementBackoff;
+    for (final wait in delays) {
+      if (wait > Duration.zero) {
+        await Future.delayed(wait);
+      }
+      if (!isConfigured) return false;
+      final fresh = await getCustomerInfo();
+      if (customerHasPremium(fresh)) return true;
+    }
+    return false;
   }
 
   /// Purchase one store package. Returns updated customer info.

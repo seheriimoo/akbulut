@@ -79,15 +79,22 @@ class _PaywallScreenState extends State<PaywallScreen> {
 
     setState(() => _busy = true);
     try {
-      final info = await _billing.purchasePackage(package);
+      final info = await _billing.purchasePackageWithBoundedWait(package);
       if (!mounted) return;
-      if (_billing.customerHasPremium(info)) {
+
+      final premium = await _billing.resolvePremiumAfterPurchase(info);
+      if (!mounted) return;
+
+      if (premium) {
         Navigator.pop(context, true);
         return;
       }
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Purchase completed, but premium is not active yet.'),
+          content: Text(
+            'Purchase completed. Premium may take a moment — tap Restore '
+            'purchases or reopen Nocta.',
+          ),
         ),
       );
     } on BillingException catch (error) {

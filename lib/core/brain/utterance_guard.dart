@@ -7,9 +7,10 @@ import 'evidence_ledger.dart';
 import 'grounded_progression.dart';
 import 'light_conversation_detector.dart';
 import 'listen_only_preference.dart';
+import 'night_session.dart';
 import 'session_locale.dart';
-import 'surface_text_fuzzy.dart';
 import 'permission_realization_contract.dart';
+import 'permission_release_admission.dart';
 import 'receipt_realization_contract.dart';
 import 'surface_mirror_contract.dart';
 import 'surface_utterance_kind.dart';
@@ -88,6 +89,7 @@ class UtteranceGuard {
         ConversationExpressionMode.standard,
     EvidenceLedger? reframeEvidenceLedger,
     bool listenOnlyActive = false,
+    NightSession? nightSession,
   }) {
     final text = utterance.text.trim();
 
@@ -129,6 +131,19 @@ class UtteranceGuard {
     // Minimal user acks / true post-reframe confirms still may land briefly.
     if (SurfaceUtteranceReader.isBareTerminalAck(normalized) &&
         SurfaceUtteranceReader.isSubstantiveUserTurn(userUtterance)) {
+      return null;
+    }
+
+    // GOLD lock: Permission/Release speech-acts on Receipt require earned
+    // recognition (or explicit user rest request) — TF alone is not enough.
+    if (what == ConversationPhase.validation &&
+        PermissionReleaseAdmission.looksLikeObligationEaseOrRelease(normalized) &&
+        !PermissionReleaseAdmission.allowsObligationEase(
+          what: what,
+          expressionMode: expressionMode,
+          userUtterance: userUtterance,
+          session: nightSession,
+        )) {
       return null;
     }
 
@@ -425,19 +440,12 @@ class UtteranceGuard {
         continue;
       }
       // Receipt may mention overthinking / won't-stop texture without being
-      // a Naming speech-act. Only English Naming speech-act stems collide;
-      // TR night-texture (“zihninde / dönüp duruyor”) is legal Receipt.
+      // a Naming speech-act. Do NOT reject legal Receipt terminals that use
+      // night-presence texture ("still there tonight") — that caused EN
+      // zero-silence collapses when ModeSafeTerminal was the only survivor.
+      // Only skip Naming cross-check; true Naming speech-acts are other stems.
       if (what == ConversationPhase.validation &&
           other == ConversationPhase.naming) {
-        if (_containsAny(lower, const [
-          'holding on',
-          'weighing',
-          'still there',
-          'lingering',
-          'on your mind',
-        ])) {
-          return false;
-        }
         continue;
       }
       // Release put-down may include “don’t need to carry” idiom; that must
@@ -1385,12 +1393,42 @@ class UtteranceGuard {
       return true;
     }
 
+    // Night-presence still-here/with-you terminals (not Naming "still there").
+    // Needed so ModeSafe / zero-silence rescues admit under standard Receipt,
+    // not only observePurity's broader still/tonight texture bypass.
+    if (_matchesNightPresenceStillHere(lower)) {
+      return true;
+    }
+
     // B2.2 — brief conversational landing when mirror abstains.
     if (ConversationalLandingContract.matches(lower)) {
       return true;
     }
 
     return false;
+  }
+
+  /// Evidence-bound night-presence Receipt terminals used by ModeSafe /
+  /// absolute zero-silence rescue. Distinct from Naming stem "still there".
+  bool _matchesNightPresenceStillHere(String lower) {
+    if (ReceiptRealizationContract.hasForbiddenNamingStem(lower)) {
+      return false;
+    }
+    return _containsAny(lower, const [
+      'still here tonight',
+      'still with you tonight',
+      'what you named is still here',
+      'what you said is still here',
+      'that part is still with you',
+      'hala orada',
+      'hâlâ orada',
+      'bu gece hala duruyor',
+      'bu gece hâlâ duruyor',
+      'hala yakinda',
+      'hâlâ yakında',
+      'hala yakında',
+      'hâlâ yakinda',
+    ]);
   }
 
   /// Fail-closed Receipt exclusions: invented stillness / presence / psychology.

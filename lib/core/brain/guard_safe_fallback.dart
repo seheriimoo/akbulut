@@ -18,6 +18,7 @@ import 'mode_safe_terminal_fallback.dart';
 import 'reframe_evidence_reader.dart';
 import 'surface_text_fuzzy.dart';
 import 'surface_utterance_kind.dart';
+import 'thinking_function_hypothesis.dart';
 import 'user_object_mirror.dart';
 
 /// Deterministic Guard-legal lines after [UtteranceGuard] rejects a model
@@ -40,6 +41,7 @@ class GuardSafeFallback {
     ConversationGroundingBuffer? grounding,
     String sessionVentCorpus = '',
     bool listenOnlyActive = false,
+    ThinkingFunctionHypothesis? thinkingFunctionHypothesis,
   }) {
     if (!_isSpeakable(what)) return null;
 
@@ -87,6 +89,7 @@ class GuardSafeFallback {
         priorUserUtterance: _priorUserLine(grounding),
         refinementAfterPartial: narrowRefinementAfterPartial,
         groundingBlob: groundingBlob,
+        thinkingFunctionHypothesis: thinkingFunctionHypothesis,
       );
       if (fork != null) return fork;
     }
@@ -346,6 +349,7 @@ class GuardSafeFallback {
       session: session,
       grounding: grounding,
       groundingBlob: groundingBlob,
+      thinkingFunctionHypothesis: thinkingFunctionHypothesis,
     );
   }
 

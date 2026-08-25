@@ -145,4 +145,36 @@ class ThinkingFunctionIntelligenceShaping {
         'generic let-go stamp. $job Do not diagnose. Do not solve. Do not emit '
         'internal labels.';
   }
+
+  /// Narrow: mechanism fork TYPE when supported TF exists (Phase 2).
+  ///
+  /// Reasoning targets only — never a fixed question bank.
+  static String narrowMechanismDirective(ThinkingFunctionHypothesis hypothesis) {
+    final fork = switch (hypothesis.kind) {
+      ThinkingFunctionKind.worstCaseRehearsal =>
+        'Fork TYPE (not a fixed reply): split rehearsing/generating bad '
+            'possible futures vs seeking certainty because the unknown feels '
+            'unfinished — soft only. Do NOT assert protection/safety motives. '
+            'Preparation/anti-blindsiding may appear as one soft side only if '
+            'their words already suggest getting ready — never invent it.',
+      ThinkingFunctionKind.earlyTomorrowCarry =>
+        'Fork TYPE (not a fixed reply): split carrying tomorrow into tonight '
+            'vs general night activation without temporal import.',
+      ThinkingFunctionKind.preparationRehearsal =>
+        'Fork TYPE (not a fixed reply): split readiness/preparation pressure '
+            'vs open uncertainty without a prep job — only if their words '
+            'support prep language.',
+      ThinkingFunctionKind.certaintyChase =>
+        'Fork TYPE (not a fixed reply): split chasing one-more-thought '
+            'certainty vs holding a settled worry without more figuring.',
+      ThinkingFunctionKind.protectiveHolding =>
+        'Fork TYPE (not a fixed reply): split keeping-watch/holding vs plain '
+            'continuation of thoughts — only if holding/safety language is '
+            'already in their words. Never invent protection.',
+    };
+
+    return 'Thinking-function Narrow (HOW only): authorized soft job is '
+        '${humanFunctionLabel(hypothesis.kind)}. $fork '
+        'Ask one original or/yoksa question. No GOLD paste. No diagnosis.';
+  }
 }

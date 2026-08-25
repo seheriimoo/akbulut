@@ -36,9 +36,15 @@ class SurfaceMirrorContract {
     'you want',
     'you said',
     'you seem',
+    'you named',
     'still with you',
+    'still here tonight',
     'still there tonight',
     'what you named',
+    'those scenes are still with you',
+    'those rehearsed scenes',
+    'work thoughts are still with you',
+    'tomorrow is still with you',
   ];
 
   static const List<String> _inferenceDrift = [

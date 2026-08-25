@@ -19,7 +19,9 @@ import 'reframe_evidence_reader.dart';
 import 'user_object_mirror.dart';
 import 'listen_only_preference.dart';
 import 'session_locale.dart';
+import 'surface_text_fuzzy.dart';
 import 'surface_utterance_kind.dart';
+import 'thinking_function_hypothesis.dart';
 import 'utterance_guard.dart';
 import 'validated_understanding.dart';
 import 'vendor_provider.dart';
@@ -63,6 +65,8 @@ class ConversationEngine {
       grounding: conversationGrounding,
       sessionVentCorpus: sessionVentCorpus,
     );
+    final thinkingFunctionHypothesis =
+        understanding?.thinkingFunctionHypothesis;
 
     final package = promptArchitecture.package(
       conversationDecision: conversationDecision,
@@ -84,6 +88,7 @@ class ConversationEngine {
         nightSession: nightSession,
         conversationGrounding: conversationGrounding,
         expressionGrounding: expressionGrounding,
+        thinkingFunctionHypothesis: thinkingFunctionHypothesis,
       );
     }
 
@@ -103,6 +108,7 @@ class ConversationEngine {
         nightSession: nightSession,
         conversationGrounding: conversationGrounding,
         expressionGrounding: expressionGrounding,
+        thinkingFunctionHypothesis: thinkingFunctionHypothesis,
       );
     } on StateError catch (error) {
       debugPrint('Nocta expression compile/config fail: $error');
@@ -115,6 +121,7 @@ class ConversationEngine {
         nightSession: nightSession,
         conversationGrounding: conversationGrounding,
         expressionGrounding: expressionGrounding,
+        thinkingFunctionHypothesis: thinkingFunctionHypothesis,
       );
     }
 
@@ -131,6 +138,7 @@ class ConversationEngine {
       expressionMode: package.expressionMode,
       reframeEvidenceLedger: reframeLedger,
       listenOnlyActive: listenOnlyActive,
+      nightSession: nightSession,
     );
     if (admitted != null) return admitted;
 
@@ -148,6 +156,7 @@ class ConversationEngine {
       grounding: package.conversationGrounding,
       sessionVentCorpus: sessionVentCorpus,
       listenOnlyActive: listenOnlyActive,
+      thinkingFunctionHypothesis: thinkingFunctionHypothesis,
     );
     if (fallback == null) {
       if (package.expressionMode == ConversationExpressionMode.closure) {
@@ -161,6 +170,7 @@ class ConversationEngine {
           what: package.what,
           userUtterance: userUtterance,
           expressionMode: package.expressionMode,
+          nightSession: nightSession,
         );
         if (closureAdmitted != null) return closureAdmitted;
       }
@@ -176,6 +186,7 @@ class ConversationEngine {
         groundingBlob: expressionGrounding,
         listenOnlyActive: listenOnlyActive,
         sessionVentCorpus: sessionVentCorpus,
+        thinkingFunctionHypothesis: thinkingFunctionHypothesis,
       );
     }
 
@@ -187,6 +198,7 @@ class ConversationEngine {
       expressionMode: package.expressionMode,
       reframeEvidenceLedger: reframeLedger,
       listenOnlyActive: listenOnlyActive,
+      nightSession: nightSession,
     );
     if (fallbackAdmitted == null) {
       debugPrint(
@@ -205,6 +217,7 @@ class ConversationEngine {
         groundingBlob: expressionGrounding,
         listenOnlyActive: listenOnlyActive,
         sessionVentCorpus: sessionVentCorpus,
+        thinkingFunctionHypothesis: thinkingFunctionHypothesis,
       );
     }
     debugPrint(
@@ -222,6 +235,7 @@ class ConversationEngine {
     NightSession? nightSession,
     ConversationGroundingBuffer? conversationGrounding,
     String? expressionGrounding,
+    ThinkingFunctionHypothesis? thinkingFunctionHypothesis,
   }) {
     if (!_requiresZeroSilence(conversationDecision, exitDecision)) {
       return null;
@@ -244,6 +258,7 @@ class ConversationEngine {
         grounding: package?.conversationGrounding ?? conversationGrounding,
         sessionVentCorpus: '',
       ),
+      thinkingFunctionHypothesis: thinkingFunctionHypothesis,
     );
   }
 
@@ -279,6 +294,7 @@ class ConversationEngine {
     String? groundingBlob,
     bool listenOnlyActive = false,
     String sessionVentCorpus = '',
+    ThinkingFunctionHypothesis? thinkingFunctionHypothesis,
   }) {
     if (what == ConversationPhase.validation &&
         expressionMode == ConversationExpressionMode.observePurity) {
@@ -296,6 +312,7 @@ class ConversationEngine {
           mirrorGroundingUtterance: groundingBlob,
           expressionMode: expressionMode,
           listenOnlyActive: listenOnlyActive,
+          nightSession: nightSession,
         );
         if (shiftAdmitted != null) {
           debugPrint(
@@ -314,6 +331,7 @@ class ConversationEngine {
       session: nightSession,
       grounding: conversationGrounding,
       groundingBlob: groundingBlob,
+      thinkingFunctionHypothesis: thinkingFunctionHypothesis,
     );
     if (terminal == null) {
       debugPrint(
@@ -329,6 +347,7 @@ class ConversationEngine {
       mirrorGroundingUtterance: groundingBlob,
       expressionMode: expressionMode,
       listenOnlyActive: listenOnlyActive,
+      nightSession: nightSession,
     );
     if (admitted == null) {
       debugPrint(
@@ -351,6 +370,7 @@ class ConversationEngine {
             groundingBlob: groundingBlob,
             session: nightSession,
             grounding: conversationGrounding,
+            thinkingFunctionHypothesis: thinkingFunctionHypothesis,
           );
           if (retreat == null) continue;
           final retreatAdmitted = utteranceGuard.allow(
@@ -360,6 +380,7 @@ class ConversationEngine {
             mirrorGroundingUtterance: groundingBlob,
             expressionMode: retreatMode,
             listenOnlyActive: listenOnlyActive,
+            nightSession: nightSession,
           );
           if (retreatAdmitted != null) {
             debugPrint(
@@ -378,6 +399,7 @@ class ConversationEngine {
             groundingBlob: groundingBlob,
             session: nightSession,
             grounding: conversationGrounding,
+            thinkingFunctionHypothesis: thinkingFunctionHypothesis,
           );
           if (listen != null) {
             final listenAdmitted = utteranceGuard.allow(
@@ -387,6 +409,7 @@ class ConversationEngine {
               mirrorGroundingUtterance: groundingBlob,
               expressionMode: ConversationExpressionMode.postReframeListen,
               listenOnlyActive: listenOnlyActive,
+              nightSession: nightSession,
             );
             if (listenAdmitted != null) {
               debugPrint(
@@ -406,6 +429,7 @@ class ConversationEngine {
         conversationGrounding: conversationGrounding,
         groundingBlob: groundingBlob,
         listenOnlyActive: listenOnlyActive,
+        thinkingFunctionHypothesis: thinkingFunctionHypothesis,
       );
     }
     debugPrint(
@@ -424,13 +448,49 @@ class ConversationEngine {
     ConversationGroundingBuffer? conversationGrounding,
     String? groundingBlob,
     bool listenOnlyActive = false,
+    ThinkingFunctionHypothesis? thinkingFunctionHypothesis,
   }) {
     if (what != ConversationPhase.validation) return null;
 
+    // TF-present Narrow must not erase into thin still-here before trying
+    // a mechanism fork under narrow mode again.
+    if (expressionMode == ConversationExpressionMode.narrow) {
+      final mechanism = ModeSafeTerminalFallback.forExpression(
+        what: what,
+        expressionMode: ConversationExpressionMode.narrow,
+        userUtterance: userUtterance,
+        groundingBlob: groundingBlob,
+        session: nightSession,
+        grounding: conversationGrounding,
+        thinkingFunctionHypothesis: thinkingFunctionHypothesis,
+      );
+      if (mechanism != null) {
+        final ok = utteranceGuard.allow(
+          utterance: mechanism,
+          what: what,
+          userUtterance: userUtterance,
+          mirrorGroundingUtterance: groundingBlob,
+          expressionMode: ConversationExpressionMode.narrow,
+          listenOnlyActive: listenOnlyActive,
+          nightSession: nightSession,
+        );
+        if (ok != null) {
+          debugPrint(
+            'Nocta expression zero-silence mechanism Narrow admitted',
+          );
+          return ok;
+        }
+      }
+    }
+
+    final mirrorMode =
+        expressionMode == ConversationExpressionMode.narrow
+            ? ConversationExpressionMode.standard
+            : expressionMode;
     final mirror = UserObjectMirror.forValidation(
       userUtterance: userUtterance,
       groundingBlob: groundingBlob,
-      expressionMode: expressionMode,
+      expressionMode: mirrorMode,
       session: nightSession,
       grounding: conversationGrounding,
     );
@@ -440,8 +500,9 @@ class ConversationEngine {
         what: what,
         userUtterance: userUtterance,
         mirrorGroundingUtterance: groundingBlob,
-        expressionMode: expressionMode,
+        expressionMode: mirrorMode,
         listenOnlyActive: listenOnlyActive,
+        nightSession: nightSession,
       );
       if (admitted != null) {
         debugPrint(
@@ -452,11 +513,16 @@ class ConversationEngine {
       }
     }
 
-    for (final fallbackMode in const [
+    final retreatModes = <ConversationExpressionMode>[
+      if (expressionMode == ConversationExpressionMode.narrow)
+        ConversationExpressionMode.narrow,
       ConversationExpressionMode.observePurity,
       ConversationExpressionMode.standard,
+      ConversationExpressionMode.groundedHold,
       ConversationExpressionMode.postReframeListen,
-    ]) {
+    ];
+
+    for (final fallbackMode in retreatModes) {
       // Never prefer bare Okay retreat on a substantive user turn.
       if (fallbackMode == ConversationExpressionMode.postReframeListen &&
           SurfaceUtteranceReader.isSubstantiveUserTurn(userUtterance)) {
@@ -469,6 +535,7 @@ class ConversationEngine {
         groundingBlob: groundingBlob,
         session: nightSession,
         grounding: conversationGrounding,
+        thinkingFunctionHypothesis: thinkingFunctionHypothesis,
       );
       if (line == null) continue;
       final ok = utteranceGuard.allow(
@@ -478,6 +545,7 @@ class ConversationEngine {
         mirrorGroundingUtterance: groundingBlob,
         expressionMode: fallbackMode,
         listenOnlyActive: listenOnlyActive,
+        nightSession: nightSession,
       );
       if (ok != null) {
         debugPrint(
@@ -486,6 +554,109 @@ class ConversationEngine {
         );
         return ok;
       }
+    }
+
+    // Absolute last resort for substantive validation — never silence.
+    final absolute = _absoluteEvidenceBoundRescue(
+      userUtterance: userUtterance,
+      groundingBlob: groundingBlob,
+      nightSession: nightSession,
+      conversationGrounding: conversationGrounding,
+      listenOnlyActive: listenOnlyActive,
+    );
+    if (absolute != null) return absolute;
+
+    debugPrint(
+      'Nocta expression CRITICAL zero-silence exhausted WHAT=${what.name}',
+    );
+    return null;
+  }
+
+  /// Last non-null surface for substantive Receipt turns.
+  ConversationUtterance? _absoluteEvidenceBoundRescue({
+    required String? userUtterance,
+    required String? groundingBlob,
+    required NightSession? nightSession,
+    required ConversationGroundingBuffer? conversationGrounding,
+    required bool listenOnlyActive,
+  }) {
+    final turkish =
+        SurfaceTextFuzzy.prefersTurkish(userUtterance, groundingBlob);
+    // Complete natural terminals only — never truncated user-clause paste.
+    final candidates = <String>[
+      if (turkish) ...[
+        'Az önce söylediğin hâlâ orada.',
+        'Söylediğin bu gece hâlâ duruyor.',
+        'Bu gece söylediklerin hâlâ yakında.',
+      ] else ...[
+        'What you named is still here tonight.',
+        'What you said is still here tonight.',
+        'That part is still with you tonight.',
+      ],
+    ];
+    final object = _shortNightObject(userUtterance, groundingBlob, turkish);
+    if (object != null) {
+      candidates.insert(0, object);
+    }
+
+    for (final text in candidates) {
+      if (HoldActDedup.sessionContainsNormalized(nightSession, text)) {
+        continue;
+      }
+      for (final mode in const [
+        ConversationExpressionMode.observePurity,
+        ConversationExpressionMode.standard,
+        ConversationExpressionMode.groundedHold,
+      ]) {
+        final ok = utteranceGuard.allow(
+          utterance: ConversationUtterance(text: text),
+          what: ConversationPhase.validation,
+          userUtterance: userUtterance,
+          mirrorGroundingUtterance: groundingBlob,
+          expressionMode: mode,
+          listenOnlyActive: listenOnlyActive,
+          nightSession: nightSession,
+        );
+        if (ok != null) {
+          debugPrint(
+            'Nocta expression absolute evidence-bound rescue admitted '
+            'mode=${mode.name}',
+          );
+          return ok;
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Short grounded night-object mirror — never truncated clause paste.
+  static String? _shortNightObject(
+    String? userUtterance,
+    String? groundingBlob,
+    bool turkish,
+  ) {
+    final blob = '${userUtterance ?? ''} ${groundingBlob ?? ''}'.toLowerCase();
+    if (blob.trim().isEmpty) return null;
+    if (turkish) {
+      if (blob.contains('yarın') || blob.contains('yarin')) {
+        return 'Yarın hâlâ sende duruyor.';
+      }
+      if (blob.contains('iş ') || blob.contains('is ') || blob.contains('değerlendirme')) {
+        return 'İş tarafı hâlâ sende duruyor.';
+      }
+      if (RegExp(r'utanc|prova|senaryo|ihtimal').hasMatch(blob)) {
+        return 'O senaryolar hâlâ sende duruyor.';
+      }
+      return null;
+    }
+    if (blob.contains('tomorrow')) {
+      return 'Tomorrow is still with you tonight.';
+    }
+    if (blob.contains('work') || blob.contains('meeting') || blob.contains('review')) {
+      return 'Work thoughts are still with you tonight.';
+    }
+    if (RegExp(r'embarrass|rehears|scenario|disaster|worst').hasMatch(blob)) {
+      return 'Those rehearsed scenes are still with you tonight.';
     }
     return null;
   }

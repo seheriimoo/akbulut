@@ -4,7 +4,6 @@ import 'conversation_phase.dart';
 import 'conversation_utterance.dart';
 import 'grounded_progression.dart';
 import 'night_session.dart';
-import 'surface_text_fuzzy.dart';
 import 'session_locale.dart';
 import 'surface_utterance_kind.dart';
 import 'utterance_guard.dart';
@@ -321,10 +320,37 @@ class UserObjectMirror {
         return ['That feeling is what you named tonight.'];
       case SurfaceUtteranceKind.neutralFact:
       case SurfaceUtteranceKind.event:
-        final compressed = _compressEnglish(source);
-        if (compressed != null) return ['$compressed — I hear you.'];
-        return ['What you said is still there tonight.'];
+        final object = _englishNightObject(source);
+        if (object != null) {
+          return [
+            '$object is still with you tonight.',
+            'What you named about that is still here tonight.',
+          ];
+        }
+        return [
+          'What you named is still here tonight.',
+          'What you said is still here tonight.',
+          'That part is still with you tonight.',
+        ];
     }
+  }
+
+  /// Short grounded night object — never truncated raw clause paste.
+  static String? _englishNightObject(String source) {
+    final n = source.toLowerCase();
+    if (n.contains('tomorrow')) return 'Tomorrow';
+    if (n.contains('work') || n.contains('meeting') || n.contains('review')) {
+      return 'Work thoughts';
+    }
+    if (RegExp(r'embarrass|rehears|humiliat').hasMatch(n)) {
+      return 'Those rehearsed scenes';
+    }
+    if (RegExp(r'disaster|scenario|worst|carousel').hasMatch(n)) {
+      return 'Those scenes';
+    }
+    if (n.contains('money') || n.contains('payment')) return 'Money worries';
+    if (n.contains('ex ') || n.contains('texted')) return 'That message thread';
+    return null;
   }
 
   static List<String?> _positiveEventTr(
@@ -701,13 +727,6 @@ class UserObjectMirror {
       caseSensitive: false,
     ).firstMatch(source);
     return match?.group(1);
-  }
-
-  static String? _compressEnglish(String source) {
-    final trimmed = source.trim();
-    if (trimmed.length < 8) return null;
-    if (trimmed.length > 72) return trimmed.substring(0, 72).trim();
-    return trimmed;
   }
 
   static String _capitalize(String word) {

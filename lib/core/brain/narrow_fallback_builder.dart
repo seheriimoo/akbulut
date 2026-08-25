@@ -1,7 +1,13 @@
 import 'conversation_utterance.dart';
 import 'grounded_progression.dart';
+import 'thinking_function_hypothesis.dart';
+import 'thinking_function_intelligence_shaping.dart';
+import 'thinking_function_kind.dart';
 
 /// Deterministic Narrow fork fallback when Guard rejects LLM output (Slice 2).
+///
+/// Phase 2+/final: when a supported ThinkingFunction is present, emit a soft
+/// mechanism fork (mind-job A vs B) instead of collapsing to thin still-here.
 class NarrowFallbackBuilder {
   const NarrowFallbackBuilder._();
 
@@ -10,6 +16,7 @@ class NarrowFallbackBuilder {
     String? priorUserUtterance,
     bool refinementAfterPartial = false,
     String? groundingBlob,
+    ThinkingFunctionHypothesis? thinkingFunctionHypothesis,
   }) {
     if (userUtterance == null || userUtterance.trim().isEmpty) {
       return null;
@@ -22,12 +29,68 @@ class NarrowFallbackBuilder {
       );
       if (text != null) return ConversationUtterance(text: text);
     }
-    final turkish = _looksTurkish(userUtterance);
+
+    final turkish = _looksTurkish(userUtterance) ||
+        _looksTurkish(groundingBlob ?? '') ||
+        _looksTurkish(priorUserUtterance ?? '');
+
+    if (ThinkingFunctionIntelligenceShaping.isSupportedOrStrong(
+          thinkingFunctionHypothesis,
+        ) &&
+        !refinementAfterPartial) {
+      final mechanism = _mechanismFork(
+        hypothesis: thinkingFunctionHypothesis!,
+        turkish: turkish,
+        user: userUtterance,
+        groundingBlob: groundingBlob,
+      );
+      if (mechanism != null) return ConversationUtterance(text: mechanism);
+    }
+
     final text = turkish
         ? _turkishFork(userUtterance, priorUserUtterance, groundingBlob)
         : _englishFork(userUtterance, priorUserUtterance);
     if (text == null || text.isEmpty) return null;
     return ConversationUtterance(text: text);
+  }
+
+  /// Soft mind-job forks — original TYPE templates, not GOLD dialogue paste.
+  static String? _mechanismFork({
+    required ThinkingFunctionHypothesis hypothesis,
+    required bool turkish,
+    required String user,
+    String? groundingBlob,
+  }) {
+    final ctx = _normalize('$user ${groundingBlob ?? ''}');
+    switch (hypothesis.kind) {
+      case ThinkingFunctionKind.worstCaseRehearsal:
+        if (turkish) {
+          if (_containsAny(ctx, ['utanc', 'prova', 'rezil'])) {
+            return 'Aklın utancı prova mı ediyor, yoksa belirsizlikte bir netlik mi arıyor?';
+          }
+          return 'Aklın kötü sonuçları tekrar mı kuruyor, yoksa belirsizlikte kesin bir cevap mı arıyor?';
+        }
+        if (_containsAny(ctx, ['embarrass', 'humiliat', 'social'])) {
+          return 'Is your mind rehearsing embarrassment, or hunting for certainty in the unknown?';
+        }
+        return 'Is your mind rehearsing bad endings, or hunting for certainty in the unknown?';
+      case ThinkingFunctionKind.earlyTomorrowCarry:
+        return turkish
+            ? 'Yarını bu geceye mi taşıyorsun, yoksa genel bir gece huzursuzluğu mu?'
+            : 'Is tomorrow already landing in tonight, or is it more general night activation?';
+      case ThinkingFunctionKind.preparationRehearsal:
+        return turkish
+            ? 'Hazırlıklı kalma baskısı mı daha ağır, yoksa açık bir belirsizlik mi?'
+            : 'Is it readiness pressure, or open uncertainty without a prep job?';
+      case ThinkingFunctionKind.certaintyChase:
+        return turkish
+            ? 'Bir düşünce daha ile netleşeceğini mi umuyorsun, yoksa oturmuş bir endişe mi duruyor?'
+            : 'Is it chasing one more thought for certainty, or a settled worry without more figuring?';
+      case ThinkingFunctionKind.protectiveHolding:
+        return turkish
+            ? 'Tutmaya devam etmek mi daha güvenli geliyor, yoksa düşünceler kendi kendine mi sürüyor?'
+            : 'Does keeping hold feel safer than stopping, or are the thoughts just continuing on their own?';
+    }
   }
 
   static String? _turkishFork(
@@ -88,6 +151,7 @@ class NarrowFallbackBuilder {
 
   static bool _looksTurkish(String text) {
     final lower = text.toLowerCase();
+    if (lower.trim().isEmpty) return false;
     if (RegExp(r'[ğüşıöçâîû]').hasMatch(lower)) return true;
     return _containsAny(lower, [
       'yarin',
@@ -99,6 +163,8 @@ class NarrowFallbackBuilder {
       'müdür',
       'yalniz',
       'belki',
+      'aklim',
+      'aklım',
     ]);
   }
 

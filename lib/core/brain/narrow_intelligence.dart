@@ -1,48 +1,71 @@
 import 'conversation_blueprint_binding.dart';
 import 'conversation_grounding_buffer.dart';
+import 'thinking_function_hypothesis.dart';
+import 'thinking_function_intelligence_shaping.dart';
 
-/// Narrow Intelligence V1 (Slice 2)
+/// Narrow Intelligence V1.1 (Phase 2 — mechanism-aware when TF supported)
 ///
 /// Compile aid for one conversation-specific fork question that splits two
 /// plausible hypotheses — not generic follow-up bait.
+///
+/// When a supported ThinkingFunction exists, prefer a mechanism fork
+/// (two jobs the mind may be doing) over a pure surface-topic fork.
+/// Never pastes canned GOLD lines.
 class NarrowIntelligence {
   const NarrowIntelligence();
 
-  static const String version = '1.0';
+  static const String version = '1.1';
 
   NarrowCompileSlice compile({
     required BlueprintStageBinding stage,
     ConversationGroundingBuffer? conversationGrounding,
     bool refinementAfterPartial = false,
+    ThinkingFunctionHypothesis? thinkingFunctionHypothesis,
   }) {
     assert(stage.stage == BlueprintStage.receipt);
 
     final currentTurn = _currentTurnGrounding(conversationGrounding);
+    final mechanismAware = !refinementAfterPartial &&
+        ThinkingFunctionIntelligenceShaping.isSupportedOrStrong(
+          thinkingFunctionHypothesis,
+        );
     final forbidden = <String>[
       ...stage.forbiddenMoves,
       ..._narrowForbidden,
+      if (mechanismAware) ..._mechanismForbidden,
     ];
 
     return NarrowCompileSlice(
-      aim: refinementAfterPartial ? _aimRefinement : _aim,
+      aim: refinementAfterPartial
+          ? _aimRefinement
+          : (mechanismAware ? _aimMechanism : _aim),
       sealedWhatSignature: refinementAfterPartial
           ? _sealedWhatSignatureRefinement
-          : _sealedWhatSignature,
+          : (mechanismAware
+              ? _sealedWhatSignatureMechanism
+              : _sealedWhatSignature),
       forbiddenMoves: forbidden,
       responseLength: _responseLength,
       narrowDirective: refinementAfterPartial
           ? _narrowRefinementDirective
-          : _narrowDirective,
+          : (mechanismAware ? _narrowMechanismDirective : _narrowDirective),
       realizationDirective: refinementAfterPartial
           ? _realizationRefinementDirective
-          : _realizationDirective,
+          : (mechanismAware
+              ? _realizationMechanismDirective
+              : _realizationDirective),
       userContent: _userContent(
         currentTurn: currentTurn,
         refinementAfterPartial: refinementAfterPartial,
+        hypothesis: mechanismAware ? thinkingFunctionHypothesis : null,
       ),
       systemAppendix: refinementAfterPartial
           ? _systemAppendixRefinement
-          : _systemAppendix,
+          : (mechanismAware
+              ? _systemAppendixMechanism(
+                  thinkingFunctionHypothesis!,
+                )
+              : _systemAppendix),
     );
   }
 
@@ -55,6 +78,11 @@ class NarrowIntelligence {
       'Ask exactly one conversation-specific fork question that splits two '
       'different plausible causes — not generic therapy follow-up.';
 
+  static const String _aimMechanism =
+      'Ask exactly one mechanism fork: split two plausible jobs the mind may '
+      'be doing tonight — grounded in their words + the soft function '
+      'hypothesis — not a surface-topic A-vs-B only.';
+
   static const String _aimRefinement =
       'After a partial reframe confirm: briefly acknowledge the part they '
       'affirmed, then ask exactly one refinement question about what is missing.';
@@ -62,6 +90,10 @@ class NarrowIntelligence {
   static const String _sealedWhatSignature =
       'validation / Receipt — Narrow only. One fork question from their '
       'actual words. Do not reframe, interpret, or ease obligation.';
+
+  static const String _sealedWhatSignatureMechanism =
+      'validation / Receipt — Narrow mechanism fork only. One question '
+      'splitting two soft mind-jobs from evidence. No reframe. No Permission.';
 
   static const String _sealedWhatSignatureRefinement =
       'validation / Receipt — Narrow refinement only. Acknowledge affirmed '
@@ -80,6 +112,18 @@ class NarrowIntelligence {
       'Never answer for them. No jargon. No Belki/Sanki/aslında. '
       'No Permission/Release. Not an interrogation stack.';
 
+  static const String _narrowMechanismDirective =
+      'Narrow mechanism (Phase 2): when a supported soft thinking-function '
+      'exists, ask one fork that splits TWO plausible mind-jobs — not only '
+      'surface topics (event vs uncertainty). '
+      'Ground both sides in THEIR words + the authorized function TYPE. '
+      'Stay epistemically soft. Never assert protection/safety motives unless '
+      'their words already earned that. Prefer rehearsal/certainty forks for '
+      'worst-case evidence; leave preparation as optional soft side only when '
+      'prep language is present. No Belki-reframe. No Permission. '
+      'One “or / yoksa” question only. Invent original wording — never paste '
+      'GOLD library lines.';
+
   static const String _narrowRefinementDirective =
       'Narrow refinement (Slice 2.1): they partially confirmed a reframe. '
       'Briefly name ONLY a fragment they actually said (“Yalnızlık kısmı doğru gibi.”), '
@@ -91,6 +135,10 @@ class NarrowIntelligence {
   static const String _realizationDirective =
       'Realize Narrow only as exactly one fork question. '
       'Do not Receipt-reframe. Do not Name. Do not Permission or Release.';
+
+  static const String _realizationMechanismDirective =
+      'Realize one mechanism fork question only. Split two soft mind-jobs. '
+      'Do not reframe. Do not ease obligation. Do not diagnose.';
 
   static const String _realizationRefinementDirective =
       'Realize one refinement question only — acknowledge affirmed part, '
@@ -107,19 +155,35 @@ class NarrowIntelligence {
     'Invented motives not in their words',
   ];
 
+  static const List<String> _mechanismForbidden = [
+    'Hard diagnosis of motives (protection, safety) without user evidence',
+    'Surface-only forks when mechanism evidence is available '
+        '(prefer mind-job A vs mind-job B)',
+    'Pasting GOLD dialogue lines or fixed response banks',
+  ];
+
   String _userContent({
     required String? currentTurn,
     bool refinementAfterPartial = false,
+    ThinkingFunctionHypothesis? hypothesis,
   }) {
     final turn = currentTurn == null
         ? ''
         : '\n\nCurrent turn (shaping only):\n"""$currentTurn"""';
-    final directive =
-        refinementAfterPartial ? _narrowRefinementDirective : _narrowDirective;
+    final directive = refinementAfterPartial
+        ? _narrowRefinementDirective
+        : (hypothesis != null
+            ? _narrowMechanismDirective
+            : _narrowDirective);
     final realization = refinementAfterPartial
         ? _realizationRefinementDirective
-        : _realizationDirective;
-    return '$realization\n\n$directive$turn';
+        : (hypothesis != null
+            ? _realizationMechanismDirective
+            : _realizationDirective);
+    final mechanism = hypothesis == null
+        ? ''
+        : '\n\n${ThinkingFunctionIntelligenceShaping.narrowMechanismDirective(hypothesis)}';
+    return '$realization\n\n$directive$mechanism$turn';
   }
 
   static const String _systemAppendix = '''
@@ -127,6 +191,15 @@ Narrow Intelligence v$version:
 $_narrowDirective
 One fork question only. Split two hypotheses from their message.
 ''';
+
+  static String _systemAppendixMechanism(ThinkingFunctionHypothesis hypothesis) {
+    return '''
+Narrow Intelligence v$version (mechanism-aware):
+$_narrowMechanismDirective
+${ThinkingFunctionIntelligenceShaping.narrowMechanismDirective(hypothesis)}
+One mechanism fork only. Soft mind-jobs — not diagnosis.
+''';
+  }
 
   static const String _systemAppendixRefinement = '''
 Narrow Intelligence v$version (refinement):

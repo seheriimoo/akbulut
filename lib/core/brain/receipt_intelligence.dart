@@ -246,6 +246,9 @@ class ReceiptIntelligence {
     'Using “I understand” / “I hear you” / “That makes sense” / “I hear that” '
         'unless immediately followed in the same sentence by concrete, '
         'user-specific lived texture',
+    'Trailing depth-sink forms such as “— I hear you.” after a mirror clause',
+    'Permission/Release obligation-ease before earned recognition '
+        '(“don’t need to”, “you can stop”, “leave it here” on early Receipt)',
     'Defaulting to a dense clinical paragraph (“making it hard to find rest… '
         'it’s a lot to hold onto”) instead of short V2 lines',
     'Category remapping: do not translate their words into a different emotion '
@@ -302,6 +305,10 @@ class ReceiptIntelligence {
     'Collapsing Naming / Permission / Release into Receipt',
     'Hard certainty about why they think (diagnosis / motive fact)',
     'Canned Gold dialogue lines or reply-bank copy',
+    'Jumping to protection/safety motives (“protecting you”, “seni korumaya”, '
+        '“keeping you safe”) when their words did not earn that',
+    'Jumping to Permission/Release obligation-ease before recognition lands',
+    'Restating their sentence with no new soft understanding of the mind-job',
   ];
 
   String _userContent({

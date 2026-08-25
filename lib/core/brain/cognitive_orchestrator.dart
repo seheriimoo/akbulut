@@ -23,7 +23,9 @@ import 'release_decision.dart';
 import 'release_engine.dart';
 import 'session_summarizer.dart';
 import 'session_turn.dart';
+import 'thinking_function_continuity.dart';
 import 'thinking_function_detector.dart';
+import 'thinking_function_hypothesis.dart';
 import 'turn_response_stance_detector.dart';
 import 'validated_understanding.dart';
 import 'working_mind_view.dart';
@@ -54,6 +56,8 @@ class CognitiveOrchestrator {
 
   final ThinkingFunctionDetector thinkingFunctionDetector;
 
+  final ThinkingFunctionContinuity thinkingFunctionContinuity;
+
   final ReleaseEngine releaseEngine;
 
   final ConversationPolicy conversationPolicy;
@@ -75,6 +79,10 @@ class CognitiveOrchestrator {
   /// Session-level vent latch — survives the 3-turn grounding window.
   String _sessionVentCorpus = '';
 
+  /// Night-scoped last supported Thinking Function (Phase 2 continuity).
+  /// Cleared on correction, topic jump, or decay-to-null. Not durable memory.
+  ThinkingFunctionHypothesis? _sessionThinkingFunction;
+
   CognitiveOrchestrator({
     required this.perceptionEngine,
     required this.mentalPatternDetector,
@@ -84,6 +92,7 @@ class CognitiveOrchestrator {
     required this.preferenceDetector,
     this.turnResponseStanceDetector = const TurnResponseStanceDetector(),
     this.thinkingFunctionDetector = const ThinkingFunctionDetector(),
+    this.thinkingFunctionContinuity = const ThinkingFunctionContinuity(),
     required this.releaseEngine,
     required this.conversationPolicy,
     required this.conversationEngine,
@@ -120,6 +129,7 @@ class CognitiveOrchestrator {
 
     if (session.turns.isEmpty) {
       _sessionVentCorpus = '';
+      _sessionThinkingFunction = null;
     }
 
     // Temporary Conversation Memory buffer: user utterances only.
@@ -154,13 +164,38 @@ class CognitiveOrchestrator {
       priorPhase: priorPhase,
     );
 
-    // Cognition only: soft function hypothesis. Must not affect Release /
-    // Policy / Exit in Thinking Function Cognition V1 / Slice 1.
-    final thinkingFunctionHypothesis = thinkingFunctionDetector.detect(
+    // Cognition only: soft function hypothesis. Continuity may persist a
+    // supported prior when this turn elaborates the same job (Phase 2).
+    // Must not choose Release / Exit; Policy load check may see TF.
+    final freshThinkingFunction = thinkingFunctionDetector.detect(
       currentMessage: message,
       conversationGrounding: _conversationGroundingBuffer,
       perceptionEvidence: evidence,
     );
+    final priorThinkingFunction = _sessionThinkingFunction;
+    final thinkingFunctionHypothesis = thinkingFunctionContinuity.resolve(
+      fresh: freshThinkingFunction,
+      prior: priorThinkingFunction,
+      currentMessage: message,
+      conversationGrounding: _conversationGroundingBuffer,
+      session: session,
+    );
+    if (ThinkingFunctionContinuity.shouldClearSessionStore(
+      resolved: thinkingFunctionHypothesis,
+      currentMessage: message,
+      prior: priorThinkingFunction,
+      conversationGrounding: _conversationGroundingBuffer,
+      session: session,
+    )) {
+      _sessionThinkingFunction = null;
+    } else if (thinkingFunctionHypothesis != null &&
+        thinkingFunctionHypothesis.confidence >=
+            ThinkingFunctionDetector.supportedFloor) {
+      _sessionThinkingFunction = thinkingFunctionHypothesis;
+    } else {
+      // Tentative-only results must not permanently lock a strong prior.
+      _sessionThinkingFunction = null;
+    }
 
     final understanding = ValidatedUnderstanding(
       mentalPatterns: mentalPatterns,

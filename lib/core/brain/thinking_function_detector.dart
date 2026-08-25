@@ -226,11 +226,16 @@ class ThinkingFunctionDetector {
     required String current,
     required List<String> priors,
   }) {
+    // Excited anticipation alone is not worst-case rehearsal.
+    if (_isExcitedAnticipationOnly(current)) return null;
+
     final ids = <String>[];
     var turns = 0;
     var confidence = 0.0;
 
     void absorb(String text, {required bool isCurrent}) {
+      if (_isExcitedAnticipationOnly(text)) return;
+      if (_isDeniedWorstCaseClaim(text)) return;
       final local = <String>[];
       if (_hasWhatIf(text)) {
         local.add('what_if');
@@ -238,11 +243,18 @@ class ThinkingFunctionDetector {
       if (_hasWorstCase(text)) {
         local.add('worst_case');
       }
+      if (_hasNegativeScenarioLoop(text)) {
+        local.add('negative_scenario_loop');
+      }
       if (local.isEmpty) return;
       ids.addAll(local.map((e) => isCurrent ? 'current:$e' : 'prior:$e'));
       turns += 1;
       if (isCurrent) {
-        confidence = local.length >= 2 || _hasWorstCase(text) ? 0.82 : 0.72;
+        confidence = local.length >= 2 ||
+                _hasWorstCase(text) ||
+                _hasNegativeScenarioLoop(text)
+            ? 0.82
+            : 0.72;
       } else {
         confidence = confidence < 0.55 ? 0.55 : confidence;
       }
@@ -263,6 +275,31 @@ class ThinkingFunctionDetector {
       supportTurnCount: turns < 1 ? 1 : turns,
     );
   }
+
+  /// Excitement / wired energy without negative rehearsal/simulation.
+  bool _isExcitedAnticipationOnly(String text) {
+    final excited = RegExp(
+      r'\b(excited|excitement|wired|heyecan|heyecanli|heyecanliyim|'
+      r'cant wait|cannot wait|looking forward)\b',
+    ).hasMatch(text);
+    if (!excited) return false;
+    if (_hasWorstCase(text) || _hasNegativeScenarioLoop(text)) return false;
+    if (_hasWhatIf(text) && _hasNegativeLanding(text)) return false;
+    return true;
+  }
+
+  /// Denial of worst-case imagination must not count as positive evidence.
+  bool _isDeniedWorstCaseClaim(String text) {
+    return RegExp(
+      r"\b(not imagining|not inventing|i'?m just excited|just excited|"
+      r'hayir[,.]?.{0,48}kotu|'
+      r'kotu .{0,24}(degil|dusunmuyorum|dusunmuyorum)|'
+      r'kotu sonuc .{0,12}(degil|dusunmuyorum)|'
+      r'sadece heyecan)\b',
+    ).hasMatch(text);
+  }
+
+  bool _hasNegativeLanding(String text) => _negativeLanding.hasMatch(text);
 
   _KindScore? _scoreEarlyTomorrow({
     required String current,
@@ -423,6 +460,7 @@ class ThinkingFunctionDetector {
 
   /// Worst-case / go-wrong / preparing-for-the-worst semantic family.
   /// Bounded natural variants — not exact-message patches.
+  /// Phase 2+hardening: generative future simulation + negative landing.
   static final RegExp _worstCase = RegExp(
     r'\b('
     r'worst[- ]?case|'
@@ -433,8 +471,58 @@ class ThinkingFunctionDetector {
     r'keeps? preparing for the worst|keep preparing for the worst|'
     r'bracing for the worst|brace for the worst|'
     r'for the worst|'
-    r'catastroph'
+    r'catastroph|'
+    r'invent\w* disasters?|inventing disasters?|'
+    r'worst[- ]?case outcomes?|new worst[- ]?case|'
+    r'ends? badly|ending badly|ends worse|end worse|'
+    r'bad outcomes?|kotu senaryo|kotu ihtimal|kotu sonuc|'
+    r'en kotu sonuc|baska kotu|'
+    r'her ihtimali kotuye|kotuye bagli|kotu(ye)? bagliyor|'
+    r'ihtimali kotuye|kotuye bagla|'
+    r'fall(ing)? apart|falls apart|fell apart|'
+    r'disaster (movies?|films?|scenes?)|'
+    r'rehears\w* embarrassment|rehears\w* (failure|humiliation)|'
+    r'imagined (social )?failure|social failure|'
+    r'negative (future )?scenes?|tiny disaster|'
+    // TR rehearsal / simulation family (normalized fold)
+    r'utanc(i|ı)? prova|prova ediyor|prova etmek|'
+    r'utanci prova|rezil(ligi)? prova|'
+    r'kotu sonuclar?i? (kafada |akilda |zihninde )?(cevir|don|bul)|'
+    r'kotu ihtimalleri? (tekrar|canlandir|uret)|'
+    r'ters gidebilecek|ters gidecek'
     r')\w*\b',
+  );
+
+  /// Structural: mind generating multiple futures AND landing negative.
+  static final RegExp _scenarioGeneration = RegExp(
+    r'\b(scenario|scenarios|senaryo|senaryolar|'
+    r'creating different|keeps? creating|keeps? inventing|'
+    r'keeps? generating|invent\w*|imagining|imagine|'
+    r'every path|paths? i imagine|ihtimal|ihtimaller|'
+    r'uret\w*|uretiyor|uretiyorum|'
+    r'disaster (movies?|films?|scenes?)|carousel of scenes|'
+    r'rehears\w*|on loop|drafting disasters?|'
+    r'building .{0,24}(disaster|scene|movie)|'
+    r'running through what|new ways it could|'
+    r'ugly one shows|another ugly|'
+    // TR generative / rehearsal loop (normalized)
+    r'prova|provalamak|canlandir|canlandiriyor|'
+    r'hayal ediyorum|hayal ediyor|'
+    r'hesapliyorum|hesapliyor|'
+    r'yenisi geliyor|yenisini|baska .{0,20}(buluyor|geliyor|uretiyor)|'
+    r'surekli .{0,24}(kotu|ihtimal|sonuc|senaryo)|'
+    r'aklim .{0,32}(prova|uret|bagliyor|buluyor|cevir)|'
+    r'zihn .{0,32}(prova|uret|bagliyor)|'
+    r'her yol|her ihtimal)\b',
+  );
+
+  static final RegExp _negativeLanding = RegExp(
+    r'\b(badly|worse|worst|disaster|catastrop|kotu|'
+    r'ends? bad|go wrong|alone|unsafe|rezil|'
+    r'fall(ing)? apart|embarrassment|humiliat|'
+    r'failure|ruin|messed it up|'
+    r'utanc|utanci|yalniz bitiyor|uzaklik|'
+    r'none .{0,24}safe|not .{0,12}safe|dont .{0,12}feel safe)\b',
   );
 
   static final RegExp _oneMoreThought = RegExp(
@@ -488,6 +576,9 @@ class ThinkingFunctionDetector {
 
   bool _hasWorstCase(String text) => _worstCase.hasMatch(text);
 
+  bool _hasNegativeScenarioLoop(String text) =>
+      _scenarioGeneration.hasMatch(text) && _negativeLanding.hasMatch(text);
+
   bool _hasOneMoreThought(String text) => _oneMoreThought.hasMatch(text);
 
   bool _hasAlmostFigured(String text) => _almostFigured.hasMatch(text);
@@ -505,6 +596,12 @@ class ThinkingFunctionDetector {
         .replaceAll('’', "'")
         .replaceAll('‘', "'")
         .replaceAll('`', "'")
+        .replaceAll('ö', 'o')
+        .replaceAll('ü', 'u')
+        .replaceAll('ı', 'i')
+        .replaceAll('ğ', 'g')
+        .replaceAll('ş', 's')
+        .replaceAll('ç', 'c')
         .trim();
   }
 

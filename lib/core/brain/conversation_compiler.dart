@@ -157,6 +157,8 @@ class ConversationCompiler {
             stage: stage,
             conversationGrounding: package.conversationGrounding,
             refinementAfterPartial: package.narrowRefinementAfterPartial,
+            thinkingFunctionHypothesis:
+                package.understanding?.thinkingFunctionHypothesis,
           );
           return _StageOverlay(
             aim: slice.aim,
@@ -215,6 +217,9 @@ class ConversationCompiler {
             systemAppendix: slice.systemAppendix,
           );
         }
+        // Observe / post-reframe listen / grounded hold: strip TF (mirror-only).
+        // Phase 1 mechanism recognition uses `standard` so supported TF reaches
+        // ReceiptIntelligence soft-hinge shaping (never canned GOLD lines).
         final observePurity = package.expressionMode ==
                 ConversationExpressionMode.observePurity ||
             package.expressionMode ==

@@ -8,6 +8,7 @@ import 'explicit_exit_intent.dart';
 import 'grounded_progression.dart';
 import 'light_conversation_detector.dart';
 import 'listen_only_preference.dart';
+import 'mechanism_recognition_admission.dart';
 import 'neutral_entry_detector.dart';
 import 'night_session.dart';
 import 'post_audio_re_engagement.dart';
@@ -352,10 +353,36 @@ class ConversationPolicy {
       );
     }
 
+    final mechanismRecognition = MechanismRecognitionAdmission.evaluate(
+      arc: arc,
+      message: message,
+      understanding: understanding,
+      session: session,
+    );
+
+    // Micro-slice: supported TF + post-Narrow same-job elaboration →
+    // one Recognition-capable `standard` turn instead of Narrow-refine sink.
+    if (mechanismRecognition == MechanismRecognitionDecision.preferStandard) {
+      return const ConversationDecision(
+        phase: ConversationPhase.validation,
+        shouldSpeak: true,
+        expressionMode: ConversationExpressionMode.standard,
+      );
+    }
+
     if (admission.outcome == ReframeAdmissionOutcome.plausibleUnproven &&
         arc.hadNarrow &&
         message != null &&
         !_isBareAcknowledgment(message)) {
+      // Anti-loop: after Recognition already surfaced, do not re-enter refine.
+      if (mechanismRecognition ==
+          MechanismRecognitionDecision.alreadySurfaced) {
+        return const ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
+          expressionMode: ConversationExpressionMode.groundedHold,
+        );
+      }
       return _narrowOrHold(
         session: session,
         message: message,
@@ -371,6 +398,14 @@ class ConversationPolicy {
         message != null &&
         !reframeReady &&
         reframeReadinessGate.isThinEvidenceAfterNarrow(message)) {
+      if (mechanismRecognition ==
+          MechanismRecognitionDecision.alreadySurfaced) {
+        return const ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
+          expressionMode: ConversationExpressionMode.groundedHold,
+        );
+      }
       return _narrowOrHold(
         session: session,
         message: message,
@@ -424,7 +459,23 @@ class ConversationPolicy {
       );
     }
 
-    // Not reframe-ready: listen/observe — never default Belki reframe (standard).
+    // Phase 1 — GOLD reasoning path (not scripting):
+    // After Narrow + substantive answer, do NOT regress to observePurity.
+    // Prefer mechanism-capable Receipt (`standard`) so ThinkingFunction can
+    // shape soft recognition when present. First-turn observe remains above.
+    if (arc.hadNarrow &&
+        message != null &&
+        !_isBareAcknowledgment(message) &&
+        !reframeReadinessGate.isThinEvidenceAfterNarrow(message)) {
+      return const ConversationDecision(
+        phase: ConversationPhase.validation,
+        shouldSpeak: true,
+        expressionMode: ConversationExpressionMode.standard,
+      );
+    }
+
+    // Pre-narrow / thin / bare-ack nights: pure observe only — never invent
+    // Belki reframe without admission.
     return const ConversationDecision(
       phase: ConversationPhase.validation,
       shouldSpeak: true,

@@ -68,6 +68,7 @@ class PromptArchitecture {
       repairRepetitionProtest: conversationDecision.repairRepetitionProtest,
       narrowRefinementAfterPartial:
           conversationDecision.narrowRefinementAfterPartial,
+      postRecognitionDeepen: conversationDecision.postRecognitionDeepen,
       dna: ConversationDNA.instance,
     );
   }

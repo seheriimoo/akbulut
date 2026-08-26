@@ -54,6 +54,7 @@ class ReceiptIntelligence {
     PriorAdmittedExpression? priorAdmittedExpression,
     bool observePurity = false,
     bool postReframeListen = false,
+    bool postRecognitionDeepen = false,
   }) {
     assert(stage.stage == BlueprintStage.receipt);
 
@@ -112,6 +113,7 @@ class ReceiptIntelligence {
         isLightTurn: isLightTurn,
         observePurity: observePurity,
         postReframeListen: postReframeListen,
+        postRecognitionDeepen: postRecognitionDeepen,
       ),
       systemAppendix: _systemAppendix(
         currentTurn: currentTurn,
@@ -121,6 +123,7 @@ class ReceiptIntelligence {
         isLightTurn: isLightTurn,
         observePurity: observePurity,
         postReframeListen: postReframeListen,
+        postRecognitionDeepen: postRecognitionDeepen,
       ),
     );
   }
@@ -319,6 +322,7 @@ class ReceiptIntelligence {
     required bool isLightTurn,
     required bool observePurity,
     required bool postReframeListen,
+    required bool postRecognitionDeepen,
   }) {
     final buffer = StringBuffer()
       ..writeln(_realizationDirective)
@@ -346,9 +350,13 @@ class ReceiptIntelligence {
       buffer
         ..writeln()
         ..writeln(
-          ThinkingFunctionIntelligenceShaping.receiptHingeDirective(
-            hypothesis,
-          ),
+          postRecognitionDeepen
+              ? ThinkingFunctionIntelligenceShaping.deepenHingeDirective(
+                  hypothesis,
+                )
+              : ThinkingFunctionIntelligenceShaping.receiptHingeDirective(
+                  hypothesis,
+                ),
         );
     }
 
@@ -457,6 +465,7 @@ class ReceiptIntelligence {
     required bool isLightTurn,
     required bool observePurity,
     required bool postReframeListen,
+    required bool postRecognitionDeepen,
   }) {
     if (postReframeListen) {
       return '''
@@ -521,7 +530,13 @@ Drift rule: do not Name, grant Permission, invite Release, or close.
     final languageRule = _languageDirective(currentTurn);
 
     final functionRule = supportedFunctional && hypothesis != null
-        ? ThinkingFunctionIntelligenceShaping.receiptHingeDirective(hypothesis)
+        ? (postRecognitionDeepen
+            ? ThinkingFunctionIntelligenceShaping.deepenHingeDirective(
+                hypothesis,
+              )
+            : ThinkingFunctionIntelligenceShaping.receiptHingeDirective(
+                hypothesis,
+              ))
         : 'Thinking-function rule: no supported soft functional hinge for '
             'this compile—stay texture-first; do not invent a mind-job.';
 

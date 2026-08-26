@@ -12,6 +12,7 @@ import 'mechanism_recognition_admission.dart';
 import 'neutral_entry_detector.dart';
 import 'night_session.dart';
 import 'post_audio_re_engagement.dart';
+import 'post_recognition_mechanism_confirmation.dart';
 import 'reframe_admission_gate.dart';
 import 'reframe_readiness_gate.dart';
 import 'release_decision.dart';
@@ -360,6 +361,15 @@ class ConversationPolicy {
       session: session,
     );
 
+    final postRecognitionConfirm =
+        PostRecognitionMechanismConfirmation.evaluate(
+      arc: arc,
+      message: message,
+      understanding: understanding,
+      session: session,
+      conversationGrounding: conversationGrounding,
+    );
+
     // Micro-slice: supported TF + post-Narrow same-job elaboration →
     // one Recognition-capable `standard` turn instead of Narrow-refine sink.
     if (mechanismRecognition == MechanismRecognitionDecision.preferStandard) {
@@ -370,19 +380,34 @@ class ConversationPolicy {
       );
     }
 
+    // Post-Recognition confirmation → one deepen / integrate-lite standard.
+    // Must run before alreadySurfaced → groundedHold anti-loop.
+    if (postRecognitionConfirm ==
+        PostRecognitionConfirmationDecision.preferDeepen) {
+      return const ConversationDecision(
+        phase: ConversationPhase.validation,
+        shouldSpeak: true,
+        expressionMode: ConversationExpressionMode.standard,
+        postRecognitionDeepen: true,
+      );
+    }
+
+    // Recognition-once / deepen-once: after Recognition has surfaced, do not
+    // Phase-1 re-Recognition or Narrow-refine. Bare/thin/non-confirm → hold.
+    // (Do not rely solely on MechanismRecognitionAdmission.alreadySurfaced —
+    // bare messages return noBasis there before the epoch check.)
+    if (MechanismRecognitionEpoch.recognitionSurfaced(session)) {
+      return const ConversationDecision(
+        phase: ConversationPhase.validation,
+        shouldSpeak: true,
+        expressionMode: ConversationExpressionMode.groundedHold,
+      );
+    }
+
     if (admission.outcome == ReframeAdmissionOutcome.plausibleUnproven &&
         arc.hadNarrow &&
         message != null &&
         !_isBareAcknowledgment(message)) {
-      // Anti-loop: after Recognition already surfaced, do not re-enter refine.
-      if (mechanismRecognition ==
-          MechanismRecognitionDecision.alreadySurfaced) {
-        return const ConversationDecision(
-          phase: ConversationPhase.validation,
-          shouldSpeak: true,
-          expressionMode: ConversationExpressionMode.groundedHold,
-        );
-      }
       return _narrowOrHold(
         session: session,
         message: message,
@@ -398,14 +423,6 @@ class ConversationPolicy {
         message != null &&
         !reframeReady &&
         reframeReadinessGate.isThinEvidenceAfterNarrow(message)) {
-      if (mechanismRecognition ==
-          MechanismRecognitionDecision.alreadySurfaced) {
-        return const ConversationDecision(
-          phase: ConversationPhase.validation,
-          shouldSpeak: true,
-          expressionMode: ConversationExpressionMode.groundedHold,
-        );
-      }
       return _narrowOrHold(
         session: session,
         message: message,

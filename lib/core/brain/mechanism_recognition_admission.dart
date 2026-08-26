@@ -1,6 +1,6 @@
 import 'conversation_arc_reader.dart';
-import 'conversation_expression_mode.dart';
 import 'night_session.dart';
+import 'post_recognition_mechanism_confirmation.dart';
 import 'thinking_function_intelligence_shaping.dart';
 import 'validated_understanding.dart';
 
@@ -45,34 +45,11 @@ class MechanismRecognitionAdmission {
 
     if (_isBareOrThin(message)) return MechanismRecognitionDecision.noBasis;
 
-    if (_alreadySurfacedThisEpoch(session)) {
+    if (MechanismRecognitionEpoch.recognitionSurfaced(session)) {
       return MechanismRecognitionDecision.alreadySurfaced;
     }
 
     return MechanismRecognitionDecision.preferStandard;
-  }
-
-  /// True when a Recognition-capable mode already ran after Narrow this epoch.
-  static bool _alreadySurfacedThisEpoch(NightSession? session) {
-    if (session == null || session.turns.isEmpty) return false;
-    var sawNarrow = false;
-    for (final turn in session.turns) {
-      final mode = turn.expressionMode;
-      if (mode == ConversationExpressionMode.narrow) {
-        sawNarrow = true;
-        continue;
-      }
-      if (!sawNarrow) continue;
-      if (mode == ConversationExpressionMode.standard ||
-          mode == ConversationExpressionMode.reframe) {
-        return true;
-      }
-      // Concern epoch reset on observe after shift.
-      if (mode == ConversationExpressionMode.observePurity) {
-        sawNarrow = false;
-      }
-    }
-    return false;
   }
 
   static bool _isBareOrThin(String message) {

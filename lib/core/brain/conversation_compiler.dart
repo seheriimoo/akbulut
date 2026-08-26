@@ -235,6 +235,7 @@ class ConversationCompiler {
           observePurity: observePurity,
           postReframeListen: package.expressionMode ==
               ConversationExpressionMode.postReframeListen,
+          postRecognitionDeepen: package.postRecognitionDeepen,
         );
         return _StageOverlay(
           aim: slice.aim,

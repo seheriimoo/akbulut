@@ -93,6 +93,38 @@ class ThinkingFunctionIntelligenceShaping {
         '$soft $hinge';
   }
 
+  /// Post-Recognition deepen / integrate-lite (HOW only).
+  ///
+  /// Adds one layer beyond Recognition — do not restate the same hinge.
+  static String deepenHingeDirective(ThinkingFunctionHypothesis hypothesis) {
+    final layer = switch (hypothesis.kind) {
+      ThinkingFunctionKind.worstCaseRehearsal ||
+      ThinkingFunctionKind.preparationRehearsal =>
+        'Deepen TYPE (not a fixed reply): they confirmed thinking-as-preparation. '
+            'Integrate one soft implication — that the preparation process itself '
+            'may keep the mind active tonight. Do NOT restate “you think through '
+            'possibilities to feel prepared” as the whole turn. Do NOT assert '
+            'protection/safety motives. Do NOT grant Permission or Release.',
+      ThinkingFunctionKind.earlyTomorrowCarry =>
+        'Deepen TYPE (not a fixed reply): one soft implication that carrying '
+            'tomorrow may itself keep tonight occupied — not a restatement of '
+            'the first recognition hinge.',
+      ThinkingFunctionKind.certaintyChase =>
+        'Deepen TYPE (not a fixed reply): one soft implication that chasing '
+            'one-more-thought may itself keep the loop running — not a repeat '
+            'of the first recognition.',
+      ThinkingFunctionKind.protectiveHolding =>
+        'Deepen TYPE (not a fixed reply): one soft implication that the holding '
+            'job itself may keep the system active — only if their words support '
+            'holding. Never invent protection.',
+    };
+
+    return 'Thinking-function deepen / integrate-lite (HOW only): authorized '
+        'job is ${humanFunctionLabel(hypothesis.kind)}. '
+        'Recognition already happened — do not duplicate it. $layer '
+        'Stay epistemically soft. Night-short. No diagnosis. No therapist cadence.';
+  }
+
   /// Permission: reduce the obligation created by the mind-job.
   static String permissionObligationDirective(
     ThinkingFunctionHypothesis hypothesis,

@@ -178,6 +178,7 @@ class ConversationEngine {
         what: package.what,
         expressionMode: package.expressionMode,
         narrowRefinementAfterPartial: package.narrowRefinementAfterPartial,
+        postRecognitionDeepen: package.postRecognitionDeepen,
         userUtterance: userUtterance,
         priorRejectedText: utterance.text,
         reason: 'primary fallback null',
@@ -209,6 +210,7 @@ class ConversationEngine {
         what: package.what,
         expressionMode: package.expressionMode,
         narrowRefinementAfterPartial: package.narrowRefinementAfterPartial,
+        postRecognitionDeepen: package.postRecognitionDeepen,
         userUtterance: userUtterance,
         priorRejectedText: fallback.text,
         reason: 'fallback double-reject',
@@ -246,6 +248,8 @@ class ConversationEngine {
           package?.expressionMode ?? conversationDecision.expressionMode,
       narrowRefinementAfterPartial: package?.narrowRefinementAfterPartial ??
           conversationDecision.narrowRefinementAfterPartial,
+      postRecognitionDeepen: package?.postRecognitionDeepen ??
+          conversationDecision.postRecognitionDeepen,
       userUtterance: userUtterance,
       priorRejectedText: '',
       reason: reason,
@@ -295,6 +299,7 @@ class ConversationEngine {
     bool listenOnlyActive = false,
     String sessionVentCorpus = '',
     ThinkingFunctionHypothesis? thinkingFunctionHypothesis,
+    bool postRecognitionDeepen = false,
   }) {
     if (what == ConversationPhase.validation &&
         expressionMode == ConversationExpressionMode.observePurity) {
@@ -328,6 +333,7 @@ class ConversationEngine {
       expressionMode: expressionMode,
       userUtterance: userUtterance,
       narrowRefinementAfterPartial: narrowRefinementAfterPartial,
+      postRecognitionDeepen: postRecognitionDeepen,
       session: nightSession,
       grounding: conversationGrounding,
       groundingBlob: groundingBlob,

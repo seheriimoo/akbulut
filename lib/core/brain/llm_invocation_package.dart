@@ -61,6 +61,9 @@ class LlmInvocationPackage {
   /// Narrow-only: one refinement question after partial reframe confirm.
   final bool narrowRefinementAfterPartial;
 
+  /// Post-Recognition integrate-lite deepen (not duplicate Recognition).
+  final bool postRecognitionDeepen;
+
   /// Bound Conversation DNA constraints (not enforced by this package).
   final ConversationDNA dna;
 
@@ -90,6 +93,7 @@ class LlmInvocationPackage {
     this.expressionMode = ConversationExpressionMode.standard,
     this.repairRepetitionProtest = false,
     this.narrowRefinementAfterPartial = false,
+    this.postRecognitionDeepen = false,
     this.dna = ConversationDNA.instance,
   }) {
     if (!_isSpeakableWhat(what)) {

@@ -37,6 +37,7 @@ class ModeSafeTerminalFallback {
     required ConversationExpressionMode expressionMode,
     String? userUtterance,
     bool narrowRefinementAfterPartial = false,
+    bool postRecognitionDeepen = false,
     NightSession? session,
     ConversationGroundingBuffer? grounding,
     String? groundingBlob,
@@ -89,6 +90,16 @@ class ModeSafeTerminalFallback {
       if (mechanism != null) return mechanism;
     }
 
+    // Post-Recognition deepen: prefer soft integrate-lite over still-here.
+    if (expressionMode == ConversationExpressionMode.standard &&
+        postRecognitionDeepen) {
+      final deepen = _deepenTerminal(
+        turkish: turkish,
+        session: session,
+      );
+      if (deepen != null) return deepen;
+    }
+
     // Phase 1 — evidence-bound before shallow empathy terminals.
     if (_prefersEvidenceBoundTerminal(expressionMode)) {
       final bound = _evidenceBoundValidationTerminal(
@@ -98,6 +109,7 @@ class ModeSafeTerminalFallback {
         session: session,
         grounding: grounding,
         turkish: turkish,
+        preferStillHere: !postRecognitionDeepen,
       );
       if (bound != null) return bound;
     }
@@ -146,6 +158,7 @@ class ModeSafeTerminalFallback {
     required NightSession? session,
     required ConversationGroundingBuffer? grounding,
     required bool turkish,
+    bool preferStillHere = true,
   }) {
     if (!SurfaceUtteranceReader.isSubstantiveUserTurn(userUtterance)) {
       return null;
@@ -161,8 +174,18 @@ class ModeSafeTerminalFallback {
     if (mirror != null &&
         !HoldActDedup.wouldRepeatText(session, mirror.text) &&
         !HoldActDedup.sessionContainsNormalized(session, mirror.text)) {
-      return mirror;
+      // Skip still-here family mirrors when deepen/TF path should stay active.
+      if (!preferStillHere &&
+          (mirror.text.toLowerCase().contains('still here tonight') ||
+              mirror.text.toLowerCase().contains('hâlâ orada') ||
+              mirror.text.toLowerCase().contains('hala orada'))) {
+        // fall through
+      } else {
+        return mirror;
+      }
     }
+
+    if (!preferStillHere) return null;
 
     final stillThere = turkish ? _trStillThere : _enStillThere;
     if (!HoldActDedup.sessionContainsNormalized(session, stillThere) &&
@@ -175,6 +198,28 @@ class ModeSafeTerminalFallback {
       }
     }
 
+    return null;
+  }
+
+  /// Soft deepen / integrate-lite ModeSafe lines (reasoning types, not a bank).
+  static ConversationUtterance? _deepenTerminal({
+    required bool turkish,
+    required NightSession? session,
+  }) {
+    final candidates = turkish
+        ? const [
+            'Hazırlanmak için daha çok düşünmek, zihni bu gece açık tutuyor olabilir.',
+            'Hazırlık gibi gelen düşünme sürecinin kendisi sistemi aktif tutuyor olabilir.',
+          ]
+        : const [
+            'Using more thinking as preparation may itself keep the mind active tonight.',
+            'The preparation process may be what keeps the system running tonight.',
+          ];
+    for (final text in candidates) {
+      if (HoldActDedup.sessionContainsNormalized(session, text)) continue;
+      if (HoldActDedup.wouldRepeatText(session, text)) continue;
+      return ConversationUtterance(text: text);
+    }
     return null;
   }
 

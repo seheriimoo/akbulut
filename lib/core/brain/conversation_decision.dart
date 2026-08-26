@@ -16,11 +16,15 @@ class ConversationDecision {
   /// Narrow-only: refine hypothesis after partial reframe confirm (Slice 2.1).
   final bool narrowRefinementAfterPartial;
 
+  /// Post-Recognition: one integrate-lite deepen turn (not re-Recognition).
+  final bool postRecognitionDeepen;
+
   const ConversationDecision({
     required this.phase,
     required this.shouldSpeak,
     this.expressionMode = ConversationExpressionMode.standard,
     this.repairRepetitionProtest = false,
     this.narrowRefinementAfterPartial = false,
+    this.postRecognitionDeepen = false,
   });
 }

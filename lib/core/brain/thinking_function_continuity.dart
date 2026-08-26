@@ -1,5 +1,6 @@
 import 'conversation_grounding_buffer.dart';
 import 'grounded_progression.dart';
+import 'mechanism_confirmation_semantics.dart';
 import 'night_session.dart';
 import 'thinking_function_detector.dart';
 import 'thinking_function_hypothesis.dart';
@@ -132,7 +133,23 @@ class ThinkingFunctionContinuity {
     return resolved == null;
   }
 
+  /// Public correction check for post-Recognition admission (same rules).
+  static bool isMechanismCorrectionPublic(
+    String message,
+    ThinkingFunctionKind? priorKind,
+  ) {
+    return _isMechanismCorrection(_normalize(message), priorKind);
+  }
+
   static bool _elaboratesSameJob(String text, ThinkingFunctionKind kind) {
+    // Post-Recognition bridge: preparation-utility confirmation elaborates
+    // the FUNCTION of the prior mechanism without requiring negative landing.
+    if (MechanismConfirmationSemantics.confirmsOrElaboratesSameJob(
+      text,
+      kind,
+    )) {
+      return true;
+    }
     switch (kind) {
       case ThinkingFunctionKind.worstCaseRehearsal:
         return _worstCaseElaboration(text);

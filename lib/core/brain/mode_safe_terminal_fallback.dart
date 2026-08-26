@@ -208,12 +208,12 @@ class ModeSafeTerminalFallback {
   }) {
     final candidates = turkish
         ? const [
-            'Hazırlanmak için daha çok düşünmek, zihni bu gece açık tutuyor olabilir.',
-            'Hazırlık gibi gelen düşünme sürecinin kendisi sistemi aktif tutuyor olabilir.',
+            'Hazırlıklı hissetmek istemek, bu gece düşünmeyi sürdürüyor olabilir.',
+            'Hazırlıklı olmak istemek, bu gece düşünmeyi sürdürüyor olabilir.',
           ]
         : const [
-            'Using more thinking as preparation may itself keep the mind active tonight.',
-            'The preparation process may be what keeps the system running tonight.',
+            'Wanting to feel prepared may itself keep thinking going tonight.',
+            'Needing to feel prepared may itself keep thinking going tonight.',
           ];
     for (final text in candidates) {
       if (HoldActDedup.sessionContainsNormalized(session, text)) continue;

@@ -37,6 +37,7 @@ class GuardSafeFallback {
     ConversationExpressionMode expressionMode =
         ConversationExpressionMode.standard,
     bool narrowRefinementAfterPartial = false,
+    bool postRecognitionDeepen = false,
     NightSession? session,
     ConversationGroundingBuffer? grounding,
     String sessionVentCorpus = '',
@@ -57,6 +58,25 @@ class GuardSafeFallback {
             effectiveMode == ConversationExpressionMode.reframe ||
             effectiveMode == ConversationExpressionMode.integrate)) {
       effectiveMode = ConversationExpressionMode.groundedHold;
+    }
+
+    // Preserve post-Recognition deepen: ModeSafe deepen terminals only —
+    // never Phase-1 still-here UserObjectMirror family.
+    if (postRecognitionDeepen &&
+        what == ConversationPhase.validation &&
+        effectiveMode == ConversationExpressionMode.standard) {
+      final deepen = ModeSafeTerminalFallback.forExpression(
+        what: what,
+        expressionMode: effectiveMode,
+        userUtterance: userUtterance,
+        narrowRefinementAfterPartial: narrowRefinementAfterPartial,
+        postRecognitionDeepen: true,
+        session: session,
+        grounding: grounding,
+        groundingBlob: groundingBlob,
+        thinkingFunctionHypothesis: thinkingFunctionHypothesis,
+      );
+      if (deepen != null) return deepen;
     }
 
     if (what == ConversationPhase.validation &&
@@ -151,6 +171,7 @@ class GuardSafeFallback {
     }
 
     // B2 — structural user-object mirror before generic empathy filler.
+    // Skip when deepen is active (still-here family must not replace deepen).
     final concernShiftFresh = userUtterance != null &&
         ConcernShiftDetector.isShift(
           currentMessage: userUtterance,
@@ -158,6 +179,7 @@ class GuardSafeFallback {
           session: session,
         );
     if (what == ConversationPhase.validation &&
+        !postRecognitionDeepen &&
         (!ProgressionStateReader.isMirrorSaturated(session) ||
             concernShiftFresh)) {
       final objectMirror = UserObjectMirror.forValidation(
@@ -346,6 +368,7 @@ class GuardSafeFallback {
       expressionMode: effectiveMode,
       userUtterance: userUtterance,
       narrowRefinementAfterPartial: narrowRefinementAfterPartial,
+      postRecognitionDeepen: postRecognitionDeepen,
       session: session,
       grounding: grounding,
       groundingBlob: groundingBlob,

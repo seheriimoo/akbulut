@@ -152,6 +152,7 @@ class ConversationEngine {
       userUtterance: userUtterance,
       expressionMode: package.expressionMode,
       narrowRefinementAfterPartial: package.narrowRefinementAfterPartial,
+      postRecognitionDeepen: package.postRecognitionDeepen,
       session: nightSession,
       grounding: package.conversationGrounding,
       sessionVentCorpus: sessionVentCorpus,

@@ -1,10 +1,17 @@
 import 'package:flutter_test/flutter_test.dart';
 import 'package:slowave/core/brain/conversation_arc_reader.dart';
+import 'package:slowave/core/brain/conversation_decision.dart';
+import 'package:slowave/core/brain/conversation_engine.dart';
 import 'package:slowave/core/brain/conversation_expression_mode.dart';
 import 'package:slowave/core/brain/conversation_grounding_buffer.dart';
 import 'package:slowave/core/brain/conversation_phase.dart';
 import 'package:slowave/core/brain/conversation_policy.dart';
+import 'package:slowave/core/brain/conversation_utterance.dart';
+import 'package:slowave/core/brain/exit_decision.dart';
+import 'package:slowave/core/brain/guard_safe_fallback.dart';
 import 'package:slowave/core/brain/identity.dart';
+import 'package:slowave/core/brain/language_model_client.dart';
+import 'package:slowave/core/brain/llm_invocation_package.dart';
 import 'package:slowave/core/brain/living_mind_model.dart';
 import 'package:slowave/core/brain/mechanism_confirmation_semantics.dart';
 import 'package:slowave/core/brain/mode_safe_terminal_fallback.dart';
@@ -301,7 +308,8 @@ void main() {
         ..._afterRecognition.turns,
         _turn(
           ConversationExpressionMode.standard,
-          text: 'Using more thinking as preparation may itself keep the mind active tonight.',
+          text:
+              'Wanting to feel prepared may itself keep thinking going tonight.',
         ),
       ]);
       expect(MechanismRecognitionEpoch.deepenConsumed(afterDeepen), isTrue);
@@ -379,4 +387,153 @@ void main() {
       expect(d, PostRecognitionConfirmationDecision.noBasis);
     });
   });
+
+  group('GuardSafeFallback deepen propagation (Build 7 device regression)', () {
+    const t4 =
+        "Maybe. It feels like if I think through every possibility, somehow I'll be more prepared.";
+    final tf = ThinkingFunctionHypothesis(
+      kind: ThinkingFunctionKind.worstCaseRehearsal,
+      confidence: 0.82,
+      evidenceIds: const ['continuity:elaboration_refresh'],
+      supportTurnCount: 3,
+    );
+
+    bool _isStillHereFamily(String text) {
+      final lower = text.toLowerCase();
+      return lower.contains('still here tonight') ||
+          lower.contains('what you said') ||
+          lower.contains('what you named') ||
+          lower.contains('hâlâ orada') ||
+          lower.contains('hala orada');
+    }
+
+    bool _isDeepenTerminal(String text) {
+      final lower = text.toLowerCase();
+      return lower.contains('feel prepared') ||
+          lower.contains('keep thinking going') ||
+          lower.contains('hazırlıklı hissetmek') ||
+          lower.contains('hazirlikli hissetmek') ||
+          lower.contains('hazırlıklı olmak istemek') ||
+          lower.contains('hazirlikli olmak istemek') ||
+          lower.contains('düşünmeyi sürdür') ||
+          lower.contains('dusunmeyi surdur');
+    }
+
+    test(
+      'Engine: Guard-rejected LLM → deepen ModeSafe, not still-here',
+      () async {
+        final engine = ConversationEngine(
+          languageModelClient: const _RejectTextClient(
+            // Clinical / tip stack — UtteranceGuard rejects.
+            'As your therapist, thinking through possibilities prepares you. '
+            'Also try this tip tonight.',
+          ),
+        );
+
+        var grounding = const ConversationGroundingBuffer.empty()
+            .appendUserUtterance(
+          "I can't stop thinking tonight.",
+        );
+        grounding = grounding.appendUserUtterance(
+          'My mind keeps thinking about everything that could go wrong tomorrow.',
+        );
+        grounding = grounding.appendUserUtterance(
+          "It's not one specific thing. My mind keeps creating different scenarios, and every one of them ends badly.",
+        );
+        grounding = grounding.appendUserUtterance(t4);
+
+        final spoken = await engine.generate(
+          conversationDecision: const ConversationDecision(
+            phase: ConversationPhase.validation,
+            shouldSpeak: true,
+            expressionMode: ConversationExpressionMode.standard,
+            postRecognitionDeepen: true,
+          ),
+          exitDecision: ExitDecision.continueConversation,
+          understanding: ValidatedUnderstanding(
+            thinkingFunctionHypothesis: tf,
+          ),
+          conversationGrounding: grounding,
+          nightSession: _afterRecognition,
+        );
+
+        expect(spoken, isNotNull);
+        expect(_isStillHereFamily(spoken!.text), isFalse);
+        expect(_isDeepenTerminal(spoken.text), isTrue);
+        expect(spoken.text.toLowerCase(), isNot(contains('therapist')));
+        expect(spoken.text.toLowerCase(), isNot(contains('tip tonight')));
+      },
+    );
+
+    test(
+      'GuardSafeFallback direct: deepen=true → ModeSafe deepen, not mirror',
+      () {
+        final deepen = GuardSafeFallback.forPhase(
+          what: ConversationPhase.validation,
+          userUtterance: t4,
+          expressionMode: ConversationExpressionMode.standard,
+          postRecognitionDeepen: true,
+          session: _afterRecognition,
+          grounding: const ConversationGroundingBuffer.empty()
+              .appendUserUtterance(t4),
+          thinkingFunctionHypothesis: tf,
+        );
+        expect(deepen, isNotNull);
+        expect(_isStillHereFamily(deepen!.text), isFalse);
+        expect(_isDeepenTerminal(deepen.text), isTrue);
+
+        final tr = GuardSafeFallback.forPhase(
+          what: ConversationPhase.validation,
+          userUtterance:
+              'Belki. Her ihtimali düşünürsem daha hazırlıklı olacağım gibi.',
+          expressionMode: ConversationExpressionMode.standard,
+          postRecognitionDeepen: true,
+          session: _afterRecognition,
+          thinkingFunctionHypothesis: tf,
+        );
+        expect(tr, isNotNull);
+        expect(_isStillHereFamily(tr!.text), isFalse);
+        expect(_isDeepenTerminal(tr.text), isTrue);
+      },
+    );
+
+    test(
+      'non-deepen standard fallback still admits object mirror / still-here',
+      () {
+        final fallback = GuardSafeFallback.forPhase(
+          what: ConversationPhase.validation,
+          userUtterance: t4,
+          expressionMode: ConversationExpressionMode.standard,
+          postRecognitionDeepen: false,
+          session: _afterRecognition,
+          grounding: const ConversationGroundingBuffer.empty()
+              .appendUserUtterance(t4),
+          thinkingFunctionHypothesis: tf,
+        );
+        expect(fallback, isNotNull);
+        // Unchanged Phase-1 path may still-here OR object-bound mirror.
+        expect(fallback!.text.trim(), isNotEmpty);
+        // Must not be forced onto deepen terminals when flag is false.
+        final modeSafeDeepen = ModeSafeTerminalFallback.forExpression(
+          what: ConversationPhase.validation,
+          expressionMode: ConversationExpressionMode.standard,
+          userUtterance: t4,
+          postRecognitionDeepen: true,
+          thinkingFunctionHypothesis: tf,
+        );
+        expect(fallback.text, isNot(modeSafeDeepen?.text));
+      },
+    );
+  });
+}
+
+class _RejectTextClient extends LanguageModelClient {
+  const _RejectTextClient(this.text);
+
+  final String text;
+
+  @override
+  Future<ConversationUtterance> realize(LlmInvocationPackage package) async {
+    return ConversationUtterance(text: text);
+  }
 }

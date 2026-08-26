@@ -1,6 +1,9 @@
 import 'conversation_decision.dart';
 import 'conversation_grounding_buffer.dart';
 import 'conversation_utterance.dart';
+import 'discovery/discovery_planner.dart';
+import 'discovery/night_mind_map.dart';
+import 'discovery/transition_profile.dart';
 import 'exit_decision.dart';
 import 'night_session.dart';
 import 'release_decision.dart';
@@ -28,6 +31,15 @@ class CognitiveTurnResult {
   /// Snapshot of the Orchestrator-owned temporary grounding buffer after this turn.
   final ConversationGroundingBuffer conversationGroundingBuffer;
 
+  /// Night-scoped discovery map snapshot (not durable memory).
+  final NightMindMap nightMindMap;
+
+  /// Planner output for this turn (optional diagnostics / host).
+  final DiscoveryPlan? discoveryPlan;
+
+  /// Transition profile when mirror emitted or map is transition-ready.
+  final TransitionProfile? transitionProfile;
+
   const CognitiveTurnResult({
     required this.session,
     required this.releaseDecision,
@@ -35,5 +47,8 @@ class CognitiveTurnResult {
     required this.exitDecision,
     this.utterance,
     this.conversationGroundingBuffer = const ConversationGroundingBuffer.empty(),
+    this.nightMindMap = NightMindMap.empty,
+    this.discoveryPlan,
+    this.transitionProfile,
   });
 }

@@ -5,6 +5,7 @@ import 'conversation_phase.dart';
 import 'conversation_utterance.dart';
 import 'closure_fallback_builder.dart';
 import 'conversational_landing.dart';
+import 'discovery/discovery_act.dart';
 import 'grounded_progression.dart';
 import 'hold_act_dedup.dart';
 import 'integrate_fallback_builder.dart';
@@ -38,6 +39,9 @@ class GuardSafeFallback {
         ConversationExpressionMode.standard,
     bool narrowRefinementAfterPartial = false,
     bool postRecognitionDeepen = false,
+    bool sleepMindMirror = false,
+    String? sleepMindMirrorText,
+    DiscoveryAct discoveryAct = DiscoveryAct.deferToArc,
     NightSession? session,
     ConversationGroundingBuffer? grounding,
     String sessionVentCorpus = '',
@@ -58,6 +62,25 @@ class GuardSafeFallback {
             effectiveMode == ConversationExpressionMode.reframe ||
             effectiveMode == ConversationExpressionMode.integrate)) {
       effectiveMode = ConversationExpressionMode.groundedHold;
+    }
+
+    // Sleep Mind Mirror: never collapse to still-here / Phase-1 mirror.
+    if (sleepMindMirror && what == ConversationPhase.validation) {
+      final text = sleepMindMirrorText?.trim();
+      if (text != null && text.isNotEmpty) {
+        return ConversationUtterance(text: text);
+      }
+      final mirror = ModeSafeTerminalFallback.forExpression(
+        what: what,
+        expressionMode: ConversationExpressionMode.integrate,
+        userUtterance: userUtterance,
+        sleepMindMirror: true,
+        session: session,
+        grounding: grounding,
+        groundingBlob: groundingBlob,
+        thinkingFunctionHypothesis: thinkingFunctionHypothesis,
+      );
+      if (mirror != null) return mirror;
     }
 
     // Preserve post-Recognition deepen: ModeSafe deepen terminals only —
@@ -171,15 +194,20 @@ class GuardSafeFallback {
     }
 
     // B2 — structural user-object mirror before generic empathy filler.
-    // Skip when deepen is active (still-here family must not replace deepen).
+    // Skip when deepen/mirror/discovery-hold: still-here family must not sink.
     final concernShiftFresh = userUtterance != null &&
         ConcernShiftDetector.isShift(
           currentMessage: userUtterance,
           grounding: grounding,
           session: session,
         );
+    final avoidStillHereSink = postRecognitionDeepen ||
+        sleepMindMirror ||
+        discoveryAct == DiscoveryAct.hold ||
+        discoveryAct == DiscoveryAct.meet;
     if (what == ConversationPhase.validation &&
         !postRecognitionDeepen &&
+        !sleepMindMirror &&
         (!ProgressionStateReader.isMirrorSaturated(session) ||
             concernShiftFresh)) {
       final objectMirror = UserObjectMirror.forValidation(
@@ -189,7 +217,17 @@ class GuardSafeFallback {
         session: session,
         grounding: grounding,
       );
-      if (objectMirror != null) return objectMirror;
+      if (objectMirror != null) {
+        final t = objectMirror.text.toLowerCase();
+        final isStillHereFamily = t.contains('still here tonight') ||
+            t.contains('hâlâ orada') ||
+            t.contains('hala orada') ||
+            t.contains('az önce söylediğin') ||
+            t.contains('az once soyledigin');
+        if (!(avoidStillHereSink && isStillHereFamily)) {
+          return objectMirror;
+        }
+      }
     }
 
     if (what == ConversationPhase.validation &&
@@ -369,6 +407,7 @@ class GuardSafeFallback {
       userUtterance: userUtterance,
       narrowRefinementAfterPartial: narrowRefinementAfterPartial,
       postRecognitionDeepen: postRecognitionDeepen,
+      sleepMindMirror: sleepMindMirror,
       session: session,
       grounding: grounding,
       groundingBlob: groundingBlob,

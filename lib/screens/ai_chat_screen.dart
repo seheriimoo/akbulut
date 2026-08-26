@@ -324,6 +324,7 @@ class _AISleepChatScreenState extends State<AISleepChatScreen> {
         : _audioHandoff.blockerFor(
             session: session,
             grounding: _lastTurnResult?.conversationGroundingBuffer,
+            transitionProfile: _lastTurnResult?.transitionProfile,
           );
     final bedAsset = _sleepBeds.assetFor(blocker: blocker, access: access);
 

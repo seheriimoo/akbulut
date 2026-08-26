@@ -473,6 +473,8 @@ class _OrderConversationPolicy extends ConversationPolicy {
     session,
     understanding,
     conversationGrounding,
+    sessionVentCorpus = '',
+    discoveryPlan,
   }) {
     order.add('policy');
     return super.decide(
@@ -481,6 +483,8 @@ class _OrderConversationPolicy extends ConversationPolicy {
       session: session,
       understanding: understanding,
       conversationGrounding: conversationGrounding,
+      sessionVentCorpus: sessionVentCorpus,
+      discoveryPlan: discoveryPlan,
     );
   }
 }

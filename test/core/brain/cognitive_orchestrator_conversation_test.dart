@@ -7,6 +7,7 @@ import 'package:slowave/core/brain/conversation_grounding_buffer.dart';
 import 'package:slowave/core/brain/conversation_phase.dart';
 import 'package:slowave/core/brain/conversation_policy.dart';
 import 'package:slowave/core/brain/conversation_utterance.dart';
+import 'package:slowave/core/brain/discovery/discovery_planner.dart';
 import 'package:slowave/core/brain/emotional_pattern_detector.dart';
 import 'package:slowave/core/brain/exit_decision.dart';
 import 'package:slowave/core/brain/exit_intelligence.dart';
@@ -309,6 +310,8 @@ class _TrackingConversationPolicy extends ConversationPolicy {
     NightSession? session,
     ValidatedUnderstanding? understanding,
     ConversationGroundingBuffer? conversationGrounding,
+    String sessionVentCorpus = '',
+    DiscoveryPlan? discoveryPlan,
   }) {
     order.add('policy');
     return super.decide(
@@ -317,6 +320,8 @@ class _TrackingConversationPolicy extends ConversationPolicy {
       session: session,
       understanding: understanding,
       conversationGrounding: conversationGrounding,
+      sessionVentCorpus: sessionVentCorpus,
+      discoveryPlan: discoveryPlan,
     );
   }
 }
@@ -363,6 +368,10 @@ class _TrackingConversationEngine extends ConversationEngine {
     String? livedExpression,
     ConversationGroundingBuffer? conversationGrounding,
     PriorAdmittedExpression? priorAdmittedExpression,
+    NightSession? nightSession,
+    String sessionVentCorpus = '',
+    String? sleepMindMirrorText,
+    String? deterministicExpression,
   }) async {
     order.add('conversation');
     invokeCount++;
@@ -374,6 +383,10 @@ class _TrackingConversationEngine extends ConversationEngine {
       livedExpression: livedExpression,
       conversationGrounding: conversationGrounding,
       priorAdmittedExpression: priorAdmittedExpression,
+      nightSession: nightSession,
+      sessionVentCorpus: sessionVentCorpus,
+      sleepMindMirrorText: sleepMindMirrorText,
+      deterministicExpression: deterministicExpression,
     );
   }
 }
@@ -403,6 +416,10 @@ class _CapturingConversationEngine extends ConversationEngine {
     String? livedExpression,
     ConversationGroundingBuffer? conversationGrounding,
     PriorAdmittedExpression? priorAdmittedExpression,
+    NightSession? nightSession,
+    String sessionVentCorpus = '',
+    String? sleepMindMirrorText,
+    String? deterministicExpression,
   }) async {
     lastConversationDecision = conversationDecision;
     lastExitDecision = exitDecision;
@@ -420,6 +437,10 @@ class _CapturingConversationEngine extends ConversationEngine {
       livedExpression: livedExpression,
       conversationGrounding: conversationGrounding,
       priorAdmittedExpression: priorAdmittedExpression,
+      nightSession: nightSession,
+      sessionVentCorpus: sessionVentCorpus,
+      sleepMindMirrorText: sleepMindMirrorText,
+      deterministicExpression: deterministicExpression,
     );
   }
 }

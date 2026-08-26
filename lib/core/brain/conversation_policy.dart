@@ -4,6 +4,8 @@ import 'conversation_decision.dart';
 import 'conversation_expression_mode.dart';
 import 'conversation_grounding_buffer.dart';
 import 'conversation_phase.dart';
+import 'discovery/discovery_act.dart';
+import 'discovery/discovery_planner.dart';
 import 'explicit_exit_intent.dart';
 import 'grounded_progression.dart';
 import 'light_conversation_detector.dart';
@@ -60,6 +62,27 @@ class ConversationPolicy {
   final ReleaseProgressionGate releaseProgressionGate;
 
   ConversationDecision decide({
+    required ReleaseDecision releaseDecision,
+    String? message,
+    NightSession? session,
+    ValidatedUnderstanding? understanding,
+    ConversationGroundingBuffer? conversationGrounding,
+    String sessionVentCorpus = '',
+    DiscoveryPlan? discoveryPlan,
+  }) {
+    final base = _decideCore(
+      releaseDecision: releaseDecision,
+      message: message,
+      session: session,
+      understanding: understanding,
+      conversationGrounding: conversationGrounding,
+      sessionVentCorpus: sessionVentCorpus,
+    );
+    return _applyDiscoveryPlan(base, discoveryPlan);
+  }
+
+  /// Existing policy tree — discovery overlays afterward.
+  ConversationDecision _decideCore({
     required ReleaseDecision releaseDecision,
     String? message,
     NightSession? session,
@@ -215,6 +238,133 @@ class ConversationPolicy {
       conversationGrounding: conversationGrounding,
       sessionVentCorpus: sessionVentCorpus,
     );
+  }
+
+  /// Overlay Adaptive Discovery plan onto an arc decision.
+  ///
+  /// Never overrides [ConversationDecision.postRecognitionDeepen].
+  ConversationDecision applyDiscoveryPlan(
+    ConversationDecision base,
+    DiscoveryPlan? plan,
+  ) {
+    return _applyDiscoveryPlan(base, plan);
+  }
+
+  ConversationDecision _applyDiscoveryPlan(
+    ConversationDecision base,
+    DiscoveryPlan? plan,
+  ) {
+    if (plan == null) return base;
+
+    // Build 8 deepen path is sacred — discovery must not replace it.
+    if (base.postRecognitionDeepen) {
+      return ConversationDecision(
+        phase: base.phase,
+        shouldSpeak: base.shouldSpeak,
+        expressionMode: base.expressionMode,
+        repairRepetitionProtest: base.repairRepetitionProtest,
+        narrowRefinementAfterPartial: base.narrowRefinementAfterPartial,
+        postRecognitionDeepen: true,
+        discoveryAct: DiscoveryAct.postRecognitionDeepen,
+      );
+    }
+
+    switch (plan.act) {
+      case DiscoveryAct.deferToArc:
+      case DiscoveryAct.meet:
+      case DiscoveryAct.recognition:
+        return ConversationDecision(
+          phase: base.phase,
+          shouldSpeak: base.shouldSpeak,
+          expressionMode: base.expressionMode,
+          repairRepetitionProtest: base.repairRepetitionProtest,
+          narrowRefinementAfterPartial: base.narrowRefinementAfterPartial,
+          postRecognitionDeepen: base.postRecognitionDeepen,
+          discoveryAct: plan.act,
+          discoveryObjective: plan.objective,
+        );
+      case DiscoveryAct.postRecognitionDeepen:
+        return const ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
+          expressionMode: ConversationExpressionMode.standard,
+          postRecognitionDeepen: true,
+          discoveryAct: DiscoveryAct.postRecognitionDeepen,
+        );
+      case DiscoveryAct.sleepMindMirror:
+        return const ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
+          expressionMode: ConversationExpressionMode.integrate,
+          sleepMindMirror: true,
+          discoveryAct: DiscoveryAct.sleepMindMirror,
+        );
+      case DiscoveryAct.hold:
+        // Do not demote mid-arc reframe/integrate/closure into hold.
+        if (base.expressionMode == ConversationExpressionMode.reframe ||
+            base.expressionMode == ConversationExpressionMode.integrate ||
+            base.expressionMode == ConversationExpressionMode.closure ||
+            base.expressionMode == ConversationExpressionMode.repair) {
+          return ConversationDecision(
+            phase: base.phase,
+            shouldSpeak: base.shouldSpeak,
+            expressionMode: base.expressionMode,
+            repairRepetitionProtest: base.repairRepetitionProtest,
+            narrowRefinementAfterPartial: base.narrowRefinementAfterPartial,
+            discoveryAct: DiscoveryAct.hold,
+          );
+        }
+        return const ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
+          expressionMode: ConversationExpressionMode.groundedHold,
+          discoveryAct: DiscoveryAct.hold,
+        );
+      case DiscoveryAct.clarifyingQuestion:
+      case DiscoveryAct.discriminatingQuestion:
+      case DiscoveryAct.deepeningQuestion:
+      case DiscoveryAct.confirmationQuestion:
+      case DiscoveryAct.reflectThenQuestion:
+        // Preserve earned mid-arc reframe/integrate/closure/repair only.
+        // Discovery IG questions may override observe/narrow/standard.
+        if (base.expressionMode == ConversationExpressionMode.reframe ||
+            base.expressionMode == ConversationExpressionMode.integrate ||
+            base.expressionMode == ConversationExpressionMode.closure ||
+            base.expressionMode == ConversationExpressionMode.repair) {
+          return ConversationDecision(
+            phase: base.phase,
+            shouldSpeak: base.shouldSpeak,
+            expressionMode: base.expressionMode,
+            repairRepetitionProtest: base.repairRepetitionProtest,
+            narrowRefinementAfterPartial: base.narrowRefinementAfterPartial,
+            discoveryAct: DiscoveryAct.deferToArc,
+          );
+        }
+        // Explicit exit / silence / light chat stay intact.
+        if (base.phase != ConversationPhase.validation || !base.shouldSpeak) {
+          return ConversationDecision(
+            phase: base.phase,
+            shouldSpeak: base.shouldSpeak,
+            expressionMode: base.expressionMode,
+            discoveryAct: DiscoveryAct.deferToArc,
+          );
+        }
+        if (base.expressionMode == ConversationExpressionMode.lightChat) {
+          return ConversationDecision(
+            phase: base.phase,
+            shouldSpeak: base.shouldSpeak,
+            expressionMode: base.expressionMode,
+            discoveryAct: DiscoveryAct.deferToArc,
+          );
+        }
+        return ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
+          expressionMode: ConversationExpressionMode.narrow,
+          discoveryAct: plan.act,
+          discoveryObjective: plan.objective,
+        );
+    }
   }
 
   /// Slice 2–3 arc: Observe → Narrow → Reframe → Integrate → Closure.

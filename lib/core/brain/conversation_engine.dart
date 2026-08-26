@@ -6,6 +6,7 @@ import 'conversation_expression_mode.dart';
 import 'conversation_grounding_buffer.dart';
 import 'conversation_phase.dart';
 import 'conversation_utterance.dart';
+import 'discovery/discovery_act.dart';
 import 'exit_decision.dart';
 import 'guard_safe_fallback.dart';
 import 'hold_act_dedup.dart';
@@ -53,6 +54,8 @@ class ConversationEngine {
     PriorAdmittedExpression? priorAdmittedExpression,
     NightSession? nightSession,
     String sessionVentCorpus = '',
+    String? sleepMindMirrorText,
+    String? deterministicExpression,
   }) async {
     final userUtterance =
         conversationGrounding?.currentUserUtterance ?? livedExpression;
@@ -68,6 +71,30 @@ class ConversationEngine {
     final thinkingFunctionHypothesis =
         understanding?.thinkingFunctionHypothesis;
 
+    // Deterministic safety / special surfaces — no LLM rewrite.
+    if (deterministicExpression != null &&
+        deterministicExpression.trim().isNotEmpty) {
+      return ConversationUtterance(text: deterministicExpression.trim());
+    }
+
+    // Deterministic Sleep Mind Mirror — no LLM invents the map realization.
+    if (conversationDecision.sleepMindMirror &&
+        sleepMindMirrorText != null &&
+        sleepMindMirrorText.trim().isNotEmpty) {
+      final mirrorUtterance = ConversationUtterance(text: sleepMindMirrorText);
+      final admitted = utteranceGuard.allow(
+        utterance: mirrorUtterance,
+        what: conversationDecision.phase,
+        userUtterance: userUtterance,
+        mirrorGroundingUtterance: expressionGrounding,
+        expressionMode: conversationDecision.expressionMode,
+        nightSession: nightSession,
+      );
+      if (admitted != null) return admitted;
+      // Soft admit if Guard rejects (mirror is evidence-bound compiler output).
+      return mirrorUtterance;
+    }
+
     final package = promptArchitecture.package(
       conversationDecision: conversationDecision,
       exitDecision: exitDecision,
@@ -76,6 +103,7 @@ class ConversationEngine {
       livedExpression: livedExpression,
       conversationGrounding: conversationGrounding,
       priorAdmittedExpression: priorAdmittedExpression,
+      sleepMindMirrorText: sleepMindMirrorText,
     );
 
     if (package == null) {
@@ -140,7 +168,16 @@ class ConversationEngine {
       listenOnlyActive: listenOnlyActive,
       nightSession: nightSession,
     );
-    if (admitted != null) return admitted;
+    if (admitted != null &&
+        !_blocksStillHereSink(package.discoveryAct, admitted.text)) {
+      return admitted;
+    }
+    if (admitted != null) {
+      debugPrint(
+        'Nocta expression blocked still-here sink act='
+        '${package.discoveryAct.name}',
+      );
+    }
 
     debugPrint(
       'Nocta expression Guard reject WHAT=${package.what.name} '
@@ -153,6 +190,9 @@ class ConversationEngine {
       expressionMode: package.expressionMode,
       narrowRefinementAfterPartial: package.narrowRefinementAfterPartial,
       postRecognitionDeepen: package.postRecognitionDeepen,
+      sleepMindMirror: package.sleepMindMirror,
+      sleepMindMirrorText: package.sleepMindMirrorText,
+      discoveryAct: package.discoveryAct,
       session: nightSession,
       grounding: package.conversationGrounding,
       sessionVentCorpus: sessionVentCorpus,
@@ -180,6 +220,8 @@ class ConversationEngine {
         expressionMode: package.expressionMode,
         narrowRefinementAfterPartial: package.narrowRefinementAfterPartial,
         postRecognitionDeepen: package.postRecognitionDeepen,
+        sleepMindMirror: package.sleepMindMirror,
+        sleepMindMirrorText: package.sleepMindMirrorText,
         userUtterance: userUtterance,
         priorRejectedText: utterance.text,
         reason: 'primary fallback null',
@@ -189,6 +231,7 @@ class ConversationEngine {
         listenOnlyActive: listenOnlyActive,
         sessionVentCorpus: sessionVentCorpus,
         thinkingFunctionHypothesis: thinkingFunctionHypothesis,
+        discoveryAct: package.discoveryAct,
       );
     }
 
@@ -202,31 +245,37 @@ class ConversationEngine {
       listenOnlyActive: listenOnlyActive,
       nightSession: nightSession,
     );
-    if (fallbackAdmitted == null) {
+    if (fallbackAdmitted != null &&
+        !_blocksStillHereSink(package.discoveryAct, fallbackAdmitted.text)) {
       debugPrint(
-        'Nocta expression Guard fallback also rejected WHAT='
-        '${package.what.name} text="${fallback.text}"',
+        'Nocta expression Guard fallback admitted WHAT=${package.what.name}',
       );
-      return _admitTerminalFallback(
-        what: package.what,
-        expressionMode: package.expressionMode,
-        narrowRefinementAfterPartial: package.narrowRefinementAfterPartial,
-        postRecognitionDeepen: package.postRecognitionDeepen,
-        userUtterance: userUtterance,
-        priorRejectedText: fallback.text,
-        reason: 'fallback double-reject',
-        nightSession: nightSession,
-        conversationGrounding: package.conversationGrounding,
-        groundingBlob: expressionGrounding,
-        listenOnlyActive: listenOnlyActive,
-        sessionVentCorpus: sessionVentCorpus,
-        thinkingFunctionHypothesis: thinkingFunctionHypothesis,
+      return fallbackAdmitted;
+    }
+    if (fallbackAdmitted != null) {
+      debugPrint(
+        'Nocta expression blocked still-here sink on fallback act='
+        '${package.discoveryAct.name}',
       );
     }
-    debugPrint(
-      'Nocta expression Guard fallback admitted WHAT=${package.what.name}',
+    return _admitTerminalFallback(
+      what: package.what,
+      expressionMode: package.expressionMode,
+      narrowRefinementAfterPartial: package.narrowRefinementAfterPartial,
+      postRecognitionDeepen: package.postRecognitionDeepen,
+      sleepMindMirror: package.sleepMindMirror,
+      sleepMindMirrorText: package.sleepMindMirrorText,
+      userUtterance: userUtterance,
+      priorRejectedText: fallback.text,
+      reason: 'fallback double-reject',
+      nightSession: nightSession,
+      conversationGrounding: package.conversationGrounding,
+      groundingBlob: expressionGrounding,
+      listenOnlyActive: listenOnlyActive,
+      sessionVentCorpus: sessionVentCorpus,
+      thinkingFunctionHypothesis: thinkingFunctionHypothesis,
+      discoveryAct: package.discoveryAct,
     );
-    return fallbackAdmitted;
   }
 
   ConversationUtterance? _zeroSilenceTerminal({
@@ -251,6 +300,9 @@ class ConversationEngine {
           conversationDecision.narrowRefinementAfterPartial,
       postRecognitionDeepen: package?.postRecognitionDeepen ??
           conversationDecision.postRecognitionDeepen,
+      sleepMindMirror: package?.sleepMindMirror ??
+          conversationDecision.sleepMindMirror,
+      sleepMindMirrorText: package?.sleepMindMirrorText,
       userUtterance: userUtterance,
       priorRejectedText: '',
       reason: reason,
@@ -264,6 +316,7 @@ class ConversationEngine {
         sessionVentCorpus: '',
       ),
       thinkingFunctionHypothesis: thinkingFunctionHypothesis,
+      discoveryAct: package?.discoveryAct ?? conversationDecision.discoveryAct,
     );
   }
 
@@ -301,7 +354,15 @@ class ConversationEngine {
     String sessionVentCorpus = '',
     ThinkingFunctionHypothesis? thinkingFunctionHypothesis,
     bool postRecognitionDeepen = false,
+    bool sleepMindMirror = false,
+    String? sleepMindMirrorText,
+    DiscoveryAct discoveryAct = DiscoveryAct.deferToArc,
   }) {
+    if (sleepMindMirror &&
+        sleepMindMirrorText != null &&
+        sleepMindMirrorText.trim().isNotEmpty) {
+      return ConversationUtterance(text: sleepMindMirrorText);
+    }
     if (what == ConversationPhase.validation &&
         expressionMode == ConversationExpressionMode.observePurity) {
       final shiftAck = HoldActDedup.concernShiftAcknowledge(
@@ -335,6 +396,7 @@ class ConversationEngine {
       userUtterance: userUtterance,
       narrowRefinementAfterPartial: narrowRefinementAfterPartial,
       postRecognitionDeepen: postRecognitionDeepen,
+      sleepMindMirror: sleepMindMirror,
       session: nightSession,
       grounding: conversationGrounding,
       groundingBlob: groundingBlob,
@@ -356,6 +418,25 @@ class ConversationEngine {
       listenOnlyActive: listenOnlyActive,
       nightSession: nightSession,
     );
+    if (admitted != null &&
+        !_blocksStillHereSink(discoveryAct, admitted.text)) {
+      debugPrint(
+        'Nocta expression terminal fallback admitted WHAT=${what.name} '
+        'mode=${expressionMode.name} reason=$reason',
+      );
+      return admitted;
+    }
+    // Last-resort soft meet/hold lines — never still-here.
+    if (discoveryAct == DiscoveryAct.meet ||
+        discoveryAct == DiscoveryAct.hold) {
+      final turkish =
+          SurfaceTextFuzzy.prefersTurkish(userUtterance, groundingBlob);
+      return ConversationUtterance(
+        text: turkish
+            ? 'Buradayım. Bu gece yanında durabilirim.'
+            : "I'm here with you in this tonight.",
+      );
+    }
     if (admitted == null) {
       debugPrint(
         'Nocta expression CRITICAL terminal rejected WHAT=${what.name} '
@@ -366,8 +447,6 @@ class ConversationEngine {
         for (final retreatMode in const [
           ConversationExpressionMode.narrow,
           ConversationExpressionMode.observePurity,
-          // postReframeListen only when user turn is a minimal confirm —
-          // substantive turns must not land on bare Okay via this retreat.
         ]) {
           final retreat = ModeSafeTerminalFallback.forExpression(
             what: what,
@@ -439,11 +518,16 @@ class ConversationEngine {
         thinkingFunctionHypothesis: thinkingFunctionHypothesis,
       );
     }
-    debugPrint(
-      'Nocta expression terminal fallback admitted WHAT=${what.name} '
-      'mode=${expressionMode.name} reason=$reason',
+    return _zeroSilenceSurfaceRetreat(
+      what: what,
+      userUtterance: userUtterance,
+      expressionMode: expressionMode,
+      nightSession: nightSession,
+      conversationGrounding: conversationGrounding,
+      groundingBlob: groundingBlob,
+      listenOnlyActive: listenOnlyActive,
+      thinkingFunctionHypothesis: thinkingFunctionHypothesis,
     );
-    return admitted;
   }
 
   /// B2.2.1 — Hard zero-silence retreat when mode terminal fails Guard.
@@ -666,6 +750,34 @@ class ConversationEngine {
       return 'Those rehearsed scenes are still with you tonight.';
     }
     return null;
+  }
+
+  static bool _blocksStillHereSink(DiscoveryAct act, String text) {
+    if (act != DiscoveryAct.meet &&
+        act != DiscoveryAct.hold &&
+        act != DiscoveryAct.deferToArc) {
+      return false;
+    }
+    // Only block still-here on meet/hold; defer blocks only exact sink lines.
+    final t = text.toLowerCase();
+    final isSink = t.contains('still here tonight') ||
+        t.contains('hâlâ orada') ||
+        t.contains('hala orada') ||
+        t.contains('az önce söylediğin') ||
+        t.contains('az once soyledigin') ||
+        t.contains('what you named is still') ||
+        (act != DiscoveryAct.deferToArc &&
+            t.contains('still with you tonight'));
+    if (!isSink) return false;
+    if (act == DiscoveryAct.deferToArc) {
+      // Block only the worst still-here stamps on defer.
+      return t.contains('still here tonight') ||
+          t.contains('hâlâ orada') ||
+          t.contains('hala orada') ||
+          t.contains('az önce söylediğin') ||
+          t.contains('what you named is still');
+    }
+    return true;
   }
 
   static String? _expressionGroundingBlob({

@@ -1,5 +1,6 @@
 import 'conversation_blueprint_binding.dart';
 import 'conversation_grounding_buffer.dart';
+import 'discovery/discovery_objective.dart';
 import 'thinking_function_hypothesis.dart';
 import 'thinking_function_intelligence_shaping.dart';
 
@@ -21,11 +22,14 @@ class NarrowIntelligence {
     ConversationGroundingBuffer? conversationGrounding,
     bool refinementAfterPartial = false,
     ThinkingFunctionHypothesis? thinkingFunctionHypothesis,
+    DiscoveryObjective? discoveryObjective,
   }) {
     assert(stage.stage == BlueprintStage.receipt);
 
     final currentTurn = _currentTurnGrounding(conversationGrounding);
+    final discovery = discoveryObjective != null && !refinementAfterPartial;
     final mechanismAware = !refinementAfterPartial &&
+        !discovery &&
         ThinkingFunctionIntelligenceShaping.isSupportedOrStrong(
           thinkingFunctionHypothesis,
         );
@@ -33,39 +37,55 @@ class NarrowIntelligence {
       ...stage.forbiddenMoves,
       ..._narrowForbidden,
       if (mechanismAware) ..._mechanismForbidden,
+      if (discovery) ..._discoveryForbidden,
     ];
 
     return NarrowCompileSlice(
       aim: refinementAfterPartial
           ? _aimRefinement
-          : (mechanismAware ? _aimMechanism : _aim),
+          : (discovery
+              ? _aimDiscovery
+              : (mechanismAware ? _aimMechanism : _aim)),
       sealedWhatSignature: refinementAfterPartial
           ? _sealedWhatSignatureRefinement
-          : (mechanismAware
-              ? _sealedWhatSignatureMechanism
-              : _sealedWhatSignature),
+          : (discovery
+              ? _sealedWhatSignatureDiscovery
+              : (mechanismAware
+                  ? _sealedWhatSignatureMechanism
+                  : _sealedWhatSignature)),
       forbiddenMoves: forbidden,
       responseLength: _responseLength,
       narrowDirective: refinementAfterPartial
           ? _narrowRefinementDirective
-          : (mechanismAware ? _narrowMechanismDirective : _narrowDirective),
+          : (discovery
+              ? _discoveryDirective(discoveryObjective)
+              : (mechanismAware ? _narrowMechanismDirective : _narrowDirective)),
       realizationDirective: refinementAfterPartial
           ? _realizationRefinementDirective
-          : (mechanismAware
-              ? _realizationMechanismDirective
-              : _realizationDirective),
-      userContent: _userContent(
-        currentTurn: currentTurn,
-        refinementAfterPartial: refinementAfterPartial,
-        hypothesis: mechanismAware ? thinkingFunctionHypothesis : null,
-      ),
+          : (discovery
+              ? _realizationDiscoveryDirective
+              : (mechanismAware
+                  ? _realizationMechanismDirective
+                  : _realizationDirective)),
+      userContent: discovery
+          ? _discoveryUserContent(
+              currentTurn: currentTurn,
+              objective: discoveryObjective,
+            )
+          : _userContent(
+              currentTurn: currentTurn,
+              refinementAfterPartial: refinementAfterPartial,
+              hypothesis: mechanismAware ? thinkingFunctionHypothesis : null,
+            ),
       systemAppendix: refinementAfterPartial
           ? _systemAppendixRefinement
-          : (mechanismAware
-              ? _systemAppendixMechanism(
-                  thinkingFunctionHypothesis!,
-                )
-              : _systemAppendix),
+          : (discovery
+              ? _systemAppendixDiscovery(discoveryObjective)
+              : (mechanismAware
+                  ? _systemAppendixMechanism(
+                      thinkingFunctionHypothesis!,
+                    )
+                  : _systemAppendix)),
     );
   }
 
@@ -206,6 +226,60 @@ Narrow Intelligence v$version (refinement):
 $_narrowRefinementDirective
 Partial confirm only — refine, do not reframe.
 ''';
+
+  static const String _aimDiscovery =
+      'Ask exactly one information-gain question that resolves the sealed '
+      'discovery objective — never a fixed question bank line.';
+
+  static const String _sealedWhatSignatureDiscovery =
+      'validation / Receipt — Discovery Narrow only. One question for the '
+      'objective dimension. No reframe. No Permission. No diagnosis.';
+
+  static const String _realizationDiscoveryDirective =
+      'Realize one discovery question only. Resolve the objective. '
+      'Do not reframe. Do not ease obligation. Do not diagnose.';
+
+  static const List<String> _discoveryForbidden = [
+    'Re-asking a forbidden/resolved dimension from the objective',
+    'Pasting fixed question-bank copy',
+    'More than one question',
+    'Clinical diagnosis or motive certainty',
+    'Permission / Release on this turn',
+  ];
+
+  static String _discoveryDirective(DiscoveryObjective objective) {
+    final poles = (objective.discriminateA != null &&
+            objective.discriminateB != null)
+        ? ' Prefer a soft fork between “${objective.discriminateA}” and '
+            '“${objective.discriminateB}” when both fit their words.'
+        : '';
+    return 'Discovery Narrow: learn about dimension '
+        '`${objective.dimension.name}` via act `${objective.act.name}`. '
+        'Intent (WHAT only — invent original HOW): ${objective.intentSummary}.'
+        '$poles '
+        'One short question only. Ground in their words. No Belki-reframe. '
+        'No interrogation stack. Never re-ask: '
+        '${objective.forbiddenDimensions.map((d) => d.name).join(', ')}.';
+  }
+
+  static String _discoveryUserContent({
+    required String? currentTurn,
+    required DiscoveryObjective objective,
+  }) {
+    final turn = currentTurn == null
+        ? ''
+        : '\n\nCurrent turn (shaping only):\n"""$currentTurn"""';
+    return '$_realizationDiscoveryDirective\n\n'
+        '${_discoveryDirective(objective)}$turn';
+  }
+
+  static String _systemAppendixDiscovery(DiscoveryObjective objective) {
+    return '''
+Narrow Intelligence v$version (discovery):
+${_discoveryDirective(objective)}
+One information-gain question only. Soft, evidence-bound.
+''';
+  }
 }
 
 class NarrowCompileSlice {

@@ -466,6 +466,10 @@ class _CapturingConversationEngine extends ConversationEngine {
     String? livedExpression,
     ConversationGroundingBuffer? conversationGrounding,
     PriorAdmittedExpression? priorAdmittedExpression,
+    NightSession? nightSession,
+    String sessionVentCorpus = '',
+    String? sleepMindMirrorText,
+    String? deterministicExpression,
   }) async {
     lastLivedExpression = livedExpression;
     lastConversationGrounding = conversationGrounding;
@@ -477,6 +481,10 @@ class _CapturingConversationEngine extends ConversationEngine {
       livedExpression: livedExpression,
       conversationGrounding: conversationGrounding,
       priorAdmittedExpression: priorAdmittedExpression,
+      nightSession: nightSession,
+      sessionVentCorpus: sessionVentCorpus,
+      sleepMindMirrorText: sleepMindMirrorText,
+      deterministicExpression: deterministicExpression,
     );
   }
 }

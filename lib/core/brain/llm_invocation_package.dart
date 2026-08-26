@@ -4,6 +4,8 @@ import 'conversation_dna.dart';
 import 'conversation_expression_mode.dart';
 import 'conversation_grounding_buffer.dart';
 import 'conversation_phase.dart';
+import 'discovery/discovery_act.dart';
+import 'discovery/discovery_objective.dart';
 import 'exit_decision.dart';
 import 'prior_admitted_expression.dart';
 import 'validated_understanding.dart';
@@ -64,6 +66,18 @@ class LlmInvocationPackage {
   /// Post-Recognition integrate-lite deepen (not duplicate Recognition).
   final bool postRecognitionDeepen;
 
+  /// Sleep Mind Mirror realization this turn.
+  final bool sleepMindMirror;
+
+  /// Deterministic Sleep Mind Mirror text when [sleepMindMirror] is true.
+  final String? sleepMindMirrorText;
+
+  /// Discovery WHAT-to-learn objective (HOW left to the model).
+  final DiscoveryObjective? discoveryObjective;
+
+  /// Planner act (shaping / fallback).
+  final DiscoveryAct discoveryAct;
+
   /// Bound Conversation DNA constraints (not enforced by this package).
   final ConversationDNA dna;
 
@@ -94,6 +108,10 @@ class LlmInvocationPackage {
     this.repairRepetitionProtest = false,
     this.narrowRefinementAfterPartial = false,
     this.postRecognitionDeepen = false,
+    this.sleepMindMirror = false,
+    this.sleepMindMirrorText,
+    this.discoveryObjective,
+    this.discoveryAct = DiscoveryAct.deferToArc,
     this.dna = ConversationDNA.instance,
   }) {
     if (!_isSpeakableWhat(what)) {

@@ -38,6 +38,7 @@ class ModeSafeTerminalFallback {
     String? userUtterance,
     bool narrowRefinementAfterPartial = false,
     bool postRecognitionDeepen = false,
+    bool sleepMindMirror = false,
     NightSession? session,
     ConversationGroundingBuffer? grounding,
     String? groundingBlob,
@@ -46,6 +47,16 @@ class ModeSafeTerminalFallback {
     if (!_isSpeakable(what)) return null;
 
     final turkish = SurfaceTextFuzzy.prefersTurkish(userUtterance, groundingBlob);
+
+    if (what == ConversationPhase.validation && sleepMindMirror) {
+      return ConversationUtterance(
+        text: turkish
+            ? 'Bu gece zihninin ne yaptığını biraz daha net görüyoruz; '
+                'hazır hissetme ihtiyacı düşünmeyi sürdürüyor olabilir.'
+            : 'We can see a little more clearly what your mind is doing tonight; '
+                'needing to feel prepared may itself keep thinking going.',
+      );
+    }
 
     if (what == ConversationPhase.validation &&
         expressionMode == ConversationExpressionMode.observePurity) {
@@ -267,7 +278,13 @@ class ModeSafeTerminalFallback {
       case ConversationExpressionMode.repair:
         return 'Tamam, orayı yanlış okudum. Seni uyanık tutan ne?';
       case ConversationExpressionMode.groundedHold:
-        return 'Henüz tam oturmadı ama seni kaybetmedim. Bu gece burada kalabilir.';
+        return _antiRepeatShallow(
+          session: session,
+          primary:
+              'Bu düşünceyi bu gece bitirmek zorunda değilsin. Buradayım.',
+          alternate:
+              'Daha ileri itmeden, burada olanla kalabiliriz.',
+        );
     }
   }
 
@@ -314,7 +331,12 @@ class ModeSafeTerminalFallback {
       case ConversationExpressionMode.repair:
         return 'Okay, I read that wrong. What is keeping you up tonight?';
       case ConversationExpressionMode.groundedHold:
-        return "You don't have to name it perfectly tonight. I'm still here with you.";
+        return _antiRepeatShallow(
+          session: session,
+          primary:
+              "You don't have to finish this thought tonight. I'm with you here.",
+          alternate: 'We can stay with what is present without pushing further.',
+        );
     }
   }
 

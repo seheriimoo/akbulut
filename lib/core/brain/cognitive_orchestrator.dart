@@ -6,6 +6,16 @@ import 'conversation_phase.dart';
 import 'conversation_policy.dart';
 import 'conversation_utterance.dart';
 import 'cognitive_turn_result.dart';
+import 'discovery/acute_somatic_safety_surface.dart';
+import 'discovery/discovery_act.dart';
+import 'discovery/discovery_planner.dart';
+import 'discovery/evidence_extractor.dart';
+import 'discovery/hypothesis_board.dart';
+import 'discovery/night_mind_map.dart';
+import 'discovery/night_pattern_id.dart';
+import 'discovery/semantic_dimension_ledger.dart';
+import 'discovery/sleep_mind_mirror.dart';
+import 'discovery/transition_profile.dart';
 import 'emotional_pattern_detector.dart';
 import 'exit_decision.dart';
 import 'exit_intelligence.dart';
@@ -17,12 +27,14 @@ import 'mental_pattern_detector.dart';
 import 'need_detector.dart';
 import 'night_session.dart';
 import 'perception_engine.dart';
+import 'post_recognition_mechanism_confirmation.dart';
 import 'preference_detector.dart';
 import 'prior_admitted_expression.dart';
 import 'release_decision.dart';
 import 'release_engine.dart';
 import 'session_summarizer.dart';
 import 'session_turn.dart';
+import 'surface_text_fuzzy.dart';
 import 'thinking_function_continuity.dart';
 import 'thinking_function_detector.dart';
 import 'thinking_function_hypothesis.dart';
@@ -72,6 +84,16 @@ class CognitiveOrchestrator {
 
   final InputBoundaryGate inputBoundaryGate;
 
+  final EvidenceExtractor evidenceExtractor;
+
+  final HypothesisBoard hypothesisBoard;
+
+  final DiscoveryPlanner discoveryPlanner;
+
+  final SleepMindMirrorCompiler sleepMindMirrorCompiler;
+
+  final TransitionProfileBuilder transitionProfileBuilder;
+
   /// Temporary same-night user grounding. Orchestrator-owned only.
   ConversationGroundingBuffer _conversationGroundingBuffer =
       const ConversationGroundingBuffer.empty();
@@ -82,6 +104,12 @@ class CognitiveOrchestrator {
   /// Night-scoped last supported Thinking Function (Phase 2 continuity).
   /// Cleared on correction, topic jump, or decay-to-null. Not durable memory.
   ThinkingFunctionHypothesis? _sessionThinkingFunction;
+
+  /// Night-scoped Adaptive Discovery map (not durable memory).
+  NightMindMap _nightMindMap = NightMindMap.empty;
+
+  /// Semantic re-ask ledger for discovery dimensions.
+  SemanticDimensionLedger _discoveryLedger = SemanticDimensionLedger.empty;
 
   CognitiveOrchestrator({
     required this.perceptionEngine,
@@ -100,6 +128,11 @@ class CognitiveOrchestrator {
     required this.sessionSummarizer,
     required this.memoryEngine,
     this.inputBoundaryGate = const InputBoundaryGate(),
+    this.evidenceExtractor = const EvidenceExtractor(),
+    this.hypothesisBoard = const HypothesisBoard(),
+    this.discoveryPlanner = const DiscoveryPlanner(),
+    this.sleepMindMirrorCompiler = const SleepMindMirrorCompiler(),
+    this.transitionProfileBuilder = const TransitionProfileBuilder(),
   });
 
   /// Read-only view of the Orchestrator-owned grounding buffer.
@@ -130,6 +163,8 @@ class CognitiveOrchestrator {
     if (session.turns.isEmpty) {
       _sessionVentCorpus = '';
       _sessionThinkingFunction = null;
+      _nightMindMap = NightMindMap.empty;
+      _discoveryLedger = SemanticDimensionLedger.empty;
     }
 
     // Temporary Conversation Memory buffer: user utterances only.
@@ -214,7 +249,33 @@ class CognitiveOrchestrator {
       message: message,
     );
 
-    final conversationDecision = conversationPolicy.decide(
+    // Adaptive Discovery: extract → hypothesize → plan (WHAT only).
+    final extracted = evidenceExtractor.extract(
+      prior: _nightMindMap,
+      message: message,
+      grounding: _conversationGroundingBuffer.isEmpty
+          ? null
+          : _conversationGroundingBuffer,
+      thinkingFunction: thinkingFunctionHypothesis,
+    );
+    final ranked = hypothesisBoard.rank(
+      map: extracted,
+      thinkingFunction: thinkingFunctionHypothesis,
+      currentMessage: message,
+    );
+    final mapped = hypothesisBoard.applyToMap(extracted, ranked);
+
+    // Ledger: newly extracted resolutions block re-ask (extract-first).
+    var ledger = _discoveryLedger.mergeFromMap(
+      mapAsked: mapped.askedDimensions,
+      mapResolved: mapped.resolvedDimensions,
+    );
+    for (final d in mapped.resolvedDimensions) {
+      ledger = ledger.markResolved(d);
+    }
+
+    // Arc decision first so postRecognitionDeepen is preserved.
+    final baseDecision = conversationPolicy.decide(
       releaseDecision: releaseDecision,
       message: message,
       session: session,
@@ -224,6 +285,75 @@ class CognitiveOrchestrator {
           : _conversationGroundingBuffer,
       sessionVentCorpus: _sessionVentCorpus,
     );
+
+    final discoveryPlan = discoveryPlanner.plan(
+      map: mapped.copyWith(
+        meetCompleted: _nightMindMap.meetCompleted,
+        lastPlanWasQuestion: _nightMindMap.lastPlanWasQuestion,
+        recognitionHoldCount: _nightMindMap.recognitionHoldCount,
+        acuteSomaticCaution: mapped.acuteSomaticCaution ||
+            _nightMindMap.acuteSomaticCaution,
+        askedDimensions: {
+          ..._nightMindMap.askedDimensions,
+          ...mapped.askedDimensions,
+        },
+        mirrorEmitted: _nightMindMap.mirrorEmitted,
+        discoveryDepth: _nightMindMap.discoveryDepth,
+        // Stickiness: prior leading survives into rank input via map fields;
+        // also re-carry leading when board returned sticky prior.
+        leadingPattern: mapped.leadingPattern,
+        mapConfidence: mapped.mapConfidence,
+      ),
+      ledger: ledger,
+      recognitionSurfaced:
+          MechanismRecognitionEpoch.recognitionSurfaced(session) &&
+              !baseDecision.postRecognitionDeepen,
+      preferPostRecognitionDeepen: baseDecision.postRecognitionDeepen,
+      isFirstUserTurn: session.turns.isEmpty,
+      userTurnIndex: session.turns.length,
+    );
+
+    final conversationDecision = conversationPolicy.applyDiscoveryPlan(
+      baseDecision,
+      discoveryPlan,
+    );
+
+    _nightMindMap = discoveryPlan.map;
+    _discoveryLedger = discoveryPlan.ledger;
+
+    String? sleepMindMirrorText;
+    String? deterministicExpression;
+    TransitionProfile? transitionProfile;
+    if (discoveryPlan.reason == 'acute_somatic_safety_hold') {
+      deterministicExpression = AcuteSomaticSafetySurface.forContext(
+        message: message,
+        groundingBlob: _conversationGroundingBuffer.userUtterances.join('\n'),
+      );
+    } else if (conversationDecision.sleepMindMirror ||
+        discoveryPlan.act == DiscoveryAct.sleepMindMirror) {
+      final preferTurkish = SurfaceTextFuzzy.prefersTurkish(
+        message,
+        _conversationGroundingBuffer.userUtterances.join('\n'),
+      );
+      final mirror = sleepMindMirrorCompiler.compile(
+        _nightMindMap,
+        lowConfidence: discoveryPlan.reason.contains('depth_cap') ||
+            discoveryPlan.reason.contains('soft_mirror') ||
+            discoveryPlan.reason.contains('escape_mirror'),
+        preferTurkish: preferTurkish,
+      );
+      sleepMindMirrorText = mirror.combined;
+      _nightMindMap = _nightMindMap.copyWith(mirrorEmitted: true);
+      transitionProfile = transitionProfileBuilder.fromMap(
+        _nightMindMap,
+        mirror: mirror,
+      );
+    } else if (_nightMindMap.leadingPattern != NightPatternId.unknown &&
+        _nightMindMap.mapConfidence >= 0.55) {
+      // Soft profile for handoff even before mirror (blocker hint).
+      transitionProfile = transitionProfileBuilder.fromMap(_nightMindMap);
+    }
+
     final exitDecision = exitIntelligence.decide(
       releaseDecision: releaseDecision,
       conversationDecision: conversationDecision,
@@ -245,6 +375,8 @@ class CognitiveOrchestrator {
           : _conversationGroundingBuffer,
       priorAdmittedExpression: _lastAdmittedExpression(session),
       nightSession: session,
+      sleepMindMirrorText: sleepMindMirrorText,
+      deterministicExpression: deterministicExpression,
     );
 
     final updatedSession = session.recordTurn(
@@ -270,6 +402,9 @@ class CognitiveOrchestrator {
       exitDecision: exitDecision,
       utterance: utterance,
       conversationGroundingBuffer: _conversationGroundingBuffer,
+      nightMindMap: _nightMindMap,
+      discoveryPlan: discoveryPlan,
+      transitionProfile: transitionProfile,
     );
   }
 
@@ -291,6 +426,8 @@ class CognitiveOrchestrator {
     ConversationGroundingBuffer? conversationGrounding,
     PriorAdmittedExpression? priorAdmittedExpression,
     NightSession? nightSession,
+    String? sleepMindMirrorText,
+    String? deterministicExpression,
   }) {
     return conversationEngine.generate(
       conversationDecision: conversationDecision,
@@ -302,6 +439,8 @@ class CognitiveOrchestrator {
       priorAdmittedExpression: priorAdmittedExpression,
       nightSession: nightSession,
       sessionVentCorpus: _sessionVentCorpus,
+      sleepMindMirrorText: sleepMindMirrorText,
+      deterministicExpression: deterministicExpression,
     );
   }
 

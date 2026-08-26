@@ -1,4 +1,5 @@
 import 'conversation_grounding_buffer.dart';
+import 'discovery/transition_profile.dart';
 import 'night_session.dart';
 
 /// Night → Player presentation handoff (not HCOS cognition).
@@ -9,10 +10,19 @@ class NightAudioHandoff {
   const NightAudioHandoff();
 
   /// Prefer loneliness / relationship / stress / mind from night texture.
+  ///
+  /// When [transitionProfile] is present, its [TransitionProfile.blockerKey]
+  /// wins (Adaptive Discovery → Player handoff).
   String blockerFor({
     required NightSession session,
     ConversationGroundingBuffer? grounding,
+    TransitionProfile? transitionProfile,
   }) {
+    if (transitionProfile != null &&
+        transitionProfile.blockerKey.trim().isNotEmpty) {
+      return transitionProfile.blockerKey;
+    }
+
     final blob = StringBuffer();
     if (grounding != null) {
       for (final line in grounding.userUtterances) {

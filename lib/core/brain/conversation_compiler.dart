@@ -159,6 +159,7 @@ class ConversationCompiler {
             refinementAfterPartial: package.narrowRefinementAfterPartial,
             thinkingFunctionHypothesis:
                 package.understanding?.thinkingFunctionHypothesis,
+            discoveryObjective: package.discoveryObjective,
           );
           return _StageOverlay(
             aim: slice.aim,

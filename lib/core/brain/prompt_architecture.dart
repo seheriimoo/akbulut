@@ -43,6 +43,7 @@ class PromptArchitecture {
     String? livedExpression,
     ConversationGroundingBuffer? conversationGrounding,
     PriorAdmittedExpression? priorAdmittedExpression,
+    String? sleepMindMirrorText,
   }) {
     if (!_invocationEligible(
       conversationDecision: conversationDecision,
@@ -69,6 +70,10 @@ class PromptArchitecture {
       narrowRefinementAfterPartial:
           conversationDecision.narrowRefinementAfterPartial,
       postRecognitionDeepen: conversationDecision.postRecognitionDeepen,
+      sleepMindMirror: conversationDecision.sleepMindMirror,
+      sleepMindMirrorText: sleepMindMirrorText,
+      discoveryObjective: conversationDecision.discoveryObjective,
+      discoveryAct: conversationDecision.discoveryAct,
       dna: ConversationDNA.instance,
     );
   }

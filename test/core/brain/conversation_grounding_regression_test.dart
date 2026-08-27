@@ -469,6 +469,7 @@ class _CapturingConversationEngine extends ConversationEngine {
     NightSession? nightSession,
     String sessionVentCorpus = '',
     String? sleepMindMirrorText,
+    String? noctaTransitionText,
     String? deterministicExpression,
   }) async {
     lastLivedExpression = livedExpression;
@@ -484,6 +485,7 @@ class _CapturingConversationEngine extends ConversationEngine {
       nightSession: nightSession,
       sessionVentCorpus: sessionVentCorpus,
       sleepMindMirrorText: sleepMindMirrorText,
+      noctaTransitionText: noctaTransitionText,
       deterministicExpression: deterministicExpression,
     );
   }

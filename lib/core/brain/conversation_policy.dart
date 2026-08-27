@@ -6,6 +6,7 @@ import 'conversation_grounding_buffer.dart';
 import 'conversation_phase.dart';
 import 'discovery/discovery_act.dart';
 import 'discovery/discovery_planner.dart';
+import 'discovery/post_mirror_transition_intent.dart';
 import 'explicit_exit_intent.dart';
 import 'grounded_progression.dart';
 import 'light_conversation_detector.dart';
@@ -92,7 +93,17 @@ class ConversationPolicy {
   }) {
     // Explicit exit intent → Enough close that may soft-handoff into audio.
     // Readiness ladder is not required when the person clearly asks to leave.
+    // After Mirror, prefer profile-bound Nocta Transition speech.
     if (message != null && explicitExitIntent.matches(message)) {
+      final arc = ConversationArcReader.fromSession(session);
+      if (arc.mirrorSurfaced && arc.transitionReady) {
+        return const ConversationDecision(
+          phase: ConversationPhase.continuity,
+          shouldSpeak: true,
+          expressionMode: ConversationExpressionMode.closure,
+          noctaTransition: true,
+        );
+      }
       return const ConversationDecision(
         phase: ConversationPhase.continuity,
         shouldSpeak: true,
@@ -117,11 +128,13 @@ class ConversationPolicy {
 
     // Conversation protest / correction: genuine repair — not Permission ease.
     if (_isConversationProtestOrCorrection(message)) {
+      final arc = ConversationArcReader.fromSession(session);
       return ConversationDecision(
         phase: ConversationPhase.validation,
         shouldSpeak: true,
         expressionMode: ConversationExpressionMode.repair,
         repairRepetitionProtest: _isRepetitionProtest(message),
+        clearPostMirrorBridge: arc.mirrorSurfaced,
       );
     }
 
@@ -269,6 +282,17 @@ class ConversationPolicy {
       );
     }
 
+    // Post-Mirror Nocta Transition is sacred — do not reopen Narrow probes.
+    if (base.noctaTransition) {
+      return ConversationDecision(
+        phase: base.phase,
+        shouldSpeak: base.shouldSpeak,
+        expressionMode: base.expressionMode,
+        noctaTransition: true,
+        discoveryAct: DiscoveryAct.deferToArc,
+      );
+    }
+
     switch (plan.act) {
       case DiscoveryAct.deferToArc:
       case DiscoveryAct.meet:
@@ -280,6 +304,9 @@ class ConversationPolicy {
           repairRepetitionProtest: base.repairRepetitionProtest,
           narrowRefinementAfterPartial: base.narrowRefinementAfterPartial,
           postRecognitionDeepen: base.postRecognitionDeepen,
+          sleepMindMirror: base.sleepMindMirror,
+          noctaTransition: base.noctaTransition,
+          clearPostMirrorBridge: base.clearPostMirrorBridge,
           discoveryAct: plan.act,
           discoveryObjective: plan.objective,
         );
@@ -311,6 +338,7 @@ class ConversationPolicy {
             expressionMode: base.expressionMode,
             repairRepetitionProtest: base.repairRepetitionProtest,
             narrowRefinementAfterPartial: base.narrowRefinementAfterPartial,
+            clearPostMirrorBridge: base.clearPostMirrorBridge,
             discoveryAct: DiscoveryAct.hold,
           );
         }
@@ -368,6 +396,9 @@ class ConversationPolicy {
   }
 
   /// Slice 2–3 arc: Observe → Narrow → Reframe → Integrate → Closure.
+  ///
+  /// After Sleep Mind Mirror: MIRROR_SURFACED → TRANSITION_READY route runs
+  /// before classic integrate-awaiting / Narrow refinement.
   ConversationDecision _arcValidationDecision({
     required NightSession? session,
     required String? message,
@@ -375,6 +406,45 @@ class ConversationPolicy {
     ConversationGroundingBuffer? conversationGrounding,
   }) {
     final arc = ConversationArcReader.fromSession(session);
+
+    // Post-Mirror bridge: never silently return to Narrow refinement.
+    if (arc.mirrorSurfaced &&
+        arc.transitionReady &&
+        message != null &&
+        message.trim().isNotEmpty) {
+      final materialNew = ConcernShiftDetector.isShift(
+        currentMessage: message,
+        grounding: conversationGrounding,
+        session: session,
+        blockDuringEarnedArc: false,
+      );
+      final intent = const PostMirrorTransitionIntentClassifier().classify(
+        message,
+        materialNewTopic: materialNew,
+      );
+      switch (intent) {
+        case PostMirrorTransitionIntent.advanceTransition:
+          return const ConversationDecision(
+            phase: ConversationPhase.continuity,
+            shouldSpeak: true,
+            expressionMode: ConversationExpressionMode.closure,
+            noctaTransition: true,
+          );
+        case PostMirrorTransitionIntent.reopenDiscovery:
+          return const ConversationDecision(
+            phase: ConversationPhase.validation,
+            shouldSpeak: true,
+            expressionMode: ConversationExpressionMode.repair,
+            clearPostMirrorBridge: true,
+          );
+        case PostMirrorTransitionIntent.softHold:
+          return const ConversationDecision(
+            phase: ConversationPhase.validation,
+            shouldSpeak: true,
+            expressionMode: ConversationExpressionMode.groundedHold,
+          );
+      }
+    }
 
     if (arc.reframeAwaitingResponse && message != null) {
       if (_isReframeFullConfirmation(message)) {

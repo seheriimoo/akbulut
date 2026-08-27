@@ -54,21 +54,27 @@ class DiscoveryPlanner {
       mapResolved: map.resolvedDimensions,
     );
 
-    if (map.mirrorEmitted) {
-      return DiscoveryPlan(
-        act: DiscoveryAct.deferToArc,
-        map: map.copyWith(lastPlanWasQuestion: false),
-        ledger: mergedLedger,
-        reason: 'mirror_already_emitted',
-      );
+    // After Mirror: stay deferred unless C13 negation/correction requires reopen.
+    var workingMap = map;
+    if (workingMap.mirrorEmitted) {
+      if (workingMap.hypothesisReopenRequired) {
+        workingMap = workingMap.copyWith(mirrorEmitted: false);
+      } else {
+        return DiscoveryPlan(
+          act: DiscoveryAct.deferToArc,
+          map: workingMap.copyWith(lastPlanWasQuestion: false),
+          ledger: mergedLedger,
+          reason: 'mirror_already_emitted',
+        );
+      }
     }
 
     // Preserve Build 8 deepen path when policy/confirmation earns it.
     if (preferPostRecognitionDeepen) {
       return DiscoveryPlan(
         act: DiscoveryAct.postRecognitionDeepen,
-        map: map.copyWith(
-          discoveryDepth: map.discoveryDepth + 1,
+        map: workingMap.copyWith(
+          discoveryDepth: workingMap.discoveryDepth + 1,
           lastPlanWasQuestion: false,
         ),
         ledger: mergedLedger,
@@ -77,10 +83,10 @@ class DiscoveryPlanner {
     }
 
     // Acute somatic: do not Mirror as a sleep pattern. Soft safety hold.
-    if (map.acuteSomaticCaution) {
+    if (workingMap.acuteSomaticCaution) {
       return DiscoveryPlan(
         act: DiscoveryAct.hold,
-        map: map.copyWith(lastPlanWasQuestion: false),
+        map: workingMap.copyWith(lastPlanWasQuestion: false),
         ledger: mergedLedger,
         stopDiscovery: true,
         reason: 'acute_somatic_safety_hold',
@@ -89,7 +95,7 @@ class DiscoveryPlanner {
 
     // Explicit negation/correction: never Mirror the rejected claim.
     // Prefer a fresh discriminating probe.
-    if (map.hypothesisReopenRequired && !map.mirrorEmitted) {
+    if (workingMap.hypothesisReopenRequired && !workingMap.mirrorEmitted) {
       final act = DiscoveryAct.discriminatingQuestion;
       final dimension = DiscoveryDimension.emotionalDriver;
       final objective = DiscoveryObjective(
@@ -105,14 +111,14 @@ class DiscoveryPlanner {
         ],
         discriminateA: 'fear_of_bad_ending',
         discriminateB: 'need_to_know_what_happens',
-        leadingPattern: map.leadingPattern,
+        leadingPattern: workingMap.leadingPattern,
       );
       return DiscoveryPlan(
         act: act,
         objective: objective,
-        map: map.copyWith(
-          askedDimensions: {...map.askedDimensions, dimension},
-          discoveryDepth: map.discoveryDepth + 1,
+        map: workingMap.copyWith(
+          askedDimensions: {...workingMap.askedDimensions, dimension},
+          discoveryDepth: workingMap.discoveryDepth + 1,
           lastPlanWasQuestion: true,
           clearHypothesisReopen: true,
         ),
@@ -121,10 +127,10 @@ class DiscoveryPlanner {
       );
     }
 
-    if (_shouldMirror(map)) {
+    if (_shouldMirror(workingMap)) {
       return DiscoveryPlan(
         act: DiscoveryAct.sleepMindMirror,
-        map: map.copyWith(lastPlanWasQuestion: false),
+        map: workingMap.copyWith(lastPlanWasQuestion: false),
         ledger: mergedLedger,
         stopDiscovery: true,
         reason: 'sufficient_evidence',
@@ -133,10 +139,10 @@ class DiscoveryPlanner {
 
     // First-turn contract: meet (Receipt/Observe), never forced-choice ask.
     // Exception: sufficient evidence already mirrored above.
-    if (isFirstUserTurn || !map.meetCompleted) {
+    if (isFirstUserTurn || !workingMap.meetCompleted) {
       return DiscoveryPlan(
         act: DiscoveryAct.meet,
-        map: map.copyWith(
+        map: workingMap.copyWith(
           meetCompleted: true,
           lastPlanWasQuestion: false,
         ),
@@ -147,22 +153,23 @@ class DiscoveryPlanner {
 
     // Prefer soft mirror over unknown escape; avoid still-here sink.
     if (recognitionSurfaced) {
-      if (_softMirrorEligible(map) || map.recognitionHoldCount >= 1) {
+      if (_softMirrorEligible(workingMap) ||
+          workingMap.recognitionHoldCount >= 1) {
         return DiscoveryPlan(
           act: DiscoveryAct.sleepMindMirror,
-          map: map.copyWith(lastPlanWasQuestion: false),
+          map: workingMap.copyWith(lastPlanWasQuestion: false),
           ledger: mergedLedger,
           stopDiscovery: true,
-          reason: map.recognitionHoldCount >= 1
+          reason: workingMap.recognitionHoldCount >= 1
               ? 'recognition_hold_escape_mirror'
               : 'recognition_soft_mirror',
         );
       }
       return DiscoveryPlan(
         act: DiscoveryAct.hold,
-        map: map.copyWith(
+        map: workingMap.copyWith(
           lastPlanWasQuestion: false,
-          recognitionHoldCount: map.recognitionHoldCount + 1,
+          recognitionHoldCount: workingMap.recognitionHoldCount + 1,
         ),
         ledger: mergedLedger,
         reason: 'recognition_soft_hold',
@@ -173,7 +180,7 @@ class DiscoveryPlanner {
     if (userTurnIndex >= 4) {
       return DiscoveryPlan(
         act: DiscoveryAct.sleepMindMirror,
-        map: map.copyWith(lastPlanWasQuestion: false),
+        map: workingMap.copyWith(lastPlanWasQuestion: false),
         ledger: mergedLedger,
         stopDiscovery: true,
         reason: 'turn_cap_soft_mirror',

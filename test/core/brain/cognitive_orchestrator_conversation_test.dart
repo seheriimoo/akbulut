@@ -371,6 +371,7 @@ class _TrackingConversationEngine extends ConversationEngine {
     NightSession? nightSession,
     String sessionVentCorpus = '',
     String? sleepMindMirrorText,
+    String? noctaTransitionText,
     String? deterministicExpression,
   }) async {
     order.add('conversation');
@@ -386,6 +387,7 @@ class _TrackingConversationEngine extends ConversationEngine {
       nightSession: nightSession,
       sessionVentCorpus: sessionVentCorpus,
       sleepMindMirrorText: sleepMindMirrorText,
+      noctaTransitionText: noctaTransitionText,
       deterministicExpression: deterministicExpression,
     );
   }
@@ -419,6 +421,7 @@ class _CapturingConversationEngine extends ConversationEngine {
     NightSession? nightSession,
     String sessionVentCorpus = '',
     String? sleepMindMirrorText,
+    String? noctaTransitionText,
     String? deterministicExpression,
   }) async {
     lastConversationDecision = conversationDecision;
@@ -440,6 +443,7 @@ class _CapturingConversationEngine extends ConversationEngine {
       nightSession: nightSession,
       sessionVentCorpus: sessionVentCorpus,
       sleepMindMirrorText: sleepMindMirrorText,
+      noctaTransitionText: noctaTransitionText,
       deterministicExpression: deterministicExpression,
     );
   }

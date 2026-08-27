@@ -1,11 +1,12 @@
 import 'conversation_expression_mode.dart';
 import 'conversation_phase.dart';
+import 'discovery/transition_profile.dart';
 import 'night_session.dart';
 
 /// Minimum arc state derived from sealed [NightSession] turns (Slice 2–3).
 ///
 /// No durable memory. Rebuilt each policy decision from expression modes
-/// recorded on prior turns.
+/// recorded on prior turns, plus night-scoped Mirror/Transition bridge fields.
 class ConversationArcReader {
   const ConversationArcReader({
     required this.hadObservePurity,
@@ -20,6 +21,9 @@ class ConversationArcReader {
     required this.loadTurnCount,
     this.lastReframeText,
     this.lastIntegrateText,
+    this.mirrorSurfaced = false,
+    this.transitionReady = false,
+    this.transitionProfile,
   });
 
   final bool hadObservePurity;
@@ -35,6 +39,15 @@ class ConversationArcReader {
   final String? lastReframeText;
   final String? lastIntegrateText;
 
+  /// Night-scoped: grounded Sleep Mind Mirror already surfaced.
+  final bool mirrorSurfaced;
+
+  /// Night-scoped: ready for Nocta Transition after Mirror.
+  final bool transitionReady;
+
+  /// Compact profile carried from the Mirror turn.
+  final TransitionProfile? transitionProfile;
+
   /// Problem-focused arc started but has not reached personalized closure.
   bool get problemFocusedArcIncomplete {
     if (hadClosure) return false;
@@ -44,7 +57,7 @@ class ConversationArcReader {
 
   factory ConversationArcReader.fromSession(NightSession? session) {
     if (session == null || session.turns.isEmpty) {
-      return const ConversationArcReader(
+      return ConversationArcReader(
         hadObservePurity: false,
         hadNarrow: false,
         hadReframe: false,
@@ -55,6 +68,9 @@ class ConversationArcReader {
         closureAwaitingResponse: false,
         reframeConfirmed: false,
         loadTurnCount: 0,
+        mirrorSurfaced: session?.mirrorSurfaced ?? false,
+        transitionReady: session?.transitionReady ?? false,
+        transitionProfile: session?.transitionProfile,
       );
     }
 
@@ -65,6 +81,7 @@ class ConversationArcReader {
     var hadClosure = false;
     var loadTurns = 0;
     ConversationExpressionMode? lastAssistantMode;
+    var lastWasSleepMindMirror = false;
     String? lastReframeText;
     String? lastIntegrateText;
 
@@ -91,6 +108,7 @@ class ConversationArcReader {
       }
       if (turn.admittedExpression != null) {
         lastAssistantMode = mode;
+        lastWasSleepMindMirror = turn.sleepMindMirror;
       }
     }
 
@@ -98,6 +116,13 @@ class ConversationArcReader {
         hadClosure ||
         lastAssistantMode == ConversationExpressionMode.integrate ||
         lastAssistantMode == ConversationExpressionMode.closure;
+
+    // Sleep Mind Mirror is recorded as integrate HOW but must not imply
+    // classic Integrate-awaiting confirmation (which falls into Narrow).
+    final classicIntegrateAwaiting =
+        lastAssistantMode == ConversationExpressionMode.integrate &&
+            !lastWasSleepMindMirror &&
+            !session.mirrorSurfaced;
 
     return ConversationArcReader(
       hadObservePurity: hadObserve,
@@ -107,14 +132,16 @@ class ConversationArcReader {
       hadClosure: hadClosure,
       reframeAwaitingResponse:
           lastAssistantMode == ConversationExpressionMode.reframe,
-      integrateAwaitingResponse:
-          lastAssistantMode == ConversationExpressionMode.integrate,
+      integrateAwaitingResponse: classicIntegrateAwaiting,
       closureAwaitingResponse:
           lastAssistantMode == ConversationExpressionMode.closure,
       reframeConfirmed: reframeConfirmed,
       loadTurnCount: loadTurns,
       lastReframeText: lastReframeText,
       lastIntegrateText: lastIntegrateText,
+      mirrorSurfaced: session.mirrorSurfaced,
+      transitionReady: session.transitionReady,
+      transitionProfile: session.transitionProfile,
     );
   }
 
@@ -132,6 +159,9 @@ class ConversationArcReader {
       loadTurnCount: loadTurnCount,
       lastReframeText: lastReframeText,
       lastIntegrateText: lastIntegrateText,
+      mirrorSurfaced: mirrorSurfaced,
+      transitionReady: transitionReady,
+      transitionProfile: transitionProfile,
     );
   }
 }

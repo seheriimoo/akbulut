@@ -36,6 +36,11 @@ class ExitIntelligence {
       return ExitDecision.transitionToAudio;
     }
 
+    // Post-Mirror Nocta Transition → speak handoff then enter audio.
+    if (conversationDecision.noctaTransition) {
+      return ExitDecision.transitionToAudio;
+    }
+
     if (conversationDecision.phase == ConversationPhase.audio) {
       return ExitDecision.transitionToAudio;
     }

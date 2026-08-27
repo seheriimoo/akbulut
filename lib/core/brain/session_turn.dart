@@ -33,6 +33,11 @@ class SessionTurn {
   /// Expression HOW mode sealed for this turn (Slice 2 arc tracking).
   final ConversationExpressionMode expressionMode;
 
+  /// True when this turn's admitted speech was a Sleep Mind Mirror.
+  ///
+  /// Distinguishes Mirror from classic Slice-3 Integrate for arc awaiting.
+  final bool sleepMindMirror;
+
   const SessionTurn({
     required this.releaseDecision,
     required this.phase,
@@ -40,5 +45,6 @@ class SessionTurn {
     this.expressionMode = ConversationExpressionMode.standard,
     this.mentalPatterns = const [],
     this.emotionalPatterns = const [],
+    this.sleepMindMirror = false,
   });
 }

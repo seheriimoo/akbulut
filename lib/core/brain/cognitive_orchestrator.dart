@@ -13,6 +13,7 @@ import 'discovery/evidence_extractor.dart';
 import 'discovery/hypothesis_board.dart';
 import 'discovery/night_mind_map.dart';
 import 'discovery/night_pattern_id.dart';
+import 'discovery/nocta_transition_surface.dart';
 import 'discovery/semantic_dimension_ledger.dart';
 import 'discovery/sleep_mind_mirror.dart';
 import 'discovery/transition_profile.dart';
@@ -94,6 +95,8 @@ class CognitiveOrchestrator {
 
   final TransitionProfileBuilder transitionProfileBuilder;
 
+  final NoctaTransitionSurface noctaTransitionSurface;
+
   /// Temporary same-night user grounding. Orchestrator-owned only.
   ConversationGroundingBuffer _conversationGroundingBuffer =
       const ConversationGroundingBuffer.empty();
@@ -133,6 +136,7 @@ class CognitiveOrchestrator {
     this.discoveryPlanner = const DiscoveryPlanner(),
     this.sleepMindMirrorCompiler = const SleepMindMirrorCompiler(),
     this.transitionProfileBuilder = const TransitionProfileBuilder(),
+    this.noctaTransitionSurface = const NoctaTransitionSurface(),
   });
 
   /// Read-only view of the Orchestrator-owned grounding buffer.
@@ -321,7 +325,16 @@ class CognitiveOrchestrator {
     _nightMindMap = discoveryPlan.map;
     _discoveryLedger = discoveryPlan.ledger;
 
+    // Post-Mirror reopen: clear night-scoped bridge + map mirror flag.
+    var sessionBridge = session;
+    if (conversationDecision.clearPostMirrorBridge ||
+        mapped.hypothesisReopenRequired) {
+      sessionBridge = sessionBridge.clearPostMirrorBridge();
+      _nightMindMap = _nightMindMap.copyWith(mirrorEmitted: false);
+    }
+
     String? sleepMindMirrorText;
+    String? noctaTransitionText;
     String? deterministicExpression;
     TransitionProfile? transitionProfile;
     if (discoveryPlan.reason == 'acute_somatic_safety_hold') {
@@ -348,6 +361,26 @@ class CognitiveOrchestrator {
         _nightMindMap,
         mirror: mirror,
       );
+    } else if (conversationDecision.noctaTransition) {
+      // Prefer the Discovery profile already carried on the session.
+      transitionProfile = sessionBridge.transitionProfile ??
+          (session.transitionProfile) ??
+          (_nightMindMap.leadingPattern != NightPatternId.unknown
+              ? transitionProfileBuilder.fromMap(_nightMindMap)
+              : null);
+      if (transitionProfile != null) {
+        final preferTurkish = SurfaceTextFuzzy.prefersTurkish(
+          message,
+          _conversationGroundingBuffer.userUtterances.join('\n'),
+        );
+        noctaTransitionText = noctaTransitionSurface.compile(
+          transitionProfile,
+          preferTurkish: preferTurkish,
+        );
+      }
+    } else if (sessionBridge.transitionProfile != null) {
+      // Keep carried profile available for audio handoff on later turns.
+      transitionProfile = sessionBridge.transitionProfile;
     } else if (_nightMindMap.leadingPattern != NightPatternId.unknown &&
         _nightMindMap.mapConfidence >= 0.55) {
       // Soft profile for handoff even before mirror (blocker hint).
@@ -357,7 +390,7 @@ class CognitiveOrchestrator {
     final exitDecision = exitIntelligence.decide(
       releaseDecision: releaseDecision,
       conversationDecision: conversationDecision,
-      session: session,
+      session: sessionBridge,
       message: message,
     );
 
@@ -373,13 +406,14 @@ class CognitiveOrchestrator {
       conversationGrounding: _conversationGroundingBuffer.isEmpty
           ? null
           : _conversationGroundingBuffer,
-      priorAdmittedExpression: _lastAdmittedExpression(session),
-      nightSession: session,
+      priorAdmittedExpression: _lastAdmittedExpression(sessionBridge),
+      nightSession: sessionBridge,
       sleepMindMirrorText: sleepMindMirrorText,
+      noctaTransitionText: noctaTransitionText,
       deterministicExpression: deterministicExpression,
     );
 
-    final updatedSession = session.recordTurn(
+    var updatedSession = sessionBridge.recordTurn(
       SessionTurn(
         releaseDecision: releaseDecision,
         phase: conversationDecision.phase,
@@ -392,8 +426,19 @@ class CognitiveOrchestrator {
               ),
         mentalPatterns: mentalPatterns,
         emotionalPatterns: emotionalPatterns,
+        sleepMindMirror: conversationDecision.sleepMindMirror &&
+            utterance != null &&
+            utterance.text.trim().isNotEmpty,
       ),
     );
+
+    // Persist Mirror → Transition bridge after admitted Mirror speech.
+    if (conversationDecision.sleepMindMirror &&
+        utterance != null &&
+        utterance.text.trim().isNotEmpty &&
+        transitionProfile != null) {
+      updatedSession = updatedSession.withMirrorSurfaced(transitionProfile);
+    }
 
     return CognitiveTurnResult(
       session: updatedSession,
@@ -427,6 +472,7 @@ class CognitiveOrchestrator {
     PriorAdmittedExpression? priorAdmittedExpression,
     NightSession? nightSession,
     String? sleepMindMirrorText,
+    String? noctaTransitionText,
     String? deterministicExpression,
   }) {
     return conversationEngine.generate(
@@ -440,6 +486,7 @@ class CognitiveOrchestrator {
       nightSession: nightSession,
       sessionVentCorpus: _sessionVentCorpus,
       sleepMindMirrorText: sleepMindMirrorText,
+      noctaTransitionText: noctaTransitionText,
       deterministicExpression: deterministicExpression,
     );
   }

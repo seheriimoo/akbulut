@@ -13,6 +13,8 @@ export 'hypothesis_board.dart';
 export 'negation_correction_contract.dart';
 export 'night_mind_map.dart';
 export 'night_pattern_id.dart';
+export 'nocta_transition_surface.dart';
+export 'post_mirror_transition_intent.dart';
 export 'semantic_dimension_ledger.dart';
 export 'sleep_mind_mirror.dart';
 export 'transition_profile.dart';

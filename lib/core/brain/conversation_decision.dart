@@ -24,6 +24,12 @@ class ConversationDecision {
   /// Adaptive discovery: emit Sleep Mind Mirror this turn.
   final bool sleepMindMirror;
 
+  /// Post-Mirror: speak Nocta Transition from the carried TransitionProfile.
+  final bool noctaTransition;
+
+  /// Clear night-scoped Mirror → Transition bridge (correction / new topic).
+  final bool clearPostMirrorBridge;
+
   /// Planner act for this turn (defer = existing arc owns HOW).
   final DiscoveryAct discoveryAct;
 
@@ -38,6 +44,8 @@ class ConversationDecision {
     this.narrowRefinementAfterPartial = false,
     this.postRecognitionDeepen = false,
     this.sleepMindMirror = false,
+    this.noctaTransition = false,
+    this.clearPostMirrorBridge = false,
     this.discoveryAct = DiscoveryAct.deferToArc,
     this.discoveryObjective,
   });

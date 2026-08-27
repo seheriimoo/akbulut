@@ -55,6 +55,7 @@ class ConversationEngine {
     NightSession? nightSession,
     String sessionVentCorpus = '',
     String? sleepMindMirrorText,
+    String? noctaTransitionText,
     String? deterministicExpression,
   }) async {
     final userUtterance =
@@ -93,6 +94,24 @@ class ConversationEngine {
       if (admitted != null) return admitted;
       // Soft admit if Guard rejects (mirror is evidence-bound compiler output).
       return mirrorUtterance;
+    }
+
+    // Deterministic Nocta Transition from carried TransitionProfile.transitionNeed.
+    if (conversationDecision.noctaTransition &&
+        noctaTransitionText != null &&
+        noctaTransitionText.trim().isNotEmpty) {
+      final transitionUtterance =
+          ConversationUtterance(text: noctaTransitionText.trim());
+      final admitted = utteranceGuard.allow(
+        utterance: transitionUtterance,
+        what: conversationDecision.phase,
+        userUtterance: userUtterance,
+        mirrorGroundingUtterance: expressionGrounding,
+        expressionMode: conversationDecision.expressionMode,
+        nightSession: nightSession,
+      );
+      if (admitted != null) return admitted;
+      return transitionUtterance;
     }
 
     final package = promptArchitecture.package(

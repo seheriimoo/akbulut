@@ -13,14 +13,18 @@ class GuardSafeFallback {
 
   /// Returns a short, non-clinical fallback for [what], or `null` when [what]
   /// is non-speakable (audio / silence) — those turns stay silent by design.
+  ///
+  /// When [turkish] is null, language is inferred from [userUtterance].
+  /// Callers may force a language to recover from inference skew vs Guard.
   static ConversationUtterance? forPhase({
     required ConversationPhase what,
     String? userUtterance,
+    bool? turkish,
   }) {
     if (!_isSpeakable(what)) return null;
 
-    final turkish = _looksTurkish(userUtterance);
-    final text = turkish ? _turkishFor(what) : _englishFor(what);
+    final useTurkish = turkish ?? _looksTurkish(userUtterance);
+    final text = useTurkish ? _turkishFor(what) : _englishFor(what);
     return ConversationUtterance(text: text);
   }
 
@@ -85,6 +89,8 @@ class GuardSafeFallback {
     final lower = text.toLowerCase();
     if (RegExp(r'[ğüşıöçâîû]').hasMatch(lower)) return true;
     // ASCII Turkish night slang / common particles (no diacritics).
+    // Keep aligned with UtteranceGuard night-language ASCII TR stems so
+    // vendor-fallback language choice is not rejected by the language lock.
     const markers = [
       'bilmiyorum',
       'uyuyamiyorum',
@@ -116,6 +122,16 @@ class GuardSafeFallback {
       'sakin',
       'rahatla',
       'dinlen',
+      'yalniz',
+      'yalnız',
+      'dusun',
+      'düşün',
+      'konusmak',
+      'konuşmak',
+      'ozledim',
+      'özledim',
+      'zihin',
+      'zihn',
       'ama ',
       ' yani',
       'ya.',

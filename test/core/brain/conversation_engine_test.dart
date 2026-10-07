@@ -131,6 +131,110 @@ void main() {
       // Turkish greeting → Turkish Neutral Entry fallback.
       expect(spoken.text, 'Merhaba, hazır olduğunda.');
     });
+
+    test('vendor auth failure uses Guard-safe fallback, never silence', () async {
+      final engine = ConversationEngine(
+        languageModelClient: LanguageModelClient(
+          vendorProvider: _FailingVendorProvider(
+            const VendorError(
+              kind: VendorErrorKind.auth,
+              message: 'OpenAI API key is missing',
+            ),
+          ),
+        ),
+      );
+
+      final spoken = await engine.generate(
+        conversationDecision: const ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
+        ),
+        exitDecision: ExitDecision.continueConversation,
+        livedExpression: "I can't stop thinking about tomorrow.",
+      );
+
+      expect(spoken, isNotNull);
+      expect(spoken!.text, 'I hear that.');
+    });
+
+    test(
+      'vendor auth on ASCII Turkish load recovers TR fallback (language lock)',
+      () async {
+        final engine = ConversationEngine(
+          languageModelClient: LanguageModelClient(
+            vendorProvider: _FailingVendorProvider(
+              const VendorError(
+                kind: VendorErrorKind.auth,
+                message: 'OpenAI API key is missing',
+              ),
+            ),
+          ),
+        );
+
+        // ASCII lonely stem: Guard language-locks TR. Fallback must not stay
+        // on an English line that UtteranceGuard would reject.
+        final spoken = await engine.generate(
+          conversationDecision: const ConversationDecision(
+            phase: ConversationPhase.validation,
+            shouldSpeak: true,
+          ),
+          exitDecision: ExitDecision.continueConversation,
+          livedExpression: 'yalnizim',
+        );
+
+        expect(spoken, isNotNull);
+        expect(spoken!.text, 'Anlıyorum.');
+      },
+    );
+
+    test(
+      'vendor timeout on ASCII Turkish thinking recovers TR fallback',
+      () async {
+        final engine = ConversationEngine(
+          languageModelClient: LanguageModelClient(
+            vendorProvider: _FailingVendorProvider(
+              const VendorError(
+                kind: VendorErrorKind.timeout,
+                message: 'timed out',
+              ),
+            ),
+          ),
+        );
+
+        final spoken = await engine.generate(
+          conversationDecision: const ConversationDecision(
+            phase: ConversationPhase.validation,
+            shouldSpeak: true,
+          ),
+          exitDecision: ExitDecision.continueConversation,
+          livedExpression: 'dusunuyorum',
+        );
+
+        expect(spoken, isNotNull);
+        expect(spoken!.text, 'Anlıyorum.');
+      },
+    );
+
+    test('successful vendor path still emits model text, not fallback', () async {
+      final engine = ConversationEngine(
+        languageModelClient: LanguageModelClient(
+          vendorProvider: FaithfulTestVendorProvider(),
+        ),
+      );
+
+      final spoken = await engine.generate(
+        conversationDecision: const ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
+        ),
+        exitDecision: ExitDecision.continueConversation,
+        livedExpression: "I can't stop thinking about tomorrow.",
+      );
+
+      expect(spoken, isNotNull);
+      expect(spoken!.text, 'That makes sense.');
+      expect(spoken.text, isNot('I hear that.'));
+    });
   });
 
   group('ConversationEngine DNA enforcement path', () {

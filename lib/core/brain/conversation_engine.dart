@@ -125,33 +125,63 @@ class ConversationEngine {
 
   /// Deterministic Guard-legal continuity line, or `null` if unavailable /
   /// itself rejected. Never rewrites model text. Never reopens WHAT.
+  ///
+  /// Tries inferred-language fallback first, then the opposite language.
+  /// That recovers from TR/EN inference skew between GuardSafeFallback and
+  /// UtteranceGuard (common with ASCII Turkish on mobile keyboards).
   ConversationUtterance? _admitGuardSafeFallback({
     required ConversationPhase what,
     required String? userUtterance,
     required String reason,
   }) {
-    final fallback = GuardSafeFallback.forPhase(
-      what: what,
-      userUtterance: userUtterance,
-    );
-    if (fallback == null) return null;
-
-    final fallbackAdmitted = utteranceGuard.allow(
-      utterance: fallback,
-      what: what,
-      userUtterance: userUtterance,
-    );
-    if (fallbackAdmitted == null) {
-      debugPrint(
-        'Nocta expression Guard fallback also rejected WHAT='
-        '${what.name} text="${fallback.text}" reason=$reason',
-      );
-      return null;
+    final candidates = <ConversationUtterance>[];
+    void addCandidate(ConversationUtterance? candidate) {
+      if (candidate == null) return;
+      if (candidates.any((c) => c.text == candidate.text)) return;
+      candidates.add(candidate);
     }
+
+    addCandidate(
+      GuardSafeFallback.forPhase(what: what, userUtterance: userUtterance),
+    );
+    addCandidate(
+      GuardSafeFallback.forPhase(
+        what: what,
+        userUtterance: userUtterance,
+        turkish: true,
+      ),
+    );
+    addCandidate(
+      GuardSafeFallback.forPhase(
+        what: what,
+        userUtterance: userUtterance,
+        turkish: false,
+      ),
+    );
+
+    for (final fallback in candidates) {
+      final admitted = utteranceGuard.allow(
+        utterance: fallback,
+        what: what,
+        userUtterance: userUtterance,
+      );
+      if (admitted != null) {
+        debugPrint(
+          'Nocta expression Guard fallback admitted WHAT=${what.name} '
+          'reason=$reason text="${admitted.text}"',
+        );
+        return admitted;
+      }
+      debugPrint(
+        'Nocta expression Guard fallback rejected WHAT=${what.name} '
+        'text="${fallback.text}" reason=$reason',
+      );
+    }
+
     debugPrint(
-      'Nocta expression Guard fallback admitted WHAT=${what.name} '
+      'Nocta expression Guard fallback exhausted WHAT=${what.name} '
       'reason=$reason',
     );
-    return fallbackAdmitted;
+    return null;
   }
 }

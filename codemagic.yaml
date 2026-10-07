@@ -29,7 +29,7 @@ workflows:
       flutter: 3.41.7
       xcode: latest
       cocoapods: default
-      # No ios_signing: block — that path is manual (pre-uploaded cert/profile).
+      # Manual Code Signing Identities UI is not used.
       # Automatic signing uses scripts below + CERTIFICATE_PRIVATE_KEY.
       groups:
         # Create this group in Codemagic → Application → Environment variables.

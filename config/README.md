@@ -43,6 +43,11 @@
 #   Example:
 #   flutter build ipa --dart-define-from-file=config/secrets.local.json
 #
+# Codemagic TestFlight Internal (manual start; automatic Apple signing):
+#   See config/CODEMAGIC_TESTFLIGHT.md and repo-root codemagic.yaml.
+#   Secrets + CERTIFICATE_PRIVATE_KEY live in Codemagic group
+#   nocta_testflight — never in git. No Mac p12/profile upload.
+#
 # Do not use --dart-define on the command line in shared logs.
 # Rotate any key that was previously committed or embedded in the binary.
 #

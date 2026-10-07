@@ -50,4 +50,6 @@ app.*.map.json
 !.env.example
 config/secrets.local.json
 config/secrets.json
+config/secrets.ci.json
 **/secrets.local.json
+**/secrets.ci.json

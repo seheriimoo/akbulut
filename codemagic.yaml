@@ -1,0 +1,203 @@
+# Nocta — manual iOS TestFlight Internal Testing only.
+#
+# No automatic triggers (push/PR/tag). Start from Codemagic UI:
+#   Start new build → branch nocta/v1 → workflow "iOS TestFlight Internal".
+#
+# Code signing: AUTOMATIC via App Store Connect API (Nocta ASC) +
+# CERTIFICATE_PRIVATE_KEY. Codemagic creates/fetches Distribution cert and
+# App Store profile — no Mac, no uploaded .p12 / .mobileprovision.
+#
+# Secrets: Codemagic variable group only (never commit). See
+# config/CODEMAGIC_TESTFLIGHT.md for panel setup.
+#
+# Does NOT submit to App Store review / production release.
+
+workflows:
+  ios-testflight-internal:
+    name: iOS TestFlight Internal
+    max_build_duration: 90
+    instance_type: mac_mini_m2
+
+    # Manual-only: omit triggering.events so webhooks never start this workflow.
+
+    integrations:
+      # Must match the App Store Connect API key name in Codemagic Team integrations.
+      # Authenticates automatic signing + TestFlight upload.
+      app_store_connect: Nocta ASC
+
+    environment:
+      flutter: 3.41.7
+      xcode: latest
+      cocoapods: default
+      # Manual Code Signing Identities UI is not used.
+      # Automatic signing uses scripts below + CERTIFICATE_PRIVATE_KEY.
+      groups:
+        # Create this group in Codemagic → Application → Environment variables.
+        # Mark secret vars as Secure. Attach the group to this app.
+        - nocta_testflight
+      vars:
+        APP_BUNDLE_ID: com.seher.slowave
+        # Numeric App Store Connect Apple ID for the Nocta iOS app (not secret).
+        # Set APP_STORE_APPLE_ID in the nocta_testflight variable group.
+        BUILD_NAME: "1.0.0"
+
+    cache:
+      cache_paths:
+        - $HOME/.pub-cache
+        - $HOME/Library/Caches/CocoaPods
+
+    scripts:
+      - name: Get Flutter packages
+        script: |
+          set -euo pipefail
+          flutter pub get
+
+      - name: Install CocoaPods dependencies
+        script: |
+          set -euo pipefail
+          cd ios && pod install
+
+      - name: Initialize keychain
+        script: |
+          set -euo pipefail
+          keychain initialize
+
+      - name: Fetch or create signing files (automatic)
+        script: |
+          set -euo pipefail
+          if [ -z "${CERTIFICATE_PRIVATE_KEY:-}" ]; then
+            echo "CERTIFICATE_PRIVATE_KEY is required for automatic iOS signing." >&2
+            echo "Add a 2048-bit RSA PEM as a Secure var in group nocta_testflight." >&2
+            exit 1
+          fi
+          # Uses Nocta ASC integration + CERTIFICATE_PRIVATE_KEY.
+          # --create: create Distribution cert / App Store profile if missing.
+          app-store-connect fetch-signing-files "$APP_BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+
+      - name: Add certificates to keychain
+        script: |
+          set -euo pipefail
+          keychain add-certificates
+
+      - name: Set up code signing (TestFlight Internal Only)
+        script: |
+          set -euo pipefail
+          xcode-project use-profiles \
+            --custom-export-options='{"testFlightInternalTestingOnly": true}'
+
+      - name: Materialize dart-define file from Codemagic secrets
+        script: |
+          # Do not enable shell xtrace — secrets must not appear in logs.
+          set -euo pipefail
+          python3 <<'PY'
+          import json
+          import os
+          import pathlib
+          import sys
+
+          required = ("OPENAI_API_KEY", "REVENUECAT_API_KEY")
+          optional = (
+              "SENTRY_DSN",
+              "PRIVACY_POLICY_URL",
+              "TERMS_OF_SERVICE_URL",
+          )
+
+          def usable(raw: str) -> bool:
+              value = raw.strip()
+              if not value:
+                  return False
+              upper = value.upper()
+              if upper.startswith("REPLACE_WITH_"):
+                  return False
+              if upper in {"YOUR_KEY_HERE", "TODO"}:
+                  return False
+              return True
+
+          out: dict[str, str] = {}
+          missing: list[str] = []
+          for key in required:
+              value = os.environ.get(key, "")
+              if not usable(value):
+                  missing.append(key)
+              else:
+                  out[key] = value.strip()
+
+          if missing:
+              print(
+                  "Missing required Codemagic secret env vars: "
+                  + ", ".join(missing),
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
+          rc = out["REVENUECAT_API_KEY"]
+          if not rc.startswith("appl_"):
+              print(
+                  "REVENUECAT_API_KEY must be an Apple public SDK key (appl_…).",
+                  file=sys.stderr,
+              )
+              sys.exit(1)
+
+          for key in optional:
+              value = os.environ.get(key, "")
+              if usable(value):
+                  out[key] = value.strip()
+
+          path = pathlib.Path("config/secrets.ci.json")
+          path.parent.mkdir(parents=True, exist_ok=True)
+          path.write_text(json.dumps(out, indent=2) + "\n", encoding="utf-8")
+          # Log key names only — never values.
+          print(
+              "Wrote dart-define file with keys: "
+              + ", ".join(sorted(out.keys()))
+              + " (values redacted)"
+          )
+          PY
+
+      - name: Resolve build number
+        script: |
+          set -euo pipefail
+          if [ -z "${APP_STORE_APPLE_ID:-}" ]; then
+            echo "APP_STORE_APPLE_ID is required (numeric App Store Connect app id)." >&2
+            exit 1
+          fi
+          LATEST="$(app-store-connect get-latest-testflight-build-number \
+            "$APP_STORE_APPLE_ID" || echo 0)"
+          if ! [[ "$LATEST" =~ ^[0-9]+$ ]]; then
+            LATEST=0
+          fi
+          BUILD_NUMBER="$((LATEST + 1))"
+          echo "BUILD_NUMBER=$BUILD_NUMBER" >> "$CM_ENV"
+          echo "Using build-name=${BUILD_NAME} build-number=${BUILD_NUMBER}"
+
+      - name: Flutter build IPA (release, dart-define-from-file)
+        script: |
+          set -euo pipefail
+          # Secrets stay in the file; do not expand them on the command line.
+          flutter build ipa --release \
+            --build-name="$BUILD_NAME" \
+            --build-number="$BUILD_NUMBER" \
+            --dart-define-from-file=config/secrets.ci.json \
+            --export-options-plist=/Users/builder/export_options.plist
+
+      - name: Scrub local dart-define file
+        script: |
+          set -euo pipefail
+          rm -f config/secrets.ci.json
+
+    artifacts:
+      - build/ios/ipa/*.ipa
+      - /tmp/xcodebuild_logs/*.log
+      - flutter_drive.log
+
+    publishing:
+      app_store_connect:
+        auth: integration
+        # Upload + TestFlight Internal only. Never App Store release.
+        submit_to_testflight: true
+        # Must match an Internal Testing group name in App Store Connect.
+        # Rename here or in ASC so they match after you create the group.
+        beta_groups:
+          - Internal Testers

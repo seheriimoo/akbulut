@@ -1,5 +1,6 @@
 import 'conversation_blueprint_binding.dart';
 import 'conversation_grounding_buffer.dart';
+import 'explicit_calm_intent.dart';
 import 'permission_realization_contract.dart';
 import 'prior_admitted_expression.dart';
 import 'thinking_function_hypothesis.dart';
@@ -103,6 +104,12 @@ class PermissionIntelligence {
       'Mirror the person’s language (English or Turkish). '
       'Vary naturally only inside the Permission realization contract.';
 
+  static const String _calmStepDirective =
+      'Explicit calm desire: offer ONE short soft rest step — authorize pause '
+      '(“you can pause” / “sadece durabilirsin” / “no need to do more”). '
+      'Do NOT ask discovery questions. Do NOT name new load. Do NOT excavate. '
+      'One quiet permission toward rest, then stop.';
+
   static const String _realizationDirective =
       'Realize only the sealed WHAT (permission / permission) as exactly one '
       'short utterance. Authorize non-resolution toward rest. '
@@ -144,6 +151,8 @@ class PermissionIntelligence {
     required bool supportedFunctional,
     PriorAdmittedExpression? priorAdmittedExpression,
   }) {
+    final calmSeeking =
+        currentTurn != null && const ExplicitCalmIntent().matches(currentTurn);
     final buffer = StringBuffer()
       ..writeln(_realizationDirective)
       ..writeln()
@@ -151,7 +160,13 @@ class PermissionIntelligence {
       ..writeln()
       ..writeln(_speechActBarrier)
       ..writeln()
-      ..writeln(_shapeDirective(currentTurn))
+      ..writeln(_shapeDirective(currentTurn));
+    if (calmSeeking) {
+      buffer
+        ..writeln()
+        ..writeln(_calmStepDirective);
+    }
+    buffer
       ..writeln()
       ..writeln(_languageDirective(currentTurn))
       ..writeln()
@@ -217,11 +232,17 @@ class PermissionIntelligence {
             'tonight.'
         : '';
 
+    final calmSeeking = currentTurn != null &&
+            const ExplicitCalmIntent().matches(currentTurn)
+        ? ' Calm-desire note: they asked to settle—one soft pause '
+            'authorization only. No discovery questions. No new naming.'
+        : '';
+
     return 'One short sentence (max 18 words). Restward. No advice. '
         'No solving. No question. One ease only—then stop. '
         'Vary naturally only inside the Permission '
         'realization contract; do not stamp figure/sort/solve-tonight by '
-        'default.$lowLoad$active$selfPermission '
+        'default.$lowLoad$active$selfPermission$calmSeeking '
         '${_languageDirective(currentTurn)}';
   }
 
@@ -270,6 +291,11 @@ class PermissionIntelligence {
     final contractRule =
         PermissionRealizationContract.intelligenceSteeringDirective();
 
+    final calmRule = currentTurn != null &&
+            const ExplicitCalmIntent().matches(currentTurn)
+        ? _calmStepDirective
+        : 'Calm-desire rule: no explicit calm request on this turn.';
+
     return '''
 Permission Intelligence v$version:
 $_easeDirective
@@ -281,6 +307,7 @@ $driftRule
 $antiRepeatRule
 $functionRule
 $contractRule
+$calmRule
 ${_languageDirective(currentTurn)}
 $grounding
 ''';

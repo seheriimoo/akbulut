@@ -228,10 +228,14 @@ class UtteranceGuard {
           'rest for you',
           'a little rest',
           'a little quiet',
+          'help you rest',
+          'ease into rest',
           'biraz sessizlik',
           'biraz dinlenme',
           'dinlenmeyle bırakıyorum',
           'sessizlikle bırakıyorum',
+          'dinlenmene yardımcı',
+          'dinlenmene yardimci',
         ])) {
           continue;
         }
@@ -344,6 +348,8 @@ class UtteranceGuard {
           'rest for you',
           'a little rest',
           'a little quiet',
+          'help you rest',
+          'ease into rest',
           // Turkish Enough / handoff
           'biraz sessizlik hazırlıyorum',
           'biraz dinlenme hazırlıyorum',
@@ -353,6 +359,8 @@ class UtteranceGuard {
           'biraz dinlenmeyle',
           'biraz sessizlikle',
           'şimdi seni dinlenmeyle bırakıyorum',
+          'dinlenmene yardımcı',
+          'dinlenmene yardimci',
           'kelimeler dinlenebilir',
           'bu kadar yeter',
           'daha fazlası gerekmiyor',
@@ -395,6 +403,7 @@ class UtteranceGuard {
     'take your time',
     // Turkish Neutral Entry parity (greeting ack only — not a safety loosen).
     'merhaba',
+    'selam',
     'hazır olduğunda',
     'hazir oldugunda',
   ];
@@ -611,6 +620,11 @@ class UtteranceGuard {
       'düşün',
       'yalniz',
       'yalnız',
+      'selam',
+      'merhaba',
+      'sakinlesmek',
+      'sakinleşmek',
+      'rahatlamak',
     ]);
     final hasTurkish = hasTurkishScript || hasTurkishLexeme;
     final hasEnglish = RegExp(

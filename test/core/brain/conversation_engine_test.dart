@@ -79,7 +79,7 @@ void main() {
       }
     });
 
-    test('vendor failure fails closed to null without escaping VendorError', () async {
+    test('vendor transport failure uses Guard-safe fallback, never silence', () async {
       final engine = ConversationEngine(
         languageModelClient: LanguageModelClient(
           vendorProvider: _FailingVendorProvider(
@@ -91,16 +91,45 @@ void main() {
         ),
       );
 
-      await expectLater(
-        engine.generate(
-          conversationDecision: const ConversationDecision(
-            phase: ConversationPhase.validation,
-            shouldSpeak: true,
-          ),
-          exitDecision: ExitDecision.continueConversation,
+      final spoken = await engine.generate(
+        conversationDecision: const ConversationDecision(
+          phase: ConversationPhase.validation,
+          shouldSpeak: true,
         ),
-        completion(isNull),
+        exitDecision: ExitDecision.continueConversation,
+        livedExpression: "I can't stop thinking about tomorrow.",
       );
+
+      expect(spoken, isNotNull);
+      expect(spoken!.text.trim(), isNotEmpty);
+      expect(spoken.text, 'I hear that.');
+    });
+
+    test('vendor timeout on Neutral Entry greeting uses Guard-safe fallback', () async {
+      final engine = ConversationEngine(
+        languageModelClient: LanguageModelClient(
+          vendorProvider: _FailingVendorProvider(
+            const VendorError(
+              kind: VendorErrorKind.timeout,
+              message: 'timed out',
+            ),
+          ),
+        ),
+      );
+
+      final spoken = await engine.generate(
+        conversationDecision: const ConversationDecision(
+          phase: ConversationPhase.neutralEntry,
+          shouldSpeak: true,
+        ),
+        exitDecision: ExitDecision.continueConversation,
+        livedExpression: 'selam 👋',
+      );
+
+      expect(spoken, isNotNull);
+      expect(spoken!.text.trim(), isNotEmpty);
+      // Turkish greeting → Turkish Neutral Entry fallback.
+      expect(spoken.text, 'Merhaba, hazır olduğunda.');
     });
   });
 

@@ -56,6 +56,18 @@ void main() {
       expect(decision.shouldSpeak, isTrue);
     });
 
+    test('first-turn hold + Turkish greeting with emoji → neutralEntry', () {
+      final decision = policy.decide(
+        releaseDecision: hold,
+        message: 'selam 👋',
+        session: emptySession(),
+        understanding: const ValidatedUnderstanding(),
+      );
+
+      expect(decision.phase, ConversationPhase.neutralEntry);
+      expect(decision.shouldSpeak, isTrue);
+    });
+
     test('emotional first-turn hold still routes to validation/Receipt', () {
       final decision = policy.decide(
         releaseDecision: hold,

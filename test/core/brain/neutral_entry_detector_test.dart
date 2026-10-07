@@ -25,6 +25,13 @@ void main() {
         'hey there!',
         'hello there…',
         '  hi  ',
+        'selam',
+        'Selam',
+        'selam 👋',
+        'selamlar',
+        'merhaba',
+        'Merhaba!',
+        'merhabalar',
       ]) {
         expect(
           detector.isNeutralGreeting(message),

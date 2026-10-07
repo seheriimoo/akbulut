@@ -3,6 +3,10 @@
 # No automatic triggers (push/PR/tag). Start from Codemagic UI:
 #   Start new build → branch nocta/v1 → workflow "iOS TestFlight Internal".
 #
+# Code signing: AUTOMATIC via App Store Connect API (Nocta ASC) +
+# CERTIFICATE_PRIVATE_KEY. Codemagic creates/fetches Distribution cert and
+# App Store profile — no Mac, no uploaded .p12 / .mobileprovision.
+#
 # Secrets: Codemagic variable group only (never commit). See
 # config/CODEMAGIC_TESTFLIGHT.md for panel setup.
 #
@@ -18,15 +22,15 @@ workflows:
 
     integrations:
       # Must match the App Store Connect API key name in Codemagic Team integrations.
+      # Authenticates automatic signing + TestFlight upload.
       app_store_connect: Nocta ASC
 
     environment:
       flutter: 3.41.7
       xcode: latest
       cocoapods: default
-      ios_signing:
-        distribution_type: app_store
-        bundle_identifier: com.seher.slowave
+      # No ios_signing: block — that path is manual (pre-uploaded cert/profile).
+      # Automatic signing uses scripts below + CERTIFICATE_PRIVATE_KEY.
       groups:
         # Create this group in Codemagic → Application → Environment variables.
         # Mark secret vars as Secure. Attach the group to this app.
@@ -52,6 +56,30 @@ workflows:
         script: |
           set -euo pipefail
           cd ios && pod install
+
+      - name: Initialize keychain
+        script: |
+          set -euo pipefail
+          keychain initialize
+
+      - name: Fetch or create signing files (automatic)
+        script: |
+          set -euo pipefail
+          if [ -z "${CERTIFICATE_PRIVATE_KEY:-}" ]; then
+            echo "CERTIFICATE_PRIVATE_KEY is required for automatic iOS signing." >&2
+            echo "Add a 2048-bit RSA PEM as a Secure var in group nocta_testflight." >&2
+            exit 1
+          fi
+          # Uses Nocta ASC integration + CERTIFICATE_PRIVATE_KEY.
+          # --create: create Distribution cert / App Store profile if missing.
+          app-store-connect fetch-signing-files "$APP_BUNDLE_ID" \
+            --type IOS_APP_STORE \
+            --create
+
+      - name: Add certificates to keychain
+        script: |
+          set -euo pipefail
+          keychain add-certificates
 
       - name: Set up code signing (TestFlight Internal Only)
         script: |

@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 
 import 'conversation_decision.dart';
 import 'conversation_grounding_buffer.dart';
+import 'conversation_phase.dart';
 import 'conversation_utterance.dart';
 import 'exit_decision.dart';
 import 'guard_safe_fallback.dart';
@@ -45,11 +46,13 @@ class ConversationEngine {
   /// PromptArchitecture → (abstain | LanguageModelClient
   ///   [ConversationCompiler → VendorProvider]) → UtteranceGuard.
   ///
-  /// On [LanguageModelClient] / [VendorError] failure, fails closed to `null`.
-  /// Does not reopen WHAT, Exit, Release, or protocol.
+  /// On [LanguageModelClient] / [VendorError] failure: never reopen WHAT /
+  /// Exit / Release / protocol. Prefer a deterministic [GuardSafeFallback]
+  /// (expression continuity) so a speakable turn does not go silent when the
+  /// fallback itself admits under [UtteranceGuard].
   ///
-  /// After [UtteranceGuard] rejection: never surface the rejected text; emit a
-  /// deterministic [GuardSafeFallback] only if that fallback itself admits.
+  /// After [UtteranceGuard] rejection: never surface the rejected text; emit
+  /// the same Guard-safe fallback path only if that fallback itself admits.
   Future<ConversationUtterance?> generate({
     required ConversationDecision conversationDecision,
     required ExitDecision exitDecision,
@@ -74,21 +77,32 @@ class ConversationEngine {
       return null;
     }
 
+    final userUtterance =
+        package.conversationGrounding?.currentUserUtterance ?? livedExpression;
+
     final ConversationUtterance utterance;
     try {
       utterance = await languageModelClient.realize(package);
     } on VendorError catch (error) {
+      // HCOS vendor contract: transport/timeout/auth/unusable may use a
+      // deterministic local fallback that still passes UtteranceGuard.
+      // Do not invent a different WHAT.
       debugPrint(
         'Nocta expression vendor fail: ${error.kind.name} ${error.message}',
       );
-      return null;
+      return _admitGuardSafeFallback(
+        what: package.what,
+        userUtterance: userUtterance,
+        reason: 'vendor_${error.kind.name}',
+      );
     } on StateError catch (error) {
       debugPrint('Nocta expression compile/config fail: $error');
-      return null;
+      return _admitGuardSafeFallback(
+        what: package.what,
+        userUtterance: userUtterance,
+        reason: 'compile_config',
+      );
     }
-
-    final userUtterance =
-        package.conversationGrounding?.currentUserUtterance ?? livedExpression;
 
     final admitted = utteranceGuard.allow(
       utterance: utterance,
@@ -102,27 +116,41 @@ class ConversationEngine {
       'text="${utterance.text}"',
     );
 
-    // Guard-safe fallback: never show rejected model text; never LLM rewrite.
-    final fallback = GuardSafeFallback.forPhase(
+    return _admitGuardSafeFallback(
       what: package.what,
+      userUtterance: userUtterance,
+      reason: 'guard_reject',
+    );
+  }
+
+  /// Deterministic Guard-legal continuity line, or `null` if unavailable /
+  /// itself rejected. Never rewrites model text. Never reopens WHAT.
+  ConversationUtterance? _admitGuardSafeFallback({
+    required ConversationPhase what,
+    required String? userUtterance,
+    required String reason,
+  }) {
+    final fallback = GuardSafeFallback.forPhase(
+      what: what,
       userUtterance: userUtterance,
     );
     if (fallback == null) return null;
 
     final fallbackAdmitted = utteranceGuard.allow(
       utterance: fallback,
-      what: package.what,
+      what: what,
       userUtterance: userUtterance,
     );
     if (fallbackAdmitted == null) {
       debugPrint(
         'Nocta expression Guard fallback also rejected WHAT='
-        '${package.what.name} text="${fallback.text}"',
+        '${what.name} text="${fallback.text}" reason=$reason',
       );
       return null;
     }
     debugPrint(
-      'Nocta expression Guard fallback admitted WHAT=${package.what.name}',
+      'Nocta expression Guard fallback admitted WHAT=${what.name} '
+      'reason=$reason',
     );
     return fallbackAdmitted;
   }

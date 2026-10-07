@@ -1,5 +1,6 @@
 import 'conversation_decision.dart';
 import 'conversation_phase.dart';
+import 'explicit_calm_intent.dart';
 import 'explicit_exit_intent.dart';
 import 'neutral_entry_detector.dart';
 import 'night_session.dart';
@@ -29,10 +30,12 @@ class ConversationPolicy {
   const ConversationPolicy({
     this.neutralEntryDetector = const NeutralEntryDetector(),
     this.explicitExitIntent = const ExplicitExitIntent(),
+    this.explicitCalmIntent = const ExplicitCalmIntent(),
   });
 
   final NeutralEntryDetector neutralEntryDetector;
   final ExplicitExitIntent explicitExitIntent;
+  final ExplicitCalmIntent explicitCalmIntent;
 
   ConversationDecision decide({
     required ReleaseDecision releaseDecision,
@@ -45,6 +48,22 @@ class ConversationPolicy {
     if (message != null && explicitExitIntent.matches(message)) {
       return const ConversationDecision(
         phase: ConversationPhase.continuity,
+        shouldSpeak: true,
+      );
+    }
+
+    // Explicit calm / settle desire → short soft rest authorization.
+    // Skip Naming discovery; do not excavate with new questions.
+    if (message != null && explicitCalmIntent.matches(message)) {
+      if (releaseDecision.readiness == ReleaseReadiness.settling ||
+          releaseDecision.readiness == ReleaseReadiness.receptive) {
+        return const ConversationDecision(
+          phase: ConversationPhase.release,
+          shouldSpeak: true,
+        );
+      }
+      return const ConversationDecision(
+        phase: ConversationPhase.permission,
         shouldSpeak: true,
       );
     }

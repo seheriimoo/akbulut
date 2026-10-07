@@ -61,6 +61,58 @@ void main() {
         expect(admitted, isNotNull, reason: 'TR ${what.name}: ${fallback.text}');
       }
     });
+
+    test('ASCII TR lonely/thinking stems choose Turkish fallback lines', () {
+      for (final user in const ['yalnizim', 'dusunuyorum', 'konusmak istemiyorum']) {
+        final fallback = GuardSafeFallback.forPhase(
+          what: ConversationPhase.validation,
+          userUtterance: user,
+        );
+        expect(fallback, isNotNull, reason: user);
+        expect(fallback!.text, 'Anlıyorum.', reason: user);
+        expect(
+          guard.allow(
+            utterance: fallback,
+            what: ConversationPhase.validation,
+            userUtterance: user,
+          ),
+          isNotNull,
+          reason: user,
+        );
+      }
+    });
+
+    test('forced opposite language still yields Guard-admissible lines', () {
+      final forcedTr = GuardSafeFallback.forPhase(
+        what: ConversationPhase.validation,
+        userUtterance: "I can't sleep",
+        turkish: true,
+      );
+      expect(forcedTr?.text, 'Anlıyorum.');
+      expect(
+        guard.allow(
+          utterance: forcedTr!,
+          what: ConversationPhase.validation,
+          userUtterance: 'yalnizim',
+        ),
+        isNotNull,
+      );
+
+      final forcedEn = GuardSafeFallback.forPhase(
+        what: ConversationPhase.validation,
+        userUtterance: 'yalnizim',
+        turkish: false,
+      );
+      expect(forcedEn?.text, 'I hear that.');
+      expect(
+        guard.allow(
+          utterance: forcedEn!,
+          what: ConversationPhase.validation,
+          userUtterance: "I can't sleep",
+        ),
+        isNotNull,
+      );
+    });
   });
 
   group('ConversationEngine Guard-drop fallback', () {
